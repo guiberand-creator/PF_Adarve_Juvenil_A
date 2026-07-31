@@ -57,14 +57,35 @@ def mostrar_sello_autor():
         st.sidebar.caption("© 2026 All Rights Reserved")
 
 def aplicar_diseno_responsive():
-    """Aplica CSS para compactar la interfaz en móviles en todas las páginas."""
+    """Fuerza a que imágenes, columnas y gráficos se adapten al 100% de la pantalla móvil."""
     st.markdown("""
     <style>
-    @media (max-width: 639px) {
-        .stHeading h1 { font-size: 1.5rem !important; }
-        .stHeading h2, .stHeading h3 { font-size: 1.2rem !important; }
-        .stMarkdown p { font-size: 0.9rem !important; }
-        .stVerticalBlock { gap: 0.5rem !important; }
+    /* Ajustes específicos para móviles (< 768px) */
+    @media (max-width: 768px) {
+        /* Evita que las imágenes se sobredimensionen */
+        img {
+            max-width: 100% !important;
+            height: auto !important;
+            object-fit: contain !important;
+        }
+
+        /* Fuerza a que las columnas de Streamlit se apilen limpiamente */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+
+        /* Fuerza a los gráficos a no desbordar el ancho de pantalla */
+        .js-plotly-plot, .plot-container {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Tipografía más contenida */
+        .stHeading h1 { font-size: 1.4rem !important; }
+        .stHeading h2, .stHeading h3 { font-size: 1.1rem !important; }
+        .stMarkdown p { font-size: 0.85rem !important; }
     }
     </style>
     """, unsafe_allow_html=True)
