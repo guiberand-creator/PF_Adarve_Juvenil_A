@@ -55,3 +55,16 @@ def mostrar_sello_autor():
         st.sidebar.caption("⚡ **GUILLE PERFORMANCE**")
         st.sidebar.caption("Performance & Data Analytics")
         st.sidebar.caption("© 2026 All Rights Reserved")
+
+def aplicar_diseno_responsive():
+    """Aplica CSS para compactar la interfaz en móviles en todas las páginas."""
+    st.markdown("""
+    <style>
+    @media (max-width: 639px) {
+        .stHeading h1 { font-size: 1.5rem !important; }
+        .stHeading h2, .stHeading h3 { font-size: 1.2rem !important; }
+        .stMarkdown p { font-size: 0.9rem !important; }
+        .stVerticalBlock { gap: 0.5rem !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)

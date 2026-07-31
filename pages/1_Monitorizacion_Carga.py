@@ -3,6 +3,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+from utils import aplicar_diseno_responsive
+
+# Al principio de la página
+aplicar_diseno_responsive()
 
 # PROTEGER SUBPÁGINA: Si no viene logueado desde la portada, lo bloqueamos
 if 'logeado' not in st.session_state or not st.session_state['logeado']:

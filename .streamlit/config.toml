@@ -3,3 +3,7 @@ base = "dark"
 backgroundColor = "#0e1117"
 secondaryBackgroundColor = "#262730"
 textColor = "#fafafa"
+# ... (lo que ya tenías de [theme] arriba)
+
+[ui]
+layout = "wide"

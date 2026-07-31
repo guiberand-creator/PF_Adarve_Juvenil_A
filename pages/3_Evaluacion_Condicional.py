@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import os
+from utils import aplicar_diseno_responsive
+
+# Al principio de la página
+aplicar_diseno_responsive()
 
 # -----------------------------------------------------------------------------
 # SELLO FIJO AL PIE DEL SIDEBAR (+30% TAMAÑO)
