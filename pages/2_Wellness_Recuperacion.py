@@ -3,9 +3,8 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
-from utils import aplicar_estilos_globales
 import os
-from utils import aplicar_diseno_responsive
+from utils import aplicar_estilos_globales, aplicar_diseno_responsive
 
 # Al principio de la página
 aplicar_diseno_responsive()
@@ -34,7 +33,7 @@ if os.path.exists(_ruta_logo):
             border-top: 1px solid rgba(255, 255, 255, 0.15);
         }}
         .footer-sello-unico img {{
-            width: 195px; /* Aumentado un 30% */
+            width: 195px;
             height: auto;
             margin-bottom: 8px;
         }}
@@ -231,7 +230,6 @@ else:
     df_well_hoy = df_well_ord[df_well_ord['FECHA_DIA'] == fecha_seleccionada].copy()
     df_saltos_hoy = df_saltos_ord[df_saltos_ord['FECHA_DIA'] == fecha_seleccionada].copy()
     
-    # CRÍTICO: Usamos 'left' para que el Wellness diario NUNCA desaparezca
     df_cruzado = pd.merge(
         df_well_hoy, 
         df_saltos_hoy[['JUGADOR_NORM', 'DRI_MEDIO', 'DRI_MEDIA_4', 'DRI_STD_INTENTOS', 'ALTURA_MEDIA_CM', 'TC_MEDIO_S', 'INTENTOS', 'Z_SCORE_SALTO']], 
@@ -240,16 +238,12 @@ else:
     )
     
     df_cruzado = df_cruzado.sort_values(by='Z_SCORE_WELLNESS', ascending=True)
-
-    # Identificamos si hay registros válidos de salto hoy (si no están vacíos/NaN)
     tiene_saltos_hoy = not df_cruzado['Z_SCORE_SALTO'].isna().all()
 
     # ==========================================
     # 8. PANEL GRÁFICO DINÁMICO ADAPTATIVO
     # ==========================================
     if not df_cruzado.empty:
-        
-        # SI HAY TEST DE SALTO HOY: Mostramos doble columna en paralelo
         if tiene_saltos_hoy:
             col_g1, col_g2 = st.columns(2)
             
@@ -310,17 +304,14 @@ else:
                 )
                 st.plotly_chart(fig_scatter, use_container_width=True)
                 
-        # SI NO HAY SALTOS HOY: Mostramos solo la gráfica de barras de Wellness limpia y a ancho completo
         else:
             fig_bar_only = go.Figure()
-            
-            # Reutilizamos la lógica de tus colores iniciales de rangos para la gráfica de Wellness diaria
             colores_wellness_barras = []
             for val in df_cruzado['Z_SCORE_WELLNESS']:
-                if -1.5 <= val <= 1.5: colores_wellness_barras.append('#00A8E8') # Azul
-                elif -2.5 <= val < -1.5: colores_wellness_barras.append('#D35400') # Naranja
-                elif val < -2.5: colores_wellness_barras.append('#B31F24') # Rojo
-                else: colores_wellness_barras.append('#2ECC71') # Verde
+                if -1.5 <= val <= 1.5: colores_wellness_barras.append('#00A8E8')
+                elif -2.5 <= val < -1.5: colores_wellness_barras.append('#D35400')
+                elif val < -2.5: colores_wellness_barras.append('#B31F24')
+                else: colores_wellness_barras.append('#2ECC71')
                     
             fig_bar_only.add_trace(go.Bar(
                 x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
@@ -341,8 +332,155 @@ else:
         st.info("No hay registros de Wellness para este día.")
 
     # ==========================================
-    # 9. TABLA DESPLEGABLE ADAPTATIVA E INTELIGENTE
+    # 9. NUEVO: MAPA ANATÓMICO PORCENTUAL DE MOLESTIAS (OPCIÓN A)
     # ==========================================
+    st.markdown("---")
+    st.markdown(f"### 🩺 Mapa Anatómico de Molestias y Carga Muscular ({fecha_seleccionada.strftime('%d/%m/%Y')})")
+    st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
+
+    # Filtrar solo DISPONIBLES (DISPONIBLE == 'sí')
+    df_disp = df_cruzado[df_cruzado['DISPONIBLE'] == 'si'].copy()
+    total_disponibles = len(df_disp)
+
+    if total_disponibles == 0:
+        st.warning("⚠️ No hay jugadores disponibles en la sesión seleccionada.")
+    else:
+        # Definición de las 5 zonas según la encuesta
+        zonas_definidas = ['Cuadriceps', 'Pubis', 'Adductores', 'Isquios', 'Gemelos']
+        dict_conteo_zonas = {z: [] for z in zonas_definidas}
+
+        # Conteo por zona
+        for _, r in df_disp.iterrows():
+            j_nom = r['JUGADOR']
+            z_resp = str(r['ZONA_DOLOR']).strip()
+            
+            if 'todo' in z_resp.lower():
+                for z in zonas_definidas:
+                    dict_conteo_zonas[z].append(j_nom)
+            else:
+                for z in zonas_definidas:
+                    if z.lower() in z_resp.lower():
+                        dict_conteo_zonas[z].append(j_nom)
+
+        # Mapa de Coordenadas Anatómicas en Plotly (0 a 100)
+        # Vista Anterior (Izquierda) y Vista Posterior (Derecha)
+        coords_zonas = {
+            'Cuadriceps': {'x': 25, 'y': 48, 'vista': 'Anterior'},
+            'Pubis':      {'x': 25, 'y': 58, 'vista': 'Anterior'},
+            'Adductores': {'x': 22, 'y': 52, 'vista': 'Anterior'},
+            'Isquios':    {'x': 75, 'y': 48, 'vista': 'Posterior'},
+            'Gemelos':    {'x': 75, 'y': 28, 'vista': 'Posterior'}
+        }
+
+        x_coords, y_coords, text_labels, text_hovers, colors, sizes = [], [], [], [], [], []
+
+        for z in zonas_definidas:
+            jugs = dict_conteo_zonas[z]
+            num_jugs = len(jugs)
+            pct = (num_jugs / total_disponibles) * 100 if total_disponibles > 0 else 0
+            
+            pos = coords_zonas[z]
+            x_coords.append(pos['x'])
+            y_coords.append(pos['y'])
+            
+            text_labels.append(f"<b>{z}</b><br>{pct:.1f}%")
+            
+            lista_str = "<br>• " + "<br>• ".join(jugs) if jugs else "<br><i>Ninguno</i>"
+            hover_html = f"<b>{z.upper()}</b><br>Porcentaje: <b>{pct:.1f}%</b> ({num_jugs}/{total_disponibles} disp.)<br><b>Jugadores:</b>{lista_str}"
+            text_hovers.append(hover_html)
+            
+            # Color e intensidad según el % de afectación
+            if pct == 0:
+                colors.append("#2ECC71") # Verde
+                sizes.append(28)
+            elif pct < 20:
+                colors.append("#F1C40F") # Amarillo
+                sizes.append(36)
+            elif pct < 40:
+                colors.append("#E67E22") # Naranja
+                sizes.append(42)
+            else:
+                colors.append("#E74C3C") # Rojo Intenso
+                sizes.append(48)
+
+        # Renderizado de la figura anatómica en Plotly
+        fig_body = go.Figure()
+
+        # Puntos de dolor interactivos
+        fig_body.add_trace(go.Scatter(
+            x=x_coords, y=y_coords,
+            mode='markers+text',
+            text=text_labels,
+            textposition='top center',
+            hovertext=text_hovers,
+            hoverinfo='text',
+            marker=dict(
+                size=sizes,
+                color=colors,
+                opacity=0.85,
+                line=dict(width=2, color='white')
+            )
+        ))
+
+        # Siluetas del cuerpo mediante formas geométricas estilizadas (Anterior & Posterior)
+        # Vista Anterior (Cuerpo Izquierdo)
+        shapes_body = [
+            # Cabeza Ant
+            dict(type="circle", x0=22, y0=85, x1=28, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            # Torso Ant
+            dict(type="path", path="M 18 83 L 32 83 L 29 62 L 21 62 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            # Piernas Ant
+            dict(type="path", path="M 21 62 L 24 62 L 23 20 L 19 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            dict(type="path", path="M 26 62 L 29 62 L 31 20 L 27 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            
+            # Cabeza Post (Cuerpo Derecho)
+            dict(type="circle", x0=72, y0=85, x1=78, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            # Torso Post
+            dict(type="path", path="M 68 83 L 82 83 L 79 62 L 71 62 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            # Piernas Post
+            dict(type="path", path="M 71 62 L 74 62 L 73 20 L 69 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
+            dict(type="path", path="M 76 62 L 79 62 L 81 20 L 77 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5))
+        ]
+
+        fig_body.update_layout(
+            shapes=shapes_body,
+            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(range=[10, 105], showgrid=False, zeroline=False, showticklabels=False),
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            annotations=[
+                dict(x=25, y=100, text="<b>VISTA ANTERIOR</b>", showarrow=False, font=dict(color="#00A8E8", size=13)),
+                dict(x=75, y=100, text="<b>VISTA POSTERIOR</b>", showarrow=False, font=dict(color="#00A8E8", size=13))
+            ],
+            height=520,
+            margin=dict(l=10, r=10, t=30, b=10)
+        )
+
+        col_mapa, col_desglose = st.columns([6, 4])
+        
+        with col_mapa:
+            st.plotly_chart(fig_body, use_container_width=True)
+
+        with col_desglose:
+            st.markdown("#### 📋 Detalle de Plantilla Disponible Afectada")
+            st.write(f"**Plantilla Disponible Hoy:** `{total_disponibles}` jugadores")
+            
+            for z in zonas_definidas:
+                jugs = dict_conteo_zonas[z]
+                pct = (len(jugs) / total_disponibles * 100) if total_disponibles > 0 else 0
+                
+                with st.expander(f"🔴 **{z}**: {pct:.1f}% ({len(jugs)} jug.)"):
+                    if jugs:
+                        for j_nom in jugs:
+                            st.markdown(f"• **{j_nom}**")
+                    else:
+                        st.caption("Sin molestias registradas en esta zona.")
+
+    # ==========================================
+    # 10. TABLA DESPLEGABLE ADAPTATIVA E INTELIGENTE
+    # ==========================================
+    st.markdown("---")
     st.markdown("### 📋 Desglose Analítico de Puntuaciones")
     mostrar_tabla = st.checkbox("📋 Mostrar / Ocultar la tabla completa de valoraciones individuales", value=False)
     
@@ -356,7 +494,6 @@ else:
             </style>
         """, unsafe_allow_html=True)
         
-        # Formateadores con resguardo para cuando los valores de salto vengan vacíos (NaN)
         def formatear_altura(row):
             if pd.isna(row['Z_SCORE_SALTO']): return "-  ="
             hoy = row['ALTURA_MEDIA_CM']
@@ -376,11 +513,9 @@ else:
         df_tabla['CONTACTO_TXT'] = df_tabla.apply(formatear_contacto, axis=1)
         df_tabla['DRI_TXT'] = df_tabla.apply(formatear_dri, axis=1)
         
-        # Columnas base del informe
         columnas_filtrar = ['JUGADOR', 'SUEÑO', 'DOLOR', 'ESTRÉS', 'CARGA', 'WELLNESS_TOTAL']
         columnas_nombres = ['JUGADOR', 'SUEÑO', 'DOLOR MUSCULAR', 'ESTRÉS', 'CARGA ACUMULADA', 'MEDIA WELLNESS']
         
-        # Si hay saltos, incluimos las columnas mecánicas en la visualización
         if tiene_saltos_hoy:
             columnas_filtrar += ['ALTURA_TXT', 'CONTACTO_TXT', 'DRI_TXT']
             columnas_nombres += ['ALTURA (CM)', 'CONTACTO (S)', 'DRI MEDIO']
@@ -391,7 +526,6 @@ else:
         df_final = df_tabla[columnas_filtrar].copy()
         df_final.columns = columnas_nombres
         
-        # Categorización clínica tolerante a valores vacíos de salto
         def categorizar_alertas_cruzadas(row):
             w_val = row['MEDIA WELLNESS']
             z_salto = row['Z_SALTO_RAW']
