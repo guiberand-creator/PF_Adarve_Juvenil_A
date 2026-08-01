@@ -425,8 +425,8 @@ else:
     # ==========================================
     # 5. CAMPOGRAMA TÁCTICO DE DISPONIBILIDAD Y WELLNESS
     # ==========================================
-    st.markdown("### ⚽ DISPONIBILIDAD DE PLANTILLA Y ESTADO DE WELLNESS")
-    st.caption("Puntos verdes, amarillos y rojos indican el nivel de Wellness percibido hoy (🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga).")
+    st.markdown("### DISPONIBILIDAD PROXIMA SESION")
+    st.caption("🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga")
 
     ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
     
