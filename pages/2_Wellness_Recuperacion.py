@@ -331,15 +331,15 @@ else:
     else:
         st.info("No hay registros de Wellness para este día.")
 
-    # ==========================================
+   # ==========================================
     # 9. NUEVO: MAPA ANATÓMICO PORCENTUAL DE MOLESTIAS (OPCIÓN A)
     # ==========================================
     st.markdown("---")
     st.markdown(f"### 🩺 Mapa Anatómico de Molestias y Carga Muscular ({fecha_seleccionada.strftime('%d/%m/%Y')})")
     st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
 
-    # Filtrar solo DISPONIBLES (DISPONIBLE == 'sí')
-    df_disp = df_cruzado[df_cruzado['DISPONIBLE'] == 'si'].copy()
+    # Consideramos disponible a cualquier jugador que NO haya marcado "no" en la disponibilidad
+    df_disp = df_cruzado[~df_cruzado['DISPONIBLE'].str.startswith('no', na=False)].copy()
     total_disponibles = len(df_disp)
 
     if total_disponibles == 0:
@@ -407,7 +407,7 @@ else:
         fig_body = go.Figure()
 
         # Puntos de dolor interactivos
-        fig_body.add_trace(go.Scatter(
+        fig_body.add_trace(go.Bar(
             x=x_coords, y=y_coords,
             mode='markers+text',
             text=text_labels,
@@ -423,7 +423,6 @@ else:
         ))
 
         # Siluetas del cuerpo mediante formas geométricas estilizadas (Anterior & Posterior)
-        # Vista Anterior (Cuerpo Izquierdo)
         shapes_body = [
             # Cabeza Ant
             dict(type="circle", x0=22, y0=85, x1=28, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
@@ -433,7 +432,7 @@ else:
             dict(type="path", path="M 21 62 L 24 62 L 23 20 L 19 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
             dict(type="path", path="M 26 62 L 29 62 L 31 20 L 27 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
             
-            # Cabeza Post (Cuerpo Derecho)
+            # Cabeza Post
             dict(type="circle", x0=72, y0=85, x1=78, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
             # Torso Post
             dict(type="path", path="M 68 83 L 82 83 L 79 62 L 71 62 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
