@@ -472,14 +472,76 @@ elif pest_sel == "🫁 VAM / Aeróbico":
         st.warning("⚠️ No se encontraron los archivos de VAM en 'data/EVALUACIONES/AEROBICO/'.")
     else:
         df_v_valid = df_vam[df_vam['VAM'] > 0].copy()
+        
+        # 1. CÁLCULO DE ALERTAS DE VAM (Última fecha registrada)
+        ult_fecha_vam = df_v_valid['Fecha_dt'].max()
+        ult_fecha_vam_str = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam]['Fecha'].iloc[0]
+        df_v_ult = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam].copy()
+
+        dict_alertas_vam = {}
+        for _, r_j in df_v_ult.iterrows():
+            nom_j = r_j['Nombre']
+            pos_j = r_j['Posicion']
+            vam_val = r_j['VAM']
+
+            # Buscar la referencia de su posición
+            if df_ref_vam is not None and not df_ref_vam.empty:
+                r_ref = df_ref_vam[df_ref_vam['Posicion'] == pos_j]
+                if not r_ref.empty:
+                    ref_val = r_ref.iloc[0]['VAM_Ref']
+                    # Si no llega al umbral de su posición -> Alerta
+                    if pd.notna(vam_val) and pd.notna(ref_val) and vam_val < ref_val:
+                        dict_alertas_vam[nom_j] = ["Trabajo Aeróbico"]
+
+        # Mostrar bloque de alertas arriba
+        st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_fecha_vam_str})")
+        c_v1, c_v2 = st.columns(2)
+        with c_v1: 
+            st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_alertas_vam)} / {len(df_v_ult)}")
+        with c_v2: 
+            pct_optimo = ((len(df_v_ult) - len(dict_alertas_vam)) / len(df_v_ult) * 100) if len(df_v_ult) > 0 else 100
+            st.metric("Porcentaje del Vestuario en Objetivo", f"{pct_optimo:.0f}%")
+
+        st.markdown("#### 🎯 Prescripción Metodológica por Jugador:")
+        if dict_alertas_vam:
+            col_va1, col_va2 = st.columns(2)
+            items_v = list(dict_alertas_vam.items())
+            mitad_v = (len(items_v) + 1) // 2
+            
+            with col_va1:
+                for nom, defs in items_v[:mitad_v]:
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+            with col_va2:
+                for nom, defs in items_v[mitad_v:]:
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+        else:
+            st.success("✅ ¡Excelente! Todo el vestuario cumple o supera la VAM de referencia para su posición.")
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+
+        # 2. FILTRO Y GRÁFICOS POR DEMARCACIÓN
         posiciones_unicas = sorted([p for p in df_v_valid['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']]) if 'Posicion' in df_v_valid.columns else []
         colores_fechas = ['#2ECC71', '#00A8E8', '#FF9F1C', '#9B59B6', '#E74C3C']
-        
-        for i in range(0, len(posiciones_unicas), 2):
-            col_g1, col_g2 = st.columns(2)
-            for idx_c, col_curr in enumerate([col_g1, col_g2]):
-                if i + idx_c < len(posiciones_unicas):
-                    pos_curr = posiciones_unicas[i + idx_c]
+
+        opciones_pos = ["Todas las Demarcaciones"] + posiciones_unicas
+        col_filtro, col_vacio = st.columns([1, 2])
+        with col_filtro:
+            pos_seleccionada = st.selectbox("⚽ Filtrar por Demarcación:", opciones_pos)
+
+        if pos_seleccionada == "Todas las Demarcaciones":
+            pos_a_mostrar = posiciones_unicas
+        else:
+            pos_a_mostrar = [pos_seleccionada]
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        for i in range(0, len(pos_a_mostrar), 2):
+            col_g1, col_g2 = st.columns(2) if len(pos_a_mostrar) > 1 else (st.container(), None)
+            columnas_iter = [col_g1, col_g2] if len(pos_a_mostrar) > 1 else [col_g1]
+
+            for idx_c, col_curr in enumerate(columnas_iter):
+                if col_curr is not None and (i + idx_c < len(pos_a_mostrar)):
+                    pos_curr = pos_a_mostrar[i + idx_c]
                     with col_curr:
                         df_p = df_v_valid[df_v_valid['Posicion'] == pos_curr].sort_values(['Nombre', 'Fecha_dt']).copy()
                         df_p['VAM_Ant'] = df_p.groupby('Nombre')['VAM'].shift(1)
@@ -490,16 +552,41 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                         for idx_f, f in enumerate(fechas_p):
                             df_f = df_p[df_p['Fecha'] == f]
                             etiquetas = [f"<b>{r['VAM']:.2f}</b>" if pd.isna(r['Var_Pct']) else f"<b>{r['VAM']:.2f}</b><br><i>{'+' if r['Var_Pct']>0 else ''}{r['Var_Pct']:.1f}%</i>" for _, r in df_f.iterrows()]
-                            fig_p.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['VAM'], name=f"Fecha {f}", text=etiquetas, textposition='outside', marker_color=colores_fechas[idx_f % len(colores_fechas)]))
+                            fig_p.add_trace(go.Bar(
+                                x=df_f['Nombre'], 
+                                y=df_f['VAM'], 
+                                name=f"Fecha {f}", 
+                                text=etiquetas, 
+                                textposition='outside', 
+                                marker_color=colores_fechas[idx_f % len(colores_fechas)]
+                            ))
 
                         ref_val = None
                         if df_ref_vam is not None:
                             row_r = df_ref_vam[df_ref_vam['Posicion'] == pos_curr]
                             if not row_r.empty:
                                 ref_val = row_r.iloc[0]['VAM_Ref']
-                                fig_p.add_shape(type="line", x0=-0.5, x1=len(df_p['Nombre'].unique())-0.5, y0=ref_val, y1=ref_val, line=dict(color="#E74C3C", width=3, dash="dash"))
+                                fig_p.add_shape(
+                                    type="line", 
+                                    x0=-0.5, 
+                                    x1=len(df_p['Nombre'].unique())-0.5, 
+                                    y0=ref_val, 
+                                    y1=ref_val, 
+                                    line=dict(color="#E74C3C", width=3, dash="dash")
+                                )
 
-                        fig_p.update_layout(title=f"⚽ Demarcación: {pos_curr}", barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickangle=-45), yaxis=dict(title="VAM (km/h)", range=[0, max(df_p['VAM'].max() if not df_p.empty else 20, (ref_val or 0)) + 3]), height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=False)
+                        fig_p.update_layout(
+                            title=f"⚽ Demarcación: {pos_curr}", 
+                            barmode='group', 
+                            template="plotly_dark", 
+                            paper_bgcolor='rgba(0,0,0,0)', 
+                            plot_bgcolor='rgba(0,0,0,0)', 
+                            xaxis=dict(tickangle=-45), 
+                            yaxis=dict(title="VAM (km/h)", range=[0, max(df_p['VAM'].max() if not df_p.empty else 20, (ref_val or 0)) + 3]), 
+                            height=420, 
+                            margin=dict(l=20, r=20, t=50, b=90), 
+                            showlegend=True
+                        )
                         st.plotly_chart(fig_p, use_container_width=True)
 
 # =============================================================================
