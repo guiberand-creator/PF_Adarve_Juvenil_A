@@ -405,6 +405,10 @@ else:
         dict_well_norm = {str(k).replace('_', ' ').strip().lower(): v for k, v in dict_well_jug.items()}
 
         agrupados = {}
+        
+        # Contadores para el resumen estadístico superior
+        num_porteros = 0
+        num_campo = 0
 
         for _, row_j in df_disponibles_campo.iterrows():
             nom_original = str(row_j['Jugador'])
@@ -421,6 +425,11 @@ else:
             # Limpiamos y preparamos las posiciones (Motor Inteligente)
             pos_clean = str(row_j.get('Posicion', '')).strip().title()
             lat_clean = str(row_j.get('Lateralidad', '')).strip().title()
+            
+            if 'Portero' in pos_clean:
+                num_porteros += 1
+            else:
+                num_campo += 1
 
             # --- MOTOR DE REGLAS DE COORDENADAS (Atacando hacia Y=0, Portero Y=92) ---
             
@@ -461,6 +470,9 @@ else:
                 agrupados[coord_base] = []
             agrupados[coord_base].append(texto_jugador)
 
+        # Calculamos los ausentes (resto de la plantilla)
+        num_ausentes = total_jugadores - (num_porteros + num_campo)
+
         # Preparar el lienzo de Plotly
         fig_campo = go.Figure()
 
@@ -490,6 +502,22 @@ else:
                     borderpad=8
                 )
             )
+
+        # Añadimos la etiqueta/resumen numérico en la esquina superior derecha
+        anotacion_resumen = dict(
+            x=98, y=103,
+            text=f"<b>RESUMEN SESIÓN</b><br>🏃 Jugadores campo disp: <b>{num_campo}</b><br>🧤 Porteros disp: <b>{num_porteros}</b><br>🚑 Ausentes/Lesionados: <b>{num_ausentes}</b>",
+            showarrow=False,
+            xanchor='right',
+            yanchor='top',
+            align='right',
+            font=dict(size=12, color="white"),
+            bgcolor="rgba(15, 23, 42, 0.9)",
+            bordercolor="#00A8E8",
+            borderwidth=1,
+            borderpad=8
+        )
+        anotaciones.append(anotacion_resumen)
 
         fig_campo.update_layout(
             shapes=lineas_campo,
