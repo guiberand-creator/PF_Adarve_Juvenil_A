@@ -414,7 +414,7 @@ else:
             # Estado Wellness
             w_score = dict_well_norm.get(nom_busqueda, None)
             
-            # 🛑 EXCLUIR DEL CAMPOGRAMA A LOS QUE NO TIENEN DATOS (SD)
+            # 🛑 EXCLUIR DEL CAMPOGRAMA A LOS QUE NO TIENEN DATOS
             if w_score is None or pd.isna(w_score):
                 continue
                 
@@ -449,16 +449,13 @@ else:
             # Asignar el color del semáforo
             if w_score >= 3.0:
                 color_nodo = "#2ECC71"
-                txt_score = f"{w_score:.1f}"
             elif w_score >= 2.5:
                 color_nodo = "#F1C40F"
-                txt_score = f"{w_score:.1f}"
             else:
                 color_nodo = "#E74C3C"
-                txt_score = f"{w_score:.1f}"
 
-            # Construir la línea HTML del jugador
-            texto_jugador = f"<span style='color:{color_nodo}; font-size:16px;'>●</span> {nom_mostrar} <b>({txt_score})</b>"
+            # Construir la línea HTML del jugador (SIN NÚMERO DE WELLNESS)
+            texto_jugador = f"<span style='color:{color_nodo}; font-size:16px;'>●</span> {nom_mostrar}"
             
             if coord_base not in agrupados:
                 agrupados[coord_base] = []
