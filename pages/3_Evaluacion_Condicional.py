@@ -302,38 +302,33 @@ def cargar_datos_evaluaciones():
         df_fts['Dominada'] = pd.to_numeric(df_fts['Dominada'], errors='coerce')
         df_fts = df_fts.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
 
-    # 8. Velocidad & Campo
-    if os.path.exists(RUTA_CAMPO):
-        df_campo = pd.read_excel(RUTA_CAMPO)
-        renomb_c = {}
-        for col in df_campo.columns:
-            c_l = str(col).strip().lower()
-            if 'fecha' in c_l: renomb_c[col] = 'Fecha'
-            elif 'nombre' in c_l or 'jugador' in c_l: renomb_c[col] = 'Nombre'
-            elif c_l == 'v_max': renomb_c[col] = 'V_MAX'
-            elif c_l == 'ac_max': renomb_c[col] = 'AC_MAX'
-            elif c_l == 'dec_max': renomb_c[col] = 'DEC_MAX'
-            elif 'sprint' in c_l: renomb_c[col] = 'Tecnica_Sprint'
-            elif 'cod' in c_l: renomb_c[col] = 'Tecnica_COD'
-
-        df_campo.rename(columns=renomb_c, inplace=True)
-        df_campo['Nombre'] = df_campo['Nombre'].astype(str).str.strip()
-        df_campo['Fecha_dt'] = pd.to_datetime(df_campo['Fecha'], dayfirst=True, errors='coerce')
-        df_campo['Fecha'] = df_campo['Fecha_dt'].dt.strftime('%d/%m/%Y')
+    # 8. Velocidad & Campo (Referencias)
+    if os.path.exists(RUTA_REF_CAMPO):
+        df_ref_campo = pd.read_excel(RUTA_REF_CAMPO)
+        renomb_rc = {}
+        for col in df_ref_campo.columns:
+            c_clean = str(col).strip().lower()
+            if 'posic' in c_clean: 
+                renomb_rc[col] = 'Posicion'
+            elif c_clean.startswith('vmax') or 'v_max' in c_clean or 'vmax' in c_clean: 
+                renomb_rc[col] = 'V_MAX_Ref'
+            elif c_clean.startswith('acmax') or 'ac_max' in c_clean or 'acmax' in c_clean: 
+                renomb_rc[col] = 'AC_MAX_Ref'
+            elif c_clean.startswith('decmax') or 'dec_max' in c_clean or 'decmax' in c_clean: 
+                renomb_rc[col] = 'DEC_MAX_Ref'
+                
+        df_ref_campo.rename(columns=renomb_rc, inplace=True)
         
-        for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX', 'Tecnica_Sprint', 'Tecnica_COD']:
-            if num_col in df_campo.columns:
-                df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
-
-        df_campo = df_campo.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
-
-        if df_pos is not None and 'Posicion' in df_pos.columns:
-            df_campo = pd.merge(df_campo, df_pos[['Nombre', 'Posicion']], on='Nombre', how='left')
-
-    return df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo
-
-df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = cargar_datos_evaluaciones()
-
+        if 'Posicion' in df_ref_campo.columns:
+            df_ref_campo['Posicion'] = df_ref_campo['Posicion'].astype(str).str.strip()
+            
+        # Limpieza de comas europeas por puntos decimales (ej. "5,5" -> 5.5)
+        for num_c in ['V_MAX_Ref', 'AC_MAX_Ref', 'DEC_MAX_Ref']:
+            if num_c in df_ref_campo.columns:
+                df_ref_campo[num_c] = pd.to_numeric(
+                    df_ref_campo[num_c].astype(str).str.replace(',', '.'), 
+                    errors='coerce'
+                )
 # -----------------------------------------------------------------------------
 # 4. CABECERA
 # -----------------------------------------------------------------------------
@@ -1367,35 +1362,7 @@ elif pest_sel == "⚡ Velocidad & COD":
         df_c_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].copy()
 
         # ---------------------------------------------------------------------
-        # 1. RÉCORDS HISTÓRICOS DE LA PLANTILLA (TOP BADGES)
-        # ---------------------------------------------------------------------
-        c_rec1, c_rec2, c_rec3 = st.columns(3)
-        
-        # Máxima Velocidad
-        if 'V_MAX' in df_campo.columns and not df_campo['V_MAX'].dropna().empty:
-            idx_vmax = df_campo['V_MAX'].idxmax()
-            row_vmax = df_campo.loc[idx_vmax]
-            with c_rec1:
-                st.info(f"⚡ **Máx. Velocidad (V_MAX):**\n`{row_vmax['Nombre']}` - **{row_vmax['V_MAX']:.1f} km/h**")
-        
-        # Máxima Aceleración
-        if 'AC_MAX' in df_campo.columns and not df_campo['AC_MAX'].dropna().empty:
-            idx_acmax = df_campo['AC_MAX'].idxmax()
-            row_acmax = df_campo.loc[idx_acmax]
-            with c_rec2:
-                st.info(f"🚀 **Máx. Aceleración (AC_MAX):**\n`{row_acmax['Nombre']}` - **{row_acmax['AC_MAX']:.2f} m/s²**")
-
-        # Máxima Desaceleración
-        if 'DEC_MAX' in df_campo.columns and not df_campo['DEC_MAX'].dropna().empty:
-            idx_decmax = df_campo['DEC_MAX'].idxmax()
-            row_decmax = df_campo.loc[idx_decmax]
-            with c_rec3:
-                st.info(f"🛑 **Máx. Desaceleración (DEC_MAX):**\n`{row_decmax['Nombre']}` - **{row_decmax['DEC_MAX']:.2f} m/s²**")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ---------------------------------------------------------------------
-        # 2. INFORME DE ALERTAS Y PRESCRIPCIÓN
+        # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN
         # ---------------------------------------------------------------------
         dict_prescripciones_campo = {}
         for _, row_j in df_c_ult.iterrows():
@@ -1413,18 +1380,16 @@ elif pest_sel == "⚡ Velocidad & COD":
             if df_ref_campo is not None and not df_ref_campo.empty:
                 r_ref = df_ref_campo[df_ref_campo['Posicion'] == pos_j]
                 if not r_ref.empty:
-                    # Buscar columnas de referencia sin importar minúsculas/mayúsculas
-                    for col_r in r_ref.columns:
-                        c_clean = str(col_r).strip().lower()
-                        if 'v_max' in c_clean or 'vmax' in c_clean: ref_v = r_ref.iloc[0][col_r]
-                        elif 'ac_max' in c_clean or 'acmax' in c_clean: ref_ac = r_ref.iloc[0][col_r]
-                        elif 'dec_max' in c_clean or 'decmax' in c_clean: ref_dec = r_ref.iloc[0][col_r]
+                    ref_v = r_ref.iloc[0].get('V_MAX_Ref', None)
+                    ref_ac = r_ref.iloc[0].get('AC_MAX_Ref', None)
+                    ref_dec = r_ref.iloc[0].get('DEC_MAX_Ref', None)
 
-            if (pd.notna(v_val) and ref_v and pd.notna(ref_v) and v_val < ref_v) or \
-               (pd.notna(ac_val) and ref_ac and pd.notna(ref_ac) and ac_val < ref_ac):
+            if (pd.notna(v_val) and pd.notna(ref_v) and v_val < ref_v) or \
+               (pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac):
                 prescripciones_j.append("Trabajo de Velocidad / Aceleración")
 
-            if pd.notna(dec_val) and ref_dec and pd.notna(ref_dec) and dec_val < ref_dec:
+            # Al ser valores negativos (ej -5.5), si frena menos (ej -4.0), dec_val es MAYOR que ref_dec
+            if pd.notna(dec_val) and pd.notna(ref_dec) and dec_val > ref_dec:
                 prescripciones_j.append("Trabajo de Capacidad COD")
 
             if (pd.notna(ts_val) and ts_val <= 2) or (pd.notna(tcod_val) and tcod_val <= 2):
@@ -1455,6 +1420,34 @@ elif pest_sel == "⚡ Velocidad & COD":
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple los objetivos cinemáticos y biomecánicos.")
 
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------------
+        # 2. RÉCORDS HISTÓRICOS DE LA PLANTILLA
+        # ---------------------------------------------------------------------
+        c_rec1, c_rec2, c_rec3 = st.columns(3)
+        
+        # Máxima Velocidad
+        if 'V_MAX' in df_campo.columns and not df_campo['V_MAX'].dropna().empty:
+            idx_vmax = df_campo['V_MAX'].idxmax()
+            row_vmax = df_campo.loc[idx_vmax]
+            with c_rec1:
+                st.info(f"⚡ **Máx. Velocidad (V_MAX):**\n`{row_vmax['Nombre']}` - **{row_vmax['V_MAX']:.1f} km/h**")
+        
+        # Máxima Aceleración
+        if 'AC_MAX' in df_campo.columns and not df_campo['AC_MAX'].dropna().empty:
+            idx_acmax = df_campo['AC_MAX'].idxmax()
+            row_acmax = df_campo.loc[idx_acmax]
+            with c_rec2:
+                st.info(f"🚀 **Máx. Aceleración (AC_MAX):**\n`{row_acmax['Nombre']}` - **{row_acmax['AC_MAX']:.2f} m/s²**")
+
+        # Máxima Desaceleración (el valor más negativo es el más fuerte)
+        if 'DEC_MAX' in df_campo.columns and not df_campo['DEC_MAX'].dropna().empty:
+            idx_decmax = df_campo['DEC_MAX'].idxmin()
+            row_decmax = df_campo.loc[idx_decmax]
+            with c_rec3:
+                st.info(f"🛑 **Máx. Desaceleración (DEC_MAX):**\n`{row_decmax['Nombre']}` - **{row_decmax['DEC_MAX']:.2f} m/s²**")
+
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
         # ---------------------------------------------------------------------
@@ -1476,15 +1469,15 @@ elif pest_sel == "⚡ Velocidad & COD":
 
         # Selección de columna y titulación
         if "Velocidad" in prueba_sel:
-            col_metrica, col_tec = 'V_MAX', 'Tecnica_Sprint'
+            col_metrica, col_ref, col_tec = 'V_MAX', 'V_MAX_Ref', 'Tecnica_Sprint'
             titulo_m = "Velocidad Máxima (V_MAX)"
             unidad_m = "km/h"
         elif "Aceleración" in prueba_sel:
-            col_metrica, col_tec = 'AC_MAX', 'Tecnica_Sprint'
+            col_metrica, col_ref, col_tec = 'AC_MAX', 'AC_MAX_Ref', 'Tecnica_Sprint'
             titulo_m = "Aceleración Máxima (AC_MAX)"
             unidad_m = "m/s²"
         else:
-            col_metrica, col_tec = 'DEC_MAX', 'Tecnica_COD'
+            col_metrica, col_ref, col_tec = 'DEC_MAX', 'DEC_MAX_Ref', 'Tecnica_COD'
             titulo_m = "Desaceleración / COD (DEC_MAX)"
             unidad_m = "m/s²"
 
@@ -1539,12 +1532,8 @@ elif pest_sel == "⚡ Velocidad & COD":
                         ref_val_c = None
                         if df_ref_campo is not None and not df_ref_campo.empty:
                             row_rc = df_ref_campo[df_ref_campo['Posicion'] == pos_curr]
-                            if not row_rc.empty:
-                                for c_ref in row_rc.columns:
-                                    c_clean = str(c_ref).strip().lower()
-                                    if col_metrica.lower() in c_clean:
-                                        ref_val_c = row_rc.iloc[0][c_ref]
-                                        break
+                            if not row_rc.empty and col_ref in row_rc.columns:
+                                ref_val_c = row_rc.iloc[0][col_ref]
 
                         if ref_val_c and pd.notna(ref_val_c):
                             fig_campo.add_shape(
@@ -1565,13 +1554,15 @@ elif pest_sel == "⚡ Velocidad & COD":
                                 yshift=12
                             )
 
-                        max_y_c = max(df_p_c[col_metrica].max(), (ref_val_c or 0)) + 4
+                        val_min = min(df_p_c[col_metrica].min(), (ref_val_c or 0))
+                        val_max = max(df_p_c[col_metrica].max(), (ref_val_c or 0))
 
                         fig_campo.update_layout(
                             title=f"⚽ Demarcación: {pos_curr} - {titulo_m}",
                             barmode='group', template="plotly_dark",
                             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                            xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad_m})", range=[min(0, df_p_c[col_metrica].min() - 2), max_y_c]),
+                            xaxis=dict(tickangle=-45), 
+                            yaxis=dict(title=f"Valor ({unidad_m})", range=[min(0, val_min - 2), val_max + 4]),
                             height=440, margin=dict(l=10, r=10, t=50, b=90),
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
