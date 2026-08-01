@@ -915,144 +915,178 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-    col_cmj_g, col_dri_g = st.columns(2)
+    # -------------------------------------------------------------------------
+    # 1. FILTRO Y SECCIÓN: EVOLUCIÓN GENERAL DE LA PLANTILLA (CMJ vs DRI)
+    # -------------------------------------------------------------------------
+    col_f_evo, col_sp_evo = st.columns([1, 2])
+    with col_f_evo:
+        sel_tipo_evo = st.selectbox(
+            "📈 Selecciona Métrica para Evolución de Equipo:",
+            ["Ambos Gráficos", "Evolución CMJ (Media de Equipo)", "Evolución DRI (Drop Jump 50cm)"]
+        )
 
-    with col_cmj_g:
-        st.markdown("### 📈 Evolución CMJ (Media de Equipo)")
-        if df_saltos is None or df_saltos.empty:
-            st.warning("⚠️ No se encontró el archivo 'SALTOS.xlsx' local.")
-        else:
-            df_cmj = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
-            if df_cmj.empty:
-                st.info("No hay datos de CMJ.")
+    col_cmj_g, col_dri_g = st.columns(2) if sel_tipo_evo == "Ambos Gráficos" else (st.container(), None)
+
+    # --- GRÁFICO 1: EVOLUCIÓN CMJ ---
+    if sel_tipo_evo in ["Ambos Gráficos", "Evolución CMJ (Media de Equipo)"]:
+        target_col = col_cmj_g if sel_tipo_evo == "Ambos Gráficos" else st
+        with target_col:
+            st.markdown("### 📈 Evolución CMJ (Media de Equipo)")
+            if df_saltos is None or df_saltos.empty:
+                st.warning("⚠️ No se encontró el archivo 'SALTOS.xlsx' local.")
             else:
-                df_jug_cmj = df_cmj.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean()
+                df_cmj = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
+                if df_cmj.empty:
+                    st.info("No hay datos de CMJ.")
+                else:
+                    # Récord Histórico CMJ
+                    idx_max_cmj = df_cmj['Altura'].idxmax()
+                    row_max_cmj = df_cmj.loc[idx_max_cmj]
+                    st.info(f"🏆 **Récord Histórico CMJ:** `{row_max_cmj['Nombre']}` con **{row_max_cmj['Altura']:.1f} cm**")
 
-                df_cmj_eq = df_jug_cmj.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
-                    Media_Equipo=('Altura', 'mean')
-                ).sort_values('Fecha_dt')
+                    df_jug_cmj = df_cmj.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean()
+                    df_cmj_eq = df_jug_cmj.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
+                        Media_Equipo=('Altura', 'mean'),
+                        SD_Equipo=('Altura', 'std')
+                    ).sort_values('Fecha_dt')
 
-                fechas_cmj_str = df_cmj_eq['Fecha'].tolist()
+                    df_cmj_eq['SD_Equipo'] = df_cmj_eq['SD_Equipo'].fillna(0)
+                    fechas_cmj_str = df_cmj_eq['Fecha'].tolist()
+                    fig_cmj = go.Figure()
 
-                fig_cmj = go.Figure()
+                    # Barras con Desviación Estándar y texto dentro
+                    fig_cmj.add_trace(go.Bar(
+                        x=fechas_cmj_str, 
+                        y=df_cmj_eq['Media_Equipo'],
+                        error_y=dict(type='data', array=df_cmj_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
+                        name='Media Equipo CMJ',
+                        marker_color=COLOR_ADARVE_GRANATE,
+                        marker_line_color=COLOR_ADARVE_BORDER,
+                        marker_line_width=2,
+                        text=[f"<b>{v:.1f} cm</b>" for v in df_cmj_eq['Media_Equipo']],
+                        textposition='inside',
+                        insidetextanchor='middle'
+                    ))
 
-                fig_cmj.add_trace(go.Bar(
-                    x=fechas_cmj_str, y=df_cmj_eq['Media_Equipo'],
-                    name='Media Equipo CMJ',
-                    marker_color=COLOR_ADARVE_GRANATE,
-                    marker_line_color=COLOR_ADARVE_BORDER,
-                    marker_line_width=2,
-                    text=[f"<b>{v:.1f} cm</b>" for v in df_cmj_eq['Media_Equipo']],
-                    textposition='outside'
-                ))
+                    # Porcentajes por encima (sin estorbar a los bigotes)
+                    for k in range(len(df_cmj_eq)):
+                        f_curr = fechas_cmj_str[k]
+                        val_curr = df_cmj_eq['Media_Equipo'].iloc[k]
+                        sd_curr = df_cmj_eq['SD_Equipo'].iloc[k]
+                        pos_y = val_curr + sd_curr + 2.5  # Se apoya por encima del bigote
 
-                for k in range(len(df_cmj_eq)):
-                    f_curr = fechas_cmj_str[k]
-                    val_curr = df_cmj_eq['Media_Equipo'].iloc[k]
-                    
-                    if k == 0:
-                        pos_y = val_curr + 2.5
-                        fig_cmj.add_annotation(
-                            x=f_curr, y=pos_y,
-                            text=f"<b>{val_curr:.1f} cm</b>",
-                            showarrow=False,
-                            font=dict(color="white", size=14)
-                        )
-                    else:
-                        m_prev = df_cmj_eq['Media_Equipo'].iloc[k-1]
-                        pct_v = ((val_curr - m_prev) / m_prev) * 100
-                        col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
-                        signo = "+" if pct_v > 0 else ""
-                        pos_y = val_curr + 3.0
+                        if k == 0:
+                            fig_cmj.add_annotation(
+                                x=f_curr, y=pos_y,
+                                text=f"<b>{val_curr:.1f} cm</b>",
+                                showarrow=False, font=dict(color="white", size=13)
+                            )
+                        else:
+                            m_prev = df_cmj_eq['Media_Equipo'].iloc[k-1]
+                            pct_v = ((val_curr - m_prev) / m_prev) * 100
+                            col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
+                            signo = "+" if pct_v > 0 else ""
 
-                        fig_cmj.add_annotation(
-                            x=f_curr, y=pos_y,
-                            text=f"<b>{signo}{pct_v:.1f}%</b>",
-                            showarrow=False,
-                            font=dict(color=col_v, size=16)
-                        )
+                            fig_cmj.add_annotation(
+                                x=f_curr, y=pos_y,
+                                text=f"<b>{signo}{pct_v:.1f}%</b>",
+                                showarrow=False, font=dict(color=col_v, size=15)
+                            )
 
-                max_y_cmj = df_cmj_eq['Media_Equipo'].max() + 7
+                    max_y_cmj = (df_cmj_eq['Media_Equipo'] + df_cmj_eq['SD_Equipo']).max() + 7
+                    fig_cmj.update_layout(
+                        title="Evolución CMJ (cm) - Media ± SD Granate",
+                        template="plotly_dark",
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_cmj]),
+                        height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
+                    )
+                    st.plotly_chart(fig_cmj, use_container_width=True)
 
-                fig_cmj.update_layout(
-                    title="Evolución CMJ (cm) - Media de Equipo Granate",
-                    template="plotly_dark",
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_cmj]),
-                    height=500, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
-                )
-                st.plotly_chart(fig_cmj, use_container_width=True)
-
-    with col_dri_g:
-        st.markdown("### ⚡ Evolución DRI (Drop Jump 50cm - Histórico Completo)")
-        if df_dri_sheet is None or df_dri_sheet.empty:
-            st.warning("⚠️ No se pudo conectar al Google Sheet de Drop Jump.")
-        else:
-            df_dri = df_dri_sheet[df_dri_sheet['Tipo'].str.upper().str.startswith('DJ')].copy()
-            if df_dri.empty:
-                df_dri = df_dri_sheet.copy()
-
-            if df_dri.empty:
-                st.info("No hay registros de Drop Jump.")
+    # --- GRÁFICO 2: EVOLUCIÓN DRI ---
+    if sel_tipo_evo in ["Ambos Gráficos", "Evolución DRI (Drop Jump 50cm)"]:
+        target_col = col_dri_g if sel_tipo_evo == "Ambos Gráficos" else st
+        with target_col:
+            st.markdown("### ⚡ Evolución DRI (Drop Jump 50cm)")
+            if df_dri_sheet is None or df_dri_sheet.empty:
+                st.warning("⚠️ No se pudo conectar al Google Sheet de Drop Jump.")
             else:
-                df_jug_dri = df_dri.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['DRI'].mean()
+                df_dri = df_dri_sheet[df_dri_sheet['Tipo'].str.upper().str.startswith('DJ')].copy()
+                if df_dri.empty:
+                    df_dri = df_dri_sheet.copy()
 
-                df_dri_eq = df_jug_dri.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
-                    Media_Equipo=('DRI', 'mean')
-                ).sort_values('Fecha_dt')
+                if df_dri.empty:
+                    st.info("No hay registros de Drop Jump.")
+                else:
+                    # Récord Histórico DRI
+                    idx_max_dri = df_dri['DRI'].idxmax()
+                    row_max_dri = df_dri.loc[idx_max_dri]
+                    st.info(f"🏆 **Récord Histórico DRI:** `{row_max_dri['Nombre']}` con **{row_max_dri['DRI']:.2f}**")
 
-                fechas_dri_str = df_dri_eq['Fecha'].tolist()
+                    df_jug_dri = df_dri.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['DRI'].mean()
+                    df_dri_eq = df_jug_dri.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
+                        Media_Equipo=('DRI', 'mean'),
+                        SD_Equipo=('DRI', 'std')
+                    ).sort_values('Fecha_dt')
 
-                fig_dri = go.Figure()
+                    df_dri_eq['SD_Equipo'] = df_dri_eq['SD_Equipo'].fillna(0)
+                    fechas_dri_str = df_dri_eq['Fecha'].tolist()
+                    fig_dri = go.Figure()
 
-                fig_dri.add_trace(go.Bar(
-                    x=fechas_dri_str, y=df_dri_eq['Media_Equipo'],
-                    name='Media Equipo DRI',
-                    marker_color=COLOR_ADARVE_GRANATE,
-                    marker_line_color=COLOR_ADARVE_BORDER,
-                    marker_line_width=2,
-                    text=[f"<b>{v:.2f}</b>" for v in df_dri_eq['Media_Equipo']],
-                    textposition='outside'
-                ))
+                    # Barras con Desviación Estándar y texto dentro
+                    fig_dri.add_trace(go.Bar(
+                        x=fechas_dri_str, 
+                        y=df_dri_eq['Media_Equipo'],
+                        error_y=dict(type='data', array=df_dri_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
+                        name='Media Equipo DRI',
+                        marker_color=COLOR_ADARVE_GRANATE,
+                        marker_line_color=COLOR_ADARVE_BORDER,
+                        marker_line_width=2,
+                        text=[f"<b>{v:.2f}</b>" for v in df_dri_eq['Media_Equipo']],
+                        textposition='inside',
+                        insidetextanchor='middle'
+                    ))
 
-                for k in range(len(df_dri_eq)):
-                    f_curr = fechas_dri_str[k]
-                    val_curr = df_dri_eq['Media_Equipo'].iloc[k]
-                    
-                    if k == 0:
-                        pos_y = val_curr + 0.15
-                        fig_dri.add_annotation(
-                            x=f_curr, y=pos_y,
-                            text=f"<b>{val_curr:.2f}</b>",
-                            showarrow=False,
-                            font=dict(color="white", size=14)
-                        )
-                    else:
-                        m_prev = df_dri_eq['Media_Equipo'].iloc[k-1]
-                        pct_v = ((val_curr - m_prev) / m_prev) * 100
-                        col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
-                        signo = "+" if pct_v > 0 else ""
-                        pos_y = val_curr + 0.20
+                    # Porcentajes por encima (sin estorbar a los bigotes)
+                    for k in range(len(df_dri_eq)):
+                        f_curr = fechas_dri_str[k]
+                        val_curr = df_dri_eq['Media_Equipo'].iloc[k]
+                        sd_curr = df_dri_eq['SD_Equipo'].iloc[k]
+                        pos_y = val_curr + sd_curr + 0.15
 
-                        fig_dri.add_annotation(
-                            x=f_curr, y=pos_y,
-                            text=f"<b>{signo}{pct_v:.1f}%</b>",
-                            showarrow=False,
-                            font=dict(color=col_v, size=16)
-                        )
+                        if k == 0:
+                            fig_dri.add_annotation(
+                                x=f_curr, y=pos_y,
+                                text=f"<b>{val_curr:.2f}</b>",
+                                showarrow=False, font=dict(color="white", size=13)
+                            )
+                        else:
+                            m_prev = df_dri_eq['Media_Equipo'].iloc[k-1]
+                            pct_v = ((val_curr - m_prev) / m_prev) * 100
+                            col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
+                            signo = "+" if pct_v > 0 else ""
 
-                max_y_dri = df_dri_eq['Media_Equipo'].max() + 0.45
+                            fig_dri.add_annotation(
+                                x=f_curr, y=pos_y,
+                                text=f"<b>{signo}{pct_v:.1f}%</b>",
+                                showarrow=False, font=dict(color=col_v, size=15)
+                            )
 
-                fig_dri.update_layout(
-                    title="Evolución DRI Exacto (Histórico Completo) - Granate Adarve",
-                    template="plotly_dark",
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-30), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri]),
-                    height=500, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
-                )
-                st.plotly_chart(fig_dri, use_container_width=True)
+                    max_y_dri = (df_dri_eq['Media_Equipo'] + df_dri_eq['SD_Equipo']).max() + 0.45
+                    fig_dri.update_layout(
+                        title="Evolución DRI Exacto - Media ± SD Granate",
+                        template="plotly_dark",
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(tickangle=-30), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri]),
+                        height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
+                    )
+                    st.plotly_chart(fig_dri, use_container_width=True)
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
+
+    # -------------------------------------------------------------------------
+    # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
+    # -------------------------------------------------------------------------
     st.markdown("### ⚽ Perfil de Saltabilidad y Asimetrías Unipodales por Posición")
 
     if df_saltos is None or df_saltos.empty:
@@ -1063,20 +1097,28 @@ elif pest_sel == "🚀 Saltos (CMJ)":
         df_s_ult = df_saltos[df_saltos['Fecha_dt'] == ult_f_saltos].copy()
 
         df_piv_s = df_s_ult.groupby(['Nombre', 'Posicion', 'Tipo'], as_index=False)['Altura'].mean()
-
         posiciones_s = sorted([p for p in df_piv_s['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']])
 
         if not posiciones_s:
             st.info("No se hallaron demarcaciones asociadas en Posiciones.xlsx para esta sesión.")
         else:
-            for i in range(0, len(posiciones_s), 2):
-                col_sp1, col_sp2 = st.columns(2)
-                for idx_c, col_curr in enumerate([col_sp1, col_sp2]):
-                    if i + idx_c < len(posiciones_s):
-                        pos_curr = posiciones_s[i + idx_c]
+            col_f_pos, col_sp_pos = st.columns([1, 2])
+            with col_f_pos:
+                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos")
+
+            pos_a_mostrar_s = posiciones_s if pos_sel_saltos == "Todas las Demarcaciones" else [pos_sel_saltos]
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            for i in range(0, len(pos_a_mostrar_s), 2):
+                col_sp1, col_sp2 = st.columns(2) if len(pos_a_mostrar_s) > 1 else (st.container(), None)
+                cols_iter_s = [col_sp1, col_sp2] if len(pos_a_mostrar_s) > 1 else [col_sp1]
+
+                for idx_c, col_curr in enumerate(cols_iter_s):
+                    if col_curr is not None and (i + idx_c < len(pos_a_mostrar_s)):
+                        pos_curr = pos_a_mostrar_s[i + idx_c]
                         with col_curr:
                             df_pos_data = df_piv_s[df_piv_s['Posicion'] == pos_curr].copy()
-                            
                             piv_j = df_pos_data.pivot_table(index='Nombre', columns='Tipo', values='Altura', aggfunc='mean').reset_index()
 
                             for col_tipo in ['CMJ', 'slCMJright', 'slCMJleft']:
@@ -1120,7 +1162,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                                 row_ref = df_ref_saltos[df_ref_saltos['Posicion'] == pos_curr]
                                 if not row_ref.empty:
                                     ref_cmj_val = row_ref.iloc[0].get('CMJ_Ref', None)
-                                    
                                     sr = row_ref.iloc[0].get('slCMJright_Ref', None)
                                     sl = row_ref.iloc[0].get('slCMJleft_Ref', None)
                                     if pd.notna(sr) and pd.notna(sl):
