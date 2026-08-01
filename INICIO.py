@@ -379,125 +379,110 @@ else:
         df_pos = pd.read_excel(ruta_posiciones)
         df_pos.columns = df_pos.columns.str.strip()
         
-        # Mapeo de coordenadas tácticas por Posición + Lateralidad
-        # Coordenadas X: 0 (Banda Izq) a 100 (Banda Der)
-        # Coordenadas Y: 0 (Portería propia) a 100 (Campo contrario)
+        # Mapeo de coordenadas tácticas (Ataque hacia ABAJO)
+        # Y=100 es la portería de arriba, Y=0 es la portería de abajo
         mapa_coordenadas = {
-            ('Portero', 'Centro'): (50, 10),
+            ('Portero', 'Centro'): (50, 92),
             
-            ('Defensa Central', 'Izquierdo'): (35, 28),
-            ('Defensa Central', 'Derecho'): (65, 28),
-            ('Defensa Central', 'Centro'): (50, 28),
+            ('Defensa Central', 'Izquierdo'): (35, 78),
+            ('Defensa Central', 'Derecho'): (65, 78),
+            ('Defensa Central', 'Centro'): (50, 78),
             
-            ('Defensa Lateral', 'Izquierdo'): (12, 38),
-            ('Defensa Lateral', 'Derecho'): (88, 38),
+            ('Defensa Lateral', 'Izquierdo'): (12, 70),
+            ('Defensa Lateral', 'Derecho'): (88, 70),
             
-            ('Mediocentro', 'Izquierdo'): (35, 52),
-            ('Mediocentro', 'Derecho'): (65, 52),
-            ('Mediocentro', 'Centro'): (50, 52),
+            ('Mediocentro', 'Izquierdo'): (35, 55),
+            ('Mediocentro', 'Derecho'): (65, 55),
+            ('Mediocentro', 'Centro'): (50, 55),
             
-            ('Mediapunta', 'Izquierdo'): (35, 70),
-            ('Mediapunta', 'Derecho'): (65, 70),
-            ('Mediapunta', 'Centro'): (50, 70),
+            ('Mediapunta', 'Izquierdo'): (35, 40),
+            ('Mediapunta', 'Derecho'): (65, 40),
+            ('Mediapunta', 'Centro'): (50, 40),
             
-            ('Extremo', 'Izquierdo'): (15, 80),
-            ('Extremo', 'Derecho'): (85, 80),
+            ('Extremo', 'Izquierdo'): (15, 25),
+            ('Extremo', 'Derecho'): (85, 25),
             
-            ('Delantero', 'Centro'): (50, 90),
-            ('Delantero', 'Izquierdo'): (38, 90),
-            ('Delantero', 'Derecho'): (62, 90)
+            ('Delantero', 'Centro'): (50, 15),
+            ('Delantero', 'Izquierdo'): (35, 15),
+            ('Delantero', 'Derecho'): (65, 15)
         }
 
         # Filtrar solo disponibles (los lesionados no se dibujan en el campo)
         df_disponibles_campo = df_pos[~df_pos['Jugador'].isin(lesionados)].copy()
 
-        x_coords, y_coords, nombres, hover_texts, colores, bordes = [], [], [], [], [], []
+        # Normalizamos el diccionario de wellness para que coincida aunque haya barras bajas o espacios
+        dict_well_norm = {str(k).replace('_', ' ').strip().lower(): v for k, v in dict_well_jug.items()}
 
-        # Contadores para desplazar ligeramente si coinciden varios en la misma posición exacta
-        dict_desplazamiento = {}
+        # Agrupar jugadores por coordenada para hacer listas limpias sin solapamiento
+        agrupados = {}
 
         for _, row_j in df_disponibles_campo.iterrows():
-            nom = row_j['Jugador']
+            nom_original = str(row_j['Jugador'])
+            nom_mostrar = nom_original.replace('_', ' ')
+            nom_busqueda = nom_mostrar.strip().lower()
+            
             pos = str(row_j.get('Posicion', 'Mediocentro')).strip()
             lat = str(row_j.get('Lateralidad', 'Centro')).strip()
 
-            # Obtener coordenada base
-            clave_pos = (pos, lat)
-            coord_base = mapa_coordenadas.get(clave_pos, (50, 50))
+            coord_base = mapa_coordenadas.get((pos, lat), (50, 50))
             
-            # Ajuste en abanico si hay más de 1 jugador en la misma subposición
-            cant_prev = dict_desplazamiento.get(clave_pos, 0)
-            dict_desplazamiento[clave_pos] = cant_prev + 1
+            w_score = dict_well_norm.get(nom_busqueda, None)
             
-            offset_x = (cant_prev % 3 - 1) * 7 if cant_prev > 0 else 0
-            offset_y = (cant_prev // 3) * 6 if cant_prev > 0 else 0
-            
-            final_x = max(8, min(92, coord_base[0] + offset_x))
-            final_y = max(8, min(95, coord_base[1] + offset_y))
-
-            # Obtener valor Wellness
-            w_score = dict_well_jug.get(nom, None)
-            
+            # Asignar el color del semáforo
             if w_score is None:
                 color_nodo = "#95A5A6" # Gris sin cuestionario
-                estado_str = "Sin Cuestionario"
             elif w_score >= 3.0:
                 color_nodo = "#2ECC71" # Verde
-                estado_str = "🟢 Óptimo"
             elif w_score >= 2.5:
                 color_nodo = "#F1C40F" # Amarillo
-                estado_str = "🟡 Alerta Moderada"
             else:
                 color_nodo = "#E74C3C" # Rojo
-                estado_str = "🔴 Fatiga Elevada"
 
-            x_coords.append(final_x)
-            y_coords.append(final_y)
-            nombres.append(f"<b>{nom.replace('_', ' ')}</b>")
-            hover_texts.append(f"<b>{nom}</b><br>Posición: {pos} ({lat})<br>Wellness: <b>{f'{w_score:.2f}' if w_score else 'Sin Datos'}</b> ({estado_str})")
-            colores.append(color_nodo)
+            # Formatear el texto de cada jugador con su punto de color en HTML
+            texto_jugador = f"<span style='color:{color_nodo}; font-size:16px;'>●</span> {nom_mostrar}"
+            
+            if coord_base not in agrupados:
+                agrupados[coord_base] = []
+            agrupados[coord_base].append(texto_jugador)
 
-        # Dibujar el Campograma en Plotly
         fig_campo = go.Figure()
-
-        # Puntos de los Jugadores
-        fig_campo.add_trace(go.Scatter(
-            x=x_coords, y=y_coords,
-            mode='markers+text',
-            text=nombres,
-            textposition='top center',
-            hovertext=hover_texts,
-            hoverinfo='text',
-            marker=dict(
-                size=28,
-                color=colores,
-                opacity=0.9,
-                line=dict(width=2, color='white')
-            )
-        ))
 
         # Dibujo de Líneas Tácticas del Campo de Fútbol
         lineas_campo = [
-            # Perímetro exterior
-            dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=2)),
-            # Línea de centro de campo
-            dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.3)", width=2)),
-            # Círculo central
-            dict(type="circle", x0=38, y0=42, x1=62, y1=58, line=dict(color="rgba(255,255,255,0.3)", width=2)),
-            # Área propia (Abajo)
-            dict(type="rect", x0=25, y0=2, x1=75, y1=20, line=dict(color="rgba(255,255,255,0.3)", width=1.5)),
-            # Área rival (Arriba)
-            dict(type="rect", x0=25, y0=80, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5))
+            dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=2)), # Perímetro
+            dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.3)", width=2)), # Medio campo
+            dict(type="circle", x0=38, y0=42, x1=62, y1=58, line=dict(color="rgba(255,255,255,0.3)", width=2)), # Círculo central
+            dict(type="rect", x0=25, y0=2, x1=75, y1=18, line=dict(color="rgba(255,255,255,0.3)", width=1.5)), # Área abajo
+            dict(type="rect", x0=25, y0=82, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5))  # Área arriba
         ]
+
+        # Convertimos las listas agrupadas en Anotaciones (Cajas de texto limpias)
+        anotaciones = []
+        for (x, y), lista_jugs in agrupados.items():
+            texto_final = "<br>".join(lista_jugs)
+            anotaciones.append(
+                dict(
+                    x=x, y=y,
+                    text=texto_final,
+                    showarrow=False,
+                    align='left',
+                    font=dict(size=12, color="white"),
+                    bgcolor="rgba(15, 23, 42, 0.8)", # Fondo semitransparente oscuro para legibilidad
+                    bordercolor="rgba(255,255,255,0.15)",
+                    borderwidth=1,
+                    borderpad=6
+                )
+            )
 
         fig_campo.update_layout(
             shapes=lineas_campo,
+            annotations=anotaciones, # Añadimos las listas de texto como anotaciones
             xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(range=[0, 105], showgrid=False, zeroline=False, showticklabels=False),
             template="plotly_dark",
             paper_bgcolor='rgba(15, 23, 42, 0.6)',
             plot_bgcolor='rgba(15, 23, 42, 0.6)',
-            height=620,
+            height=750, # Aumentado para que quepan bien las listas sin apretarse
             margin=dict(l=10, r=10, t=20, b=10),
             showlegend=False
         )
