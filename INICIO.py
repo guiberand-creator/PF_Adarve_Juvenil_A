@@ -373,7 +373,7 @@ else:
         st.markdown(
             f"""
             <div style="background-color: {bg_enf}; padding: 20px; border-radius: 8px; border-left: 5px solid {color_enf}; min-height: 220px;">
-                <h5 style="margin: 0; color: {color_enf}; font-size: 0.9em; letter-spacing: 1px;">ENFERMERÍA</h5>
+                <h5 style="margin: 0; color: {color_enf}; font-size: 0.9em; letter-spacing: 1px;">ENFERMERÍA-OTROS</h5>
                 <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_enf}</p>
             </div>
             """, 
