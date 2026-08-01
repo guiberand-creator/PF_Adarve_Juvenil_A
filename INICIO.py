@@ -503,38 +503,40 @@ else:
                 )
             )
 
-        # Añadimos la etiqueta/resumen numérico en la esquina superior derecha
-        anotacion_resumen = dict(
-            x=98, y=103,
-            text=f"<b>RESUMEN SESIÓN</b><br>🏃 Jugadores campo disp: <b>{num_campo}</b><br>🧤 Porteros disp: <b>{num_porteros}</b><br>🚑 Ausentes/Lesionados: <b>{num_ausentes}</b>",
-            showarrow=False,
-            xanchor='right',
-            yanchor='top',
-            align='right',
-            font=dict(size=12, color="white"),
-            bgcolor="rgba(15, 23, 42, 0.9)",
-            bordercolor="#00A8E8",
-            borderwidth=1,
-            borderpad=8
-        )
-        anotaciones.append(anotacion_resumen)
+        # Añadimos las etiquetas estilo Métrica limpia en el margen superior del campo
+        anotaciones.append(dict(
+            x=4, y=109,
+            text=f"<span style='font-size:13px; color:#A0AEC0;'>Jugadores de campo disp.</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_campo}</b></span>",
+            showarrow=False, xanchor='left', yanchor='top', align='left'
+        ))
+        
+        anotaciones.append(dict(
+            x=40, y=109,
+            text=f"<span style='font-size:13px; color:#A0AEC0;'>Porteros disponibles</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_porteros}</b></span>",
+            showarrow=False, xanchor='left', yanchor='top', align='left'
+        ))
+        
+        anotaciones.append(dict(
+            x=76, y=109,
+            text=f"<span style='font-size:13px; color:#A0AEC0;'>Ausentes / Lesionados</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_ausentes}</b></span>",
+            showarrow=False, xanchor='left', yanchor='top', align='left'
+        ))
 
         fig_campo.update_layout(
             shapes=lineas_campo,
             annotations=anotaciones,
             xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            yaxis=dict(range=[0, 105], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            dragmode=False, # <-- ESTO BLOQUEA TOTALMENTE EL ARRASTRE/DESCONFIGURACIÓN
+            yaxis=dict(range=[0, 112], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True), # Ampliado a 112
+            dragmode=False, 
             template="plotly_dark",
             paper_bgcolor='rgba(15, 23, 42, 0.6)',
             plot_bgcolor='rgba(15, 23, 42, 0.6)',
-            height=780,
-            margin=dict(l=10, r=10, t=20, b=10),
+            height=820, # Ampliado de 780 a 820 para compensar el margen
+            margin=dict(l=10, r=10, t=10, b=10),
             showlegend=False,
-            hovermode=False # <-- ESTO BLOQUEA LOS TOOLTIPS, COMPORTAMIENTO DE IMAGEN
+            hovermode=False 
         )
 
-        # Usar config={'staticPlot': True} convierte la gráfica en una imagen estática 100% rígida
         st.plotly_chart(fig_campo, use_container_width=True, config={'staticPlot': True})
 
     st.markdown("---")
