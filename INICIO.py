@@ -54,45 +54,6 @@ if os.path.exists(_ruta_logo):
         </div>
     """, unsafe_allow_html=True)
 
-    # --- AGENDA Y GESTIÓN DE GRUPO ---
-        col_partido, col_cumples = st.columns(2)
-    
-    with col_partido:
-        st.markdown("#### PRÓXIMO PARTIDO")
-        proximo_partido, racha, error_partidos = obtener_datos_partidos()
-        if error_partidos: st.error(error_partidos)
-        elif proximo_partido:
-            html_racha = " - ".join([f'<span style="color: {"#50C878" if r=="V" else "gray" if r=="E" else "#FF6B6B"};">{r}</span>' for r in racha]) if racha else "<span style='color: gray;'>Sin datos previos</span>"
-            img_escudo = f'<img src="{proximo_partido["escudo"]}" width="50" style="margin-bottom: 5px;">' if proximo_partido["escudo"] else ""
-            st.markdown(f"""
-            <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
-            <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
-            {img_escudo}
-            <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
-            <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
-            <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
-            </div></div>""", unsafe_allow_html=True)
-        else: st.info("No hay próximos partidos programados en el calendario.")
-        
-    with col_cumples:
-        st.markdown("#### CUMPLEAÑOS DE LA SEMANA")
-        cumples_semana, error_msg = obtener_cumpleaños_semana()
-        html_cumples = """<div style="background-color: #1E2633; border-radius: 8px; padding: 15px; height: 100%;"><p style="margin: 0; font-weight: bold; color: #50C878;">Celebraciones en los próximos 7 días:</p><ul style="margin-top: 10px; padding-left: 20px;">"""
-        if cumples_semana is None: html_cumples += f"<li><span style='color: #FF6B6B;'>Error: {error_msg}</span></li>"
-        elif len(cumples_semana) == 0: html_cumples += "<li><i>No hay cumpleaños programados para esta semana.</i></li>"
-        else:
-            for c in sorted(cumples_semana, key=lambda x: x['dias']):
-                texto_dias = "<span style='color: #50C878; font-weight: bold;'>¡ES HOY! 🎂</span>" if c['dias'] == 0 else f"en {c['dias']} días"
-                html_cumples += f"<li style='margin-bottom: 5px;'><strong>{c['nombre']}</strong> ({c['fecha']}) - {texto_dias}</li>"
-        st.markdown(html_cumples + "</ul></div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    if st.button("Cerrar Sesión"):
-        st.session_state['logeado'] = False
-        st.rerun()
-
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL DE LA PÁGINA
 # ==========================================
@@ -220,7 +181,6 @@ def analizar_datos_completos():
             col_entrenar = [c for c in df_w_hoy.columns if 'ENTRENAR' in c]
             if col_entrenar:
                 df_w_hoy['Entrenar_Clean'] = df_w_hoy[col_entrenar[0]].astype(str).str.strip().str.lower()
-                # Filtrado robusto devuelto a su estado original
                 df_bajas = df_w_hoy[df_w_hoy['Entrenar_Clean'] == 'no']
                 bajas_actuales = sorted(list(df_bajas['Nombre_Clean'].unique()))
                 df_w_validos = df_w_hoy[df_w_hoy['Entrenar_Clean'] != 'no'].copy()
@@ -302,7 +262,7 @@ def analizar_datos_completos():
         return 0.0, "Sesión", [], 0, 0.0, [], [], 0, [], 22, {}
 
 # ==========================================
-# 3. SISTEMA DE LOGIN
+# 3. SISTEMA DE LOGIN (ELIMINACIÓN RADICAL)
 # ==========================================
 if 'logeado' not in st.session_state:
     st.session_state['logeado'] = False
@@ -313,6 +273,7 @@ if not st.session_state['logeado']:
         [data-testid="stSidebar"] { display: none; } 
         [data-testid="collapsedControl"] { display: none; }
         
+        /* FULMINAR EL TEXTO DEL BOTÓN DE VISIBILIDAD DE CORZÓN */
         div[data-testid="stTextInputRootElement"] button {
             font-size: 0px !important;
             color: transparent !important;
@@ -322,16 +283,22 @@ if not st.session_state['logeado']:
             margin: 0px !important;
             display: none !important;
         }
+        
+        /* Asegurar que la caja e input queden limpios */
         div[data-testid="stTextInputRootElement"] input {
             color: #FFFFFF !important;
         }
-        div.stButton { margin-top: 15px; }
+        
+        div.stButton {
+            margin-top: 15px;
+        }
         </style>
     """, unsafe_allow_html=True)
     
     col_vacia1, col_centro, col_vacia2 = st.columns([1.2, 1.6, 1.2])
     with col_centro:
         st.markdown("<br><br><br><h1 style='text-align: center; margin-bottom: 25px; letter-spacing: 1px;'>ACCESO STAFF</h1>", unsafe_allow_html=True)
+        
         clave_usuario = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Escribe la contraseña aquí...")
         
         if st.button("Entrar", use_container_width=True):
@@ -352,6 +319,44 @@ else:
     with c3: st.image("assets/Imagen1.png", width=120)
 
     st.markdown("---") 
+
+    # --- PRÓXIMO PARTIDO Y CUMPLEAÑOS (MOVIDO ARRIBA) ---
+    col_partido, col_cumples = st.columns(2)
+    
+    with col_partido:
+        st.markdown("### ⚽ PRÓXIMO PARTIDO")
+        proximo_partido, racha, error_partidos = obtener_datos_partidos()
+        if error_partidos: st.error(error_partidos)
+        elif proximo_partido:
+            html_racha = " - ".join([f'<span style="color: {"#50C878" if r=="V" else "gray" if r=="E" else "#FF6B6B"};">{r}</span>' for r in racha]) if racha else "<span style='color: gray;'>Sin datos previos</span>"
+            img_escudo = f'<img src="{proximo_partido["escudo"]}" width="50" style="margin-bottom: 5px;">' if proximo_partido["escudo"] else ""
+            st.markdown(f"""
+            <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
+            <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
+            {img_escudo}
+            <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
+            <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
+            <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
+            <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
+            </div></div>""", unsafe_allow_html=True)
+        else: st.info("No hay próximos partidos programados en el calendario.")
+        
+    with col_cumples:
+        st.markdown("### 🎂 CUMPLEAÑOS DE LA SEMANA")
+        cumples_semana, error_msg = obtener_cumpleaños_semana()
+        html_cumples = """<div style="background-color: #1E2633; border-radius: 8px; padding: 15px; height: 100%;"><p style="margin: 0; font-weight: bold; color: #50C878;">Celebraciones en los próximos 7 días:</p><ul style="margin-top: 10px; padding-left: 20px;">"""
+        if cumples_semana is None: html_cumples += f"<li><span style='color: #FF6B6B;'>Error: {error_msg}</span></li>"
+        elif len(cumples_semana) == 0: html_cumples += "<li><i>No hay cumpleaños programados para esta semana.</i></li>"
+        else:
+            for c in sorted(cumples_semana, key=lambda x: x['dias']):
+                texto_dias = "<span style='color: #50C878; font-weight: bold;'>¡ES HOY! 🎂</span>" if c['dias'] == 0 else f"en {c['dias']} días"
+                html_cumples += f"<li style='margin-bottom: 5px;'><strong>{c['nombre']}</strong> ({c['fecha']}) - {texto_dias}</li>"
+        st.markdown(html_cumples + "</ul></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # --- PANEL DE CONTROL GENERAL ---
     st.markdown("### PANEL DE CONTROL GENERAL")
     
     (rpe_val, sesion_lbl, rpe_faltan, rpe_cant, well_val, well_faltan, well_mal, well_cant, lesionados, total_jugadores, dict_well_jug) = analizar_datos_completos()
@@ -420,8 +425,8 @@ else:
     # ==========================================
     # 5. CAMPOGRAMA TÁCTICO DE DISPONIBILIDAD Y WELLNESS
     # ==========================================
-    st.markdown("### DISPONIBILIDAD PROXIMO ENTRENAMIENTO")
-    st.caption("🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga")
+    st.markdown("### ⚽ DISPONIBILIDAD DE PLANTILLA Y ESTADO DE WELLNESS")
+    st.caption("Puntos verdes, amarillos y rojos indican el nivel de Wellness percibido hoy (🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga).")
 
     ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
     
@@ -445,7 +450,6 @@ else:
             
             w_score = dict_well_norm.get(nom_busqueda, None)
             
-            # 🛑 EXCLUIR DEL CAMPOGRAMA A LOS QUE NO TIENEN DATOS
             if w_score is None or pd.isna(w_score):
                 continue
                 
@@ -457,7 +461,6 @@ else:
             else:
                 num_campo += 1
 
-            # --- MOTOR DE REGLAS DE COORDENADAS (Atacando hacia Y=0, Portero Y=92) ---
             if 'porter' in pos_low: y = 92
             elif 'central' in pos_low or 'defensa c' in pos_low or 'defensa' in pos_low: y = 78
             elif 'lateral' in pos_low or 'defensa l' in pos_low: y = 70
@@ -465,7 +468,7 @@ else:
             elif 'medio' in pos_low or 'centrocampista' in pos_low or 'pivote' in pos_low: y = 55
             elif 'extremo' in pos_low or 'carrilero' in pos_low: y = 25
             elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: y = 15
-            else: y = 55 # Medio por defecto si no encaja en nada
+            else: y = 55
 
             if 'izquierd' in lat_low:
                 if 'lateral' in pos_low or 'extremo' in pos_low: x = 85
@@ -482,7 +485,6 @@ else:
             elif w_score >= 2.5: color_nodo = "#F1C40F"
             else: color_nodo = "#E74C3C"
 
-            # Construir la línea HTML del jugador SIN NUMEROS
             texto_jugador = f"<span style='color:{color_nodo}; font-size:16px;'>●</span> {nom_mostrar}"
             
             if coord_base not in agrupados: agrupados[coord_base] = []
@@ -512,54 +514,23 @@ else:
                 )
             )
 
-        # --- ETIQUETAS DE RESUMEN SEPARADAS (CERO SOLAPAMIENTO) ---
-        
-        # 1. Jugadores de Campo
-        anotaciones.append(dict(
-            x=16, y=107, text="Jugadores de campo",
-            showarrow=False, font=dict(size=14, color="#A0AEC0"),
-            xanchor="center", yanchor="bottom"
-        ))
-        anotaciones.append(dict(
-            x=16, y=106, text=f"<b>{num_campo}</b>",
-            showarrow=False, font=dict(size=36, color="#FFFFFF"),
-            xanchor="center", yanchor="top"
-        ))
-
-        # 2. Porteros Disponibles
-        anotaciones.append(dict(
-            x=50, y=107, text="Porteros Disponibles",
-            showarrow=False, font=dict(size=14, color="#A0AEC0"),
-            xanchor="center", yanchor="bottom"
-        ))
-        anotaciones.append(dict(
-            x=50, y=106, text=f"<b>{num_porteros}</b>",
-            showarrow=False, font=dict(size=36, color="#FFFFFF"),
-            xanchor="center", yanchor="top"
-        ))
-
-        # 3. Ausentes/Lesionados
-        anotaciones.append(dict(
-            x=84, y=107, text="Ausentes / Lesionados",
-            showarrow=False, font=dict(size=14, color="#A0AEC0"),
-            xanchor="center", yanchor="bottom"
-        ))
-        anotaciones.append(dict(
-            x=84, y=106, text=f"<b>{num_ausentes}</b>",
-            showarrow=False, font=dict(size=36, color="#FFFFFF"),
-            xanchor="center", yanchor="top"
-        ))
+        anotaciones.append(dict(x=16, y=107, text="Jugadores de campo", showarrow=False, font=dict(size=14, color="#A0AEC0"), xanchor="center", yanchor="bottom"))
+        anotaciones.append(dict(x=16, y=106, text=f"<b>{num_campo}</b>", showarrow=False, font=dict(size=36, color="#FFFFFF"), xanchor="center", yanchor="top"))
+        anotaciones.append(dict(x=50, y=107, text="Porteros Disponibles", showarrow=False, font=dict(size=14, color="#A0AEC0"), xanchor="center", yanchor="bottom"))
+        anotaciones.append(dict(x=50, y=106, text=f"<b>{num_porteros}</b>", showarrow=False, font=dict(size=36, color="#FFFFFF"), xanchor="center", yanchor="top"))
+        anotaciones.append(dict(x=84, y=107, text="Ausentes / Lesionados", showarrow=False, font=dict(size=14, color="#A0AEC0"), xanchor="center", yanchor="bottom"))
+        anotaciones.append(dict(x=84, y=106, text=f"<b>{num_ausentes}</b>", showarrow=False, font=dict(size=36, color="#FFFFFF"), xanchor="center", yanchor="top"))
 
         fig_campo.update_layout(
             shapes=lineas_campo,
             annotations=anotaciones,
             xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            yaxis=dict(range=[0, 116], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True), # Espacio ampliado arriba
+            yaxis=dict(range=[0, 116], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
             dragmode=False, 
             template="plotly_dark",
             paper_bgcolor='rgba(15, 23, 42, 0.6)',
             plot_bgcolor='rgba(15, 23, 42, 0.6)',
-            height=850, # Aumentada la altura total para que respiren las etiquetas
+            height=850, 
             margin=dict(l=10, r=10, t=10, b=10),
             showlegend=False,
             hovermode=False 
@@ -568,5 +539,6 @@ else:
         st.plotly_chart(fig_campo, use_container_width=True, config={'staticPlot': True})
 
     st.markdown("---")
-    
-    
+    if st.button("Cerrar Sesión"):
+        st.session_state['logeado'] = False
+        st.rerun()
