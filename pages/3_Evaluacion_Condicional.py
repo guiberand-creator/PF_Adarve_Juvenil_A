@@ -8,8 +8,15 @@ from utils import aplicar_diseno_responsive
 aplicar_diseno_responsive()
 
 # -----------------------------------------------------------------------------
-# SELLO FIJO AL PIE DEL SIDEBAR (+30% TAMAÑO)
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS (ÚNICA)
 # -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Evaluación Condicional - Adarve DH",
+    page_icon="⚡",
+    layout="wide"
+)
+
+# SELLO FIJO AL PIE DEL SIDEBAR
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
 _ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
 
@@ -31,7 +38,7 @@ if os.path.exists(_ruta_logo):
             border-top: 1px solid rgba(255, 255, 255, 0.15);
         }}
         .footer-sello-unico img {{
-            width: 195px; /* Aumentado un 30% */
+            width: 195px;
             height: auto;
             margin-bottom: 8px;
         }}
@@ -48,22 +55,6 @@ if os.path.exists(_ruta_logo):
             <p>© 2026 All Rights Reserved</p>
         </div>
     """, unsafe_allow_html=True)
-
-# 1. Configuración de página
-st.set_page_config(
-    page_title="Evaluación Condicional - Adarve DH",
-    page_icon="⚡",
-    layout="wide"
-)
-
-# -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
-# -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Evaluación Condicional - Adarve DH",
-    page_icon="⚡",
-    layout="wide"
-)
 
 st.markdown("""
     <style>
@@ -302,33 +293,60 @@ def cargar_datos_evaluaciones():
         df_fts['Dominada'] = pd.to_numeric(df_fts['Dominada'], errors='coerce')
         df_fts = df_fts.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
 
-    # 8. Velocidad & Campo (Referencias)
+    # 8. Velocidad & Campo
+    if os.path.exists(RUTA_CAMPO):
+        df_campo = pd.read_excel(RUTA_CAMPO)
+        renomb_c = {}
+        for col in df_campo.columns:
+            c_l = str(col).strip().lower()
+            if 'fecha' in c_l: renomb_c[col] = 'Fecha'
+            elif 'nombre' in c_l or 'jugador' in c_l: renomb_c[col] = 'Nombre'
+            elif c_l == 'v_max': renomb_c[col] = 'V_MAX'
+            elif c_l == 'ac_max': renomb_c[col] = 'AC_MAX'
+            elif c_l == 'dec_max': renomb_c[col] = 'DEC_MAX'
+            elif 'sprint' in c_l: renomb_c[col] = 'Tecnica_Sprint'
+            elif 'cod' in c_l: renomb_c[col] = 'Tecnica_COD'
+
+        df_campo.rename(columns=renomb_c, inplace=True)
+        df_campo['Nombre'] = df_campo['Nombre'].astype(str).str.strip()
+        df_campo['Fecha_dt'] = pd.to_datetime(df_campo['Fecha'], dayfirst=True, errors='coerce')
+        df_campo['Fecha'] = df_campo['Fecha_dt'].dt.strftime('%d/%m/%Y')
+        
+        for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX', 'Tecnica_Sprint', 'Tecnica_COD']:
+            if num_col in df_campo.columns:
+                df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
+
+        df_campo = df_campo.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
+
+        if df_pos is not None and 'Posicion' in df_pos.columns:
+            df_campo = pd.merge(df_campo, df_pos[['Nombre', 'Posicion']], on='Nombre', how='left')
+
+    # Referencias Campo
     if os.path.exists(RUTA_REF_CAMPO):
         df_ref_campo = pd.read_excel(RUTA_REF_CAMPO)
         renomb_rc = {}
         for col in df_ref_campo.columns:
             c_clean = str(col).strip().lower()
-            if 'posic' in c_clean: 
-                renomb_rc[col] = 'Posicion'
-            elif c_clean.startswith('vmax') or 'v_max' in c_clean or 'vmax' in c_clean: 
-                renomb_rc[col] = 'V_MAX_Ref'
-            elif c_clean.startswith('acmax') or 'ac_max' in c_clean or 'acmax' in c_clean: 
-                renomb_rc[col] = 'AC_MAX_Ref'
-            elif c_clean.startswith('decmax') or 'dec_max' in c_clean or 'decmax' in c_clean: 
-                renomb_rc[col] = 'DEC_MAX_Ref'
+            if 'posic' in c_clean: renomb_rc[col] = 'Posicion'
+            elif c_clean.startswith('vmax') or 'v_max' in c_clean or 'vmax' in c_clean: renomb_rc[col] = 'V_MAX_Ref'
+            elif c_clean.startswith('acmax') or 'ac_max' in c_clean or 'acmax' in c_clean: renomb_rc[col] = 'AC_MAX_Ref'
+            elif c_clean.startswith('decmax') or 'dec_max' in c_clean or 'decmax' in c_clean: renomb_rc[col] = 'DEC_MAX_Ref'
                 
         df_ref_campo.rename(columns=renomb_rc, inplace=True)
-        
         if 'Posicion' in df_ref_campo.columns:
             df_ref_campo['Posicion'] = df_ref_campo['Posicion'].astype(str).str.strip()
             
-        # Limpieza de comas europeas por puntos decimales (ej. "5,5" -> 5.5)
         for num_c in ['V_MAX_Ref', 'AC_MAX_Ref', 'DEC_MAX_Ref']:
             if num_c in df_ref_campo.columns:
                 df_ref_campo[num_c] = pd.to_numeric(
                     df_ref_campo[num_c].astype(str).str.replace(',', '.'), 
                     errors='coerce'
                 )
+
+    return df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo
+
+df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = cargar_datos_evaluaciones()
+
 # -----------------------------------------------------------------------------
 # 4. CABECERA
 # -----------------------------------------------------------------------------
@@ -468,7 +486,6 @@ elif pest_sel == "🫁 VAM / Aeróbico":
     else:
         df_v_valid = df_vam[df_vam['VAM'] > 0].copy()
         
-        # 1. CÁLCULO DE ALERTAS DE VAM (Última fecha registrada)
         ult_fecha_vam = df_v_valid['Fecha_dt'].max()
         ult_fecha_vam_str = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam]['Fecha'].iloc[0]
         df_v_ult = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam].copy()
@@ -479,16 +496,13 @@ elif pest_sel == "🫁 VAM / Aeróbico":
             pos_j = r_j['Posicion']
             vam_val = r_j['VAM']
 
-            # Buscar la referencia de su posición
             if df_ref_vam is not None and not df_ref_vam.empty:
                 r_ref = df_ref_vam[df_ref_vam['Posicion'] == pos_j]
                 if not r_ref.empty:
                     ref_val = r_ref.iloc[0]['VAM_Ref']
-                    # Si no llega al umbral de su posición -> Alerta
                     if pd.notna(vam_val) and pd.notna(ref_val) and vam_val < ref_val:
                         dict_alertas_vam[nom_j] = ["Trabajo Aeróbico"]
 
-        # Mostrar bloque de alertas arriba
         st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_fecha_vam_str})")
         c_v1, c_v2 = st.columns(2)
         with c_v1: 
@@ -514,7 +528,6 @@ elif pest_sel == "🫁 VAM / Aeróbico":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-        # 2. FILTRO Y GRÁFICOS POR DEMARCACIÓN
         posiciones_unicas = sorted([p for p in df_v_valid['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']]) if 'Posicion' in df_v_valid.columns else []
         colores_fechas = ['#2ECC71', '#00A8E8', '#FF9F1C', '#9B59B6', '#E74C3C']
 
@@ -523,10 +536,7 @@ elif pest_sel == "🫁 VAM / Aeróbico":
         with col_filtro:
             pos_seleccionada = st.selectbox("⚽ Filtrar por Demarcación:", opciones_pos)
 
-        if pos_seleccionada == "Todas las Demarcaciones":
-            pos_a_mostrar = posiciones_unicas
-        else:
-            pos_a_mostrar = [pos_seleccionada]
+        pos_a_mostrar = posiciones_unicas if pos_seleccionada == "Todas las Demarcaciones" else [pos_seleccionada]
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -910,9 +920,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-    # -------------------------------------------------------------------------
-    # 1. FILTRO Y SECCIÓN: EVOLUCIÓN GENERAL DE LA PLANTILLA (CMJ vs DRI)
-    # -------------------------------------------------------------------------
+    # 1. FILTRO Y SECCIÓN: EVOLUCIÓN GENERAL DE LA PLANTILLA
     col_f_evo, col_sp_evo = st.columns([1, 2])
     with col_f_evo:
         sel_tipo_evo = st.selectbox(
@@ -922,7 +930,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Definición de contenedores para ocupar 2 columnas o 100% del ancho según la selección
     if sel_tipo_evo == "Ambos Gráficos":
         col_cmj_g, col_dri_g = st.columns(2)
     else:
@@ -940,7 +947,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                 if df_cmj.empty:
                     st.info("No hay datos de CMJ.")
                 else:
-                    # Récord Histórico CMJ
                     idx_max_cmj = df_cmj['Altura'].idxmax()
                     row_max_cmj = df_cmj.loc[idx_max_cmj]
                     st.info(f"🏆 **Récord Histórico CMJ:** `{row_max_cmj['Nombre']}` con **{row_max_cmj['Altura']:.1f} cm**")
@@ -955,7 +961,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_cmj_str = df_cmj_eq['Fecha'].tolist()
                     fig_cmj = go.Figure()
 
-                    # Barras con Desviación Estándar y texto dentro
                     fig_cmj.add_trace(go.Bar(
                         x=fechas_cmj_str, 
                         y=df_cmj_eq['Media_Equipo'],
@@ -969,7 +974,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         insidetextanchor='middle'
                     ))
 
-                    # Porcentajes por encima (sin estorbar a los bigotes)
                     for k in range(len(df_cmj_eq)):
                         f_curr = fechas_cmj_str[k]
                         val_curr = df_cmj_eq['Media_Equipo'].iloc[k]
@@ -1018,7 +1022,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                 if df_dri.empty:
                     st.info("No hay registros de Drop Jump.")
                 else:
-                    # Récord Histórico DRI
                     idx_max_dri = df_dri['DRI'].idxmax()
                     row_max_dri = df_dri.loc[idx_max_dri]
                     st.info(f"🏆 **Récord Histórico DRI:** `{row_max_dri['Nombre']}` con **{row_max_dri['DRI']:.2f}**")
@@ -1033,7 +1036,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_dri_str = df_dri_eq['Fecha'].tolist()
                     fig_dri = go.Figure()
 
-                    # Barras con Desviación Estándar y texto dentro
                     fig_dri.add_trace(go.Bar(
                         x=fechas_dri_str, 
                         y=df_dri_eq['Media_Equipo'],
@@ -1047,7 +1049,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         insidetextanchor='middle'
                     ))
 
-                    # Porcentajes por encima (sin estorbar a los bigotes)
                     for k in range(len(df_dri_eq)):
                         f_curr = fechas_dri_str[k]
                         val_curr = df_dri_eq['Media_Equipo'].iloc[k]
@@ -1082,9 +1083,9 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     )
                     st.plotly_chart(fig_dri, use_container_width=True)
 
-    # -------------------------------------------------------------------------
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
-    # -------------------------------------------------------------------------
     st.markdown("### ⚽ Perfil de Saltabilidad y Asimetrías Unipodales por Posición")
 
     if df_saltos is None or df_saltos.empty:
@@ -1361,9 +1362,7 @@ elif pest_sel == "⚡ Velocidad & COD":
         ult_f_campo_str = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt]['Fecha'].iloc[0]
         df_c_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].copy()
 
-        # ---------------------------------------------------------------------
         # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN
-        # ---------------------------------------------------------------------
         dict_prescripciones_campo = {}
         for _, row_j in df_c_ult.iterrows():
             nom_j = row_j['Nombre']
@@ -1388,7 +1387,6 @@ elif pest_sel == "⚡ Velocidad & COD":
                (pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac):
                 prescripciones_j.append("Trabajo de Velocidad / Aceleración")
 
-            # Al ser valores negativos (ej -5.5), si frena menos (ej -4.0), dec_val es MAYOR que ref_dec
             if pd.notna(dec_val) and pd.notna(ref_dec) and dec_val > ref_dec:
                 prescripciones_j.append("Trabajo de Capacidad COD")
 
@@ -1422,26 +1420,21 @@ elif pest_sel == "⚡ Velocidad & COD":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ---------------------------------------------------------------------
         # 2. RÉCORDS HISTÓRICOS DE LA PLANTILLA
-        # ---------------------------------------------------------------------
         c_rec1, c_rec2, c_rec3 = st.columns(3)
         
-        # Máxima Velocidad
         if 'V_MAX' in df_campo.columns and not df_campo['V_MAX'].dropna().empty:
             idx_vmax = df_campo['V_MAX'].idxmax()
             row_vmax = df_campo.loc[idx_vmax]
             with c_rec1:
                 st.info(f"⚡ **Máx. Velocidad (V_MAX):**\n`{row_vmax['Nombre']}` - **{row_vmax['V_MAX']:.1f} km/h**")
         
-        # Máxima Aceleración
         if 'AC_MAX' in df_campo.columns and not df_campo['AC_MAX'].dropna().empty:
             idx_acmax = df_campo['AC_MAX'].idxmax()
             row_acmax = df_campo.loc[idx_acmax]
             with c_rec2:
                 st.info(f"🚀 **Máx. Aceleración (AC_MAX):**\n`{row_acmax['Nombre']}` - **{row_acmax['AC_MAX']:.2f} m/s²**")
 
-        # Máxima Desaceleración (el valor más negativo es el más fuerte)
         if 'DEC_MAX' in df_campo.columns and not df_campo['DEC_MAX'].dropna().empty:
             idx_decmax = df_campo['DEC_MAX'].idxmin()
             row_decmax = df_campo.loc[idx_decmax]
@@ -1450,9 +1443,7 @@ elif pest_sel == "⚡ Velocidad & COD":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-        # ---------------------------------------------------------------------
-        # 3. FILTROS PARALELOS (MÉTRICA + DEMARCACIÓN)
-        # ---------------------------------------------------------------------
+        # 3. FILTROS PARALELOS
         posiciones_campo = sorted([p for p in df_campo['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']])
         
         col_f1, col_f2 = st.columns(2)
@@ -1467,7 +1458,6 @@ elif pest_sel == "⚡ Velocidad & COD":
                 ["Todas las Demarcaciones"] + posiciones_campo
             )
 
-        # Selección de columna y titulación
         if "Velocidad" in prueba_sel:
             col_metrica, col_ref, col_tec = 'V_MAX', 'V_MAX_Ref', 'Tecnica_Sprint'
             titulo_m = "Velocidad Máxima (V_MAX)"
@@ -1593,7 +1583,7 @@ elif pest_sel == "⚡ Velocidad & COD":
                 st.markdown("<br><hr>", unsafe_allow_html=True)
 
 # =============================================================================
-# ÁREA 8: RANKING GLOBAL (LA LIGA DEL VESTUARIO - CON FILTRO DE FECHA)
+# ÁREA 8: RANKING GLOBAL (LA LIGA DEL VESTUARIO)
 # =============================================================================
 elif pest_sel == "🏆 Ranking Global":
     st.subheader("🏆 Liga de Rendimiento Condicional del Vestuario")
@@ -1602,7 +1592,6 @@ elif pest_sel == "🏆 Ranking Global":
     if df_pos is None or df_pos.empty:
         st.warning("⚠️ No se encontró la lista de plantilla en 'Posiciones.xlsx'.")
     else:
-        # Recopilar todas las fechas disponibles en las pruebas de evaluación
         conjunto_fechas_dt = set()
         for df_t in [df_mov, df_vam, df_dina, df_saltos, df_dri_sheet, df_fts, df_campo]:
             if df_t is not None and 'Fecha_dt' in df_t.columns:
@@ -1615,22 +1604,19 @@ elif pest_sel == "🏆 Ranking Global":
         else:
             dict_fechas_str = {f_dt: pd.to_datetime(f_dt).strftime('%d/%m/%Y') for f_dt in fechas_unicas_dt}
             
-            # FILTRO DE FECHA AL COMIENZO DE LA PÁGINA
             col_filt_f, col_spacer = st.columns([2, 2])
             with col_filt_f:
                 f_sel_dt = st.selectbox(
                     "📅 Selecciona Fecha de Evaluación para el Ranking:",
                     options=fechas_unicas_dt,
-                    index=len(fechas_unicas_dt)-1, # Por defecto la fecha más reciente
+                    index=len(fechas_unicas_dt)-1,
                     format_func=lambda x: dict_fechas_str[x]
                 )
 
             f_sel_str = dict_fechas_str[f_sel_dt]
 
-            # CONSTRUCCIÓN DEL RANKING PARA LA FECHA SELECCIONADA
             df_rank_base = df_pos[['Nombre', 'Posicion']].copy()
 
-            # Helper para extraer la métrica de un jugador en o hasta la fecha elegida
             def get_metric_hasta_fecha(df_origen, col_metric, agg_func='mean'):
                 if df_origen is not None and not df_origen.empty and col_metric in df_origen.columns:
                     df_sub = df_origen[df_origen['Fecha_dt'] <= f_sel_dt].copy()
@@ -1640,8 +1626,6 @@ elif pest_sel == "🏆 Ranking Global":
                         return df_u.groupby('Nombre', as_index=False)[col_metric].agg(agg_func)
                 return None
 
-            # 1. Movilidad
-            df_m_met = get_metric_hasta_fecha(df_mov, 'DORSIFLEX_D') # Usamos movilidad general si estuviese
             if df_mov is not None and not df_mov.empty:
                 df_m_sub = df_mov[df_mov['Fecha_dt'] <= f_sel_dt]
                 if not df_m_sub.empty:
@@ -1650,12 +1634,10 @@ elif pest_sel == "🏆 Ranking Global":
                     df_m_u['Movilidad_Score'] = df_m_u[['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I', 'LUMBAR']].mean(axis=1)
                     df_rank_base = pd.merge(df_rank_base, df_m_u[['Nombre', 'Movilidad_Score']], on='Nombre', how='left')
 
-            # 2. VAM
             df_v_met = get_metric_hasta_fecha(df_vam, 'VAM')
             if df_v_met is not None:
                 df_rank_base = pd.merge(df_rank_base, df_v_met[['Nombre', 'VAM']], on='Nombre', how='left')
 
-            # 3. Dinamometría Relativa
             dict_pesos = {}
             if df_peso is not None and not df_peso.empty:
                 for nom in df_peso['Nombre'].unique():
@@ -1672,7 +1654,6 @@ elif pest_sel == "🏆 Ranking Global":
                     df_d_agg = df_d_u.groupby('Nombre', as_index=False)['Fmax_Rel'].mean()
                     df_rank_base = pd.merge(df_rank_base, df_d_agg[['Nombre', 'Fmax_Rel']], on='Nombre', how='left')
 
-            # 4. Saltos CMJ
             if df_saltos is not None and not df_saltos.empty:
                 df_cmj_sub = df_saltos[(df_saltos['Tipo'].str.upper() == 'CMJ') & (df_saltos['Fecha_dt'] <= f_sel_dt)]
                 if not df_cmj_sub.empty:
@@ -1681,12 +1662,10 @@ elif pest_sel == "🏆 Ranking Global":
                     df_s_u.rename(columns={'Altura': 'CMJ_Altura'}, inplace=True)
                     df_rank_base = pd.merge(df_rank_base, df_s_u[['Nombre', 'CMJ_Altura']], on='Nombre', how='left')
 
-            # 5. DRI
             df_dri_met = get_metric_hasta_fecha(df_dri_sheet, 'DRI')
             if df_dri_met is not None:
                 df_rank_base = pd.merge(df_rank_base, df_dri_met[['Nombre', 'DRI']], on='Nombre', how='left')
 
-            # 6. Tren Superior (Press Banca + Dominadas)
             if df_fts is not None and not df_fts.empty:
                 df_ts_sub = df_fts[df_fts['Fecha_dt'] <= f_sel_dt].copy()
                 if not df_ts_sub.empty:
@@ -1695,7 +1674,6 @@ elif pest_sel == "🏆 Ranking Global":
                     df_ts_u['Tren_Superior_Reps'] = df_ts_u['Press_Banca'].fillna(0) + df_ts_u['Dominada'].fillna(0)
                     df_rank_base = pd.merge(df_rank_base, df_ts_u[['Nombre', 'Tren_Superior_Reps']], on='Nombre', how='left')
 
-            # 7. Velocidad & Campo
             if df_campo is not None and not df_campo.empty:
                 df_c_sub = df_campo[df_campo['Fecha_dt'] <= f_sel_dt]
                 if not df_c_sub.empty:
@@ -1703,7 +1681,6 @@ elif pest_sel == "🏆 Ranking Global":
                     df_c_u = df_c_sub[df_c_sub['Fecha_dt'] == ult_f_c]
                     df_rank_base = pd.merge(df_rank_base, df_c_u[['Nombre', 'V_MAX', 'AC_MAX']], on='Nombre', how='left')
 
-            # CÁLCULO DE PUESTOS EN CADA PRUEBA
             columnas_pruebas = {
                 'Movilidad_Score': ('Movilidad', True),
                 'VAM': ('VAM Aeróbico', True),
@@ -1728,7 +1705,6 @@ elif pest_sel == "🏆 Ranking Global":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # PODIO TOP 3
             st.markdown(f"### 🥇 Podio de Rendimiento Físico ({f_sel_str})")
             c_p1, c_p2, c_p3 = st.columns(3)
 
@@ -1770,7 +1746,6 @@ elif pest_sel == "🏆 Ranking Global":
 
             st.markdown("<br><hr>", unsafe_allow_html=True)
 
-            # TABLA DE CLASIFICACIÓN
             st.markdown(f"### 📋 Clasificación Completa del Vestuario ({f_sel_str})")
             st.caption("Nota: Menos Puntos Totales = Mejor Puesto Global. El número en cada columna representa el lugar obtenido en esa prueba específica (1º = Mejor de la plantilla).")
 
