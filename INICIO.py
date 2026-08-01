@@ -54,6 +54,45 @@ if os.path.exists(_ruta_logo):
         </div>
     """, unsafe_allow_html=True)
 
+    # --- AGENDA Y GESTIÓN DE GRUPO ---
+        col_partido, col_cumples = st.columns(2)
+    
+    with col_partido:
+        st.markdown("#### PRÓXIMO PARTIDO")
+        proximo_partido, racha, error_partidos = obtener_datos_partidos()
+        if error_partidos: st.error(error_partidos)
+        elif proximo_partido:
+            html_racha = " - ".join([f'<span style="color: {"#50C878" if r=="V" else "gray" if r=="E" else "#FF6B6B"};">{r}</span>' for r in racha]) if racha else "<span style='color: gray;'>Sin datos previos</span>"
+            img_escudo = f'<img src="{proximo_partido["escudo"]}" width="50" style="margin-bottom: 5px;">' if proximo_partido["escudo"] else ""
+            st.markdown(f"""
+            <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
+            <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
+            {img_escudo}
+            <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
+            <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
+            <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
+            <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
+            </div></div>""", unsafe_allow_html=True)
+        else: st.info("No hay próximos partidos programados en el calendario.")
+        
+    with col_cumples:
+        st.markdown("#### CUMPLEAÑOS DE LA SEMANA")
+        cumples_semana, error_msg = obtener_cumpleaños_semana()
+        html_cumples = """<div style="background-color: #1E2633; border-radius: 8px; padding: 15px; height: 100%;"><p style="margin: 0; font-weight: bold; color: #50C878;">Celebraciones en los próximos 7 días:</p><ul style="margin-top: 10px; padding-left: 20px;">"""
+        if cumples_semana is None: html_cumples += f"<li><span style='color: #FF6B6B;'>Error: {error_msg}</span></li>"
+        elif len(cumples_semana) == 0: html_cumples += "<li><i>No hay cumpleaños programados para esta semana.</i></li>"
+        else:
+            for c in sorted(cumples_semana, key=lambda x: x['dias']):
+                texto_dias = "<span style='color: #50C878; font-weight: bold;'>¡ES HOY! 🎂</span>" if c['dias'] == 0 else f"en {c['dias']} días"
+                html_cumples += f"<li style='margin-bottom: 5px;'><strong>{c['nombre']}</strong> ({c['fecha']}) - {texto_dias}</li>"
+        st.markdown(html_cumples + "</ul></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    if st.button("Cerrar Sesión"):
+        st.session_state['logeado'] = False
+        st.rerun()
+
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL DE LA PÁGINA
 # ==========================================
@@ -381,8 +420,8 @@ else:
     # ==========================================
     # 5. CAMPOGRAMA TÁCTICO DE DISPONIBILIDAD Y WELLNESS
     # ==========================================
-    st.markdown("### ⚽ DISPONIBILIDAD DE PLANTILLA Y ESTADO DE WELLNESS")
-    st.caption("Puntos verdes, amarillos y rojos indican el nivel de Wellness percibido hoy (🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga).")
+    st.markdown("### DISPONIBILIDAD PROXIMO ENTRENAMIENTO")
+    st.caption("🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga")
 
     ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
     
@@ -530,42 +569,4 @@ else:
 
     st.markdown("---")
     
-    # --- AGENDA Y GESTIÓN DE GRUPO ---
-    st.markdown("### AGENDA Y GESTIÓN DE GRUPO")
-    col_partido, col_cumples = st.columns(2)
     
-    with col_partido:
-        st.markdown("#### PRÓXIMO PARTIDO")
-        proximo_partido, racha, error_partidos = obtener_datos_partidos()
-        if error_partidos: st.error(error_partidos)
-        elif proximo_partido:
-            html_racha = " - ".join([f'<span style="color: {"#50C878" if r=="V" else "gray" if r=="E" else "#FF6B6B"};">{r}</span>' for r in racha]) if racha else "<span style='color: gray;'>Sin datos previos</span>"
-            img_escudo = f'<img src="{proximo_partido["escudo"]}" width="50" style="margin-bottom: 5px;">' if proximo_partido["escudo"] else ""
-            st.markdown(f"""
-            <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
-            <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
-            {img_escudo}
-            <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
-            <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
-            <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
-            </div></div>""", unsafe_allow_html=True)
-        else: st.info("No hay próximos partidos programados en el calendario.")
-        
-    with col_cumples:
-        st.markdown("#### CUMPLEAÑOS DE LA SEMANA")
-        cumples_semana, error_msg = obtener_cumpleaños_semana()
-        html_cumples = """<div style="background-color: #1E2633; border-radius: 8px; padding: 15px; height: 100%;"><p style="margin: 0; font-weight: bold; color: #50C878;">Celebraciones en los próximos 7 días:</p><ul style="margin-top: 10px; padding-left: 20px;">"""
-        if cumples_semana is None: html_cumples += f"<li><span style='color: #FF6B6B;'>Error: {error_msg}</span></li>"
-        elif len(cumples_semana) == 0: html_cumples += "<li><i>No hay cumpleaños programados para esta semana.</i></li>"
-        else:
-            for c in sorted(cumples_semana, key=lambda x: x['dias']):
-                texto_dias = "<span style='color: #50C878; font-weight: bold;'>¡ES HOY! 🎂</span>" if c['dias'] == 0 else f"en {c['dias']} días"
-                html_cumples += f"<li style='margin-bottom: 5px;'><strong>{c['nombre']}</strong> ({c['fecha']}) - {texto_dias}</li>"
-        st.markdown(html_cumples + "</ul></div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    if st.button("Cerrar Sesión"):
-        st.session_state['logeado'] = False
-        st.rerun()
