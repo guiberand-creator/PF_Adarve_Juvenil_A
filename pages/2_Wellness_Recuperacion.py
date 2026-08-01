@@ -332,7 +332,7 @@ else:
         st.info("No hay registros de Wellness para este día.")
 
 # ==========================================
-    # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (ANCHO COMPLETO)
+    # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (UNIFICADO)
     # ==========================================
     st.markdown("---")
     st.markdown(f"### 🩺 Estado de Carga Muscular y Molestias ({fecha_seleccionada.strftime('%d/%m/%Y')})")
@@ -345,12 +345,12 @@ else:
     if total_disponibles == 0:
         st.warning("⚠️ No hay jugadores disponibles en la sesión seleccionada.")
     else:
-        # Definición de zonas musculares individuales
         zonas_especificas = ['Cuadriceps', 'Pubis', 'Adductores', 'Isquios', 'Gemelos']
         dict_conteo_zonas = {z: [] for z in zonas_especificas}
         
         jugs_sin_molestia = []
         jugs_duele_todo = []
+        jugs_con_alguna_molestia = []
 
         # Conteo por jugador
         for _, r in df_disp.iterrows():
@@ -360,58 +360,58 @@ else:
 
             if 'nada' in z_resp_low or z_resp_low in ['ninguna', '', 'nan', 'none', '-']:
                 jugs_sin_molestia.append(j_nom)
-            elif 'todo' in z_resp_low:
-                jugs_duele_todo.append(j_nom)
-                for z in zonas_especificas:
-                    dict_conteo_zonas[z].append(j_nom)
             else:
-                for z in zonas_especificas:
-                    if z.lower() in z_resp_low:
+                jugs_con_alguna_molestia.append(j_nom)
+                if 'todo' in z_resp_low:
+                    jugs_duele_todo.append(j_nom)
+                    for z in zonas_especificas:
                         dict_conteo_zonas[z].append(j_nom)
+                else:
+                    for z in zonas_especificas:
+                        if z.lower() in z_resp_low:
+                            dict_conteo_zonas[z].append(j_nom)
 
         pct_sin_molestia = (len(jugs_sin_molestia) / total_disponibles) * 100
+        pct_alguna_molestia = (len(jugs_con_alguna_molestia) / total_disponibles) * 100
         pct_duele_todo = (len(jugs_duele_todo) / total_disponibles) * 100
 
-        # --- TARJETAS DESTACADAS DE ESTADO GENERAL ---
-        c_tot1, c_tot2, c_tot3 = st.columns(3)
+        # --- TARJETAS DESTACADAS DE ESTADO GENERAL (4 COLUMNAS) ---
+        c_tot1, c_tot2, c_tot3, c_tot4 = st.columns(4)
         with c_tot1:
             st.metric("🏃 Plantilla Disponible Hoy", f"{total_disponibles} jugadores")
         with c_tot2:
             st.metric("🟢 Sin Molestias", f"{pct_sin_molestia:.1f}%", f"{len(jugs_sin_molestia)} jugadores")
         with c_tot3:
+            st.metric("⚠️ Con Alguna Molestia", f"{pct_alguna_molestia:.1f}%", f"{len(jugs_con_alguna_molestia)} jugadores", delta_color="inverse")
+        with c_tot4:
             st.metric("💥 Me Duele Todo", f"{pct_duele_todo:.1f}%", f"{len(jugs_duele_todo)} jugadores", delta_color="inverse")
 
         st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 📋 Detalle Unificado de Carga y Molestias Musculares")
 
-        # --- SECCIÓN 1: ESTADOS GENERALES (SIN MOLESTIA & ME DUELE TODO) ---
-        col_sin, col_todo = st.columns(2)
-        
-        with col_sin:
-            with st.expander(f"🟢 **Sin Molestias Musculares**: {pct_sin_molestia:.1f}% ({len(jugs_sin_molestia)} jug.)"):
-                if jugs_sin_molestia:
-                    for j_nom in jugs_sin_molestia:
+        # --- LISTA UNIFICADA DE DESPLEGABLES ---
+
+        # 1. Sin molestias
+        with st.expander(f"🟢 **Sin Molestias Musculares**: {pct_sin_molestia:.1f}% ({len(jugs_sin_molestia)} jug.)"):
+            st.progress(min(pct_sin_molestia / 100.0, 1.0))
+            if jugs_sin_molestia:
+                col_j1, col_j2 = st.columns(2)
+                mitad_j = (len(jugs_sin_molestia) + 1) // 2
+                with col_j1:
+                    for j_nom in jugs_sin_molestia[:mitad_j]:
                         st.markdown(f"• **{j_nom}**")
-                else:
-                    st.caption("Ningún jugador ha reportado estar 100% libre de molestias.")
+                with col_j2:
+                    for j_nom in jugs_sin_molestia[mitad_j:]:
+                        st.markdown(f"• **{j_nom}**")
+            else:
+                st.caption("Ningún jugador ha reportado estar 100% libre de molestias.")
 
-        with col_todo:
-            with st.expander(f"💥 **Fatiga Generalizada (Me Duele Todo)**: {pct_duele_todo:.1f}% ({len(jugs_duele_todo)} jug.)"):
-                if jugs_duele_todo:
-                    for j_nom in jugs_duele_todo:
-                        st.markdown(f"• 🔴 **{j_nom}**")
-                else:
-                    st.caption("Ningún jugador ha marcado fatiga generalizada.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### 📋 Detalle por Zonas Musculares")
-
-        # --- SECCIÓN 2: DESGLOSE POR ZONAS MUSCULARES ---
+        # 2. Las 5 Zonas Musculares
         for z in zonas_especificas:
             jugs = dict_conteo_zonas[z]
             num_j = len(jugs)
             pct = (num_j / total_disponibles) * 100
             
-            # Icono según % de afectación
             if pct == 0: icono = "🟢"
             elif pct < 20: icono = "🟡"
             elif pct < 40: icono = "🟠"
@@ -430,6 +430,21 @@ else:
                             st.markdown(f"• **{j_nom}**")
                 else:
                     st.caption("Sin molestias registradas en esta zona.")
+
+        # 3. Me duele todo
+        with st.expander(f"💥 **Fatiga Generalizada (Me Duele Todo)**: {pct_duele_todo:.1f}% ({len(jugs_duele_todo)} jug.)"):
+            st.progress(min(pct_duele_todo / 100.0, 1.0))
+            if jugs_duele_todo:
+                col_j1, col_j2 = st.columns(2)
+                mitad_j = (len(jugs_duele_todo) + 1) // 2
+                with col_j1:
+                    for j_nom in jugs_duele_todo[:mitad_j]:
+                        st.markdown(f"• 🔴 **{j_nom}**")
+                with col_j2:
+                    for j_nom in jugs_duele_todo[mitad_j:]:
+                        st.markdown(f"• 🔴 **{j_nom}**")
+            else:
+                st.caption("Ningún jugador ha marcado fatiga generalizada.")
 
     # ==========================================
     # 10. TABLA DESPLEGABLE ADAPTATIVA E INTELIGENTE
