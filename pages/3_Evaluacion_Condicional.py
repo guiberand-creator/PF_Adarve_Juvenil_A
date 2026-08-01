@@ -925,12 +925,18 @@ elif pest_sel == "🚀 Saltos (CMJ)":
             ["Ambos Gráficos", "Evolución CMJ (Media de Equipo)", "Evolución DRI (Drop Jump 50cm)"]
         )
 
-    col_cmj_g, col_dri_g = st.columns(2) if sel_tipo_evo == "Ambos Gráficos" else (st.container(), None)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Definición de contenedores para ocupar 2 columnas o 100% del ancho según la selección
+    if sel_tipo_evo == "Ambos Gráficos":
+        col_cmj_g, col_dri_g = st.columns(2)
+    else:
+        col_cmj_g = st.container()
+        col_dri_g = st.container()
 
     # --- GRÁFICO 1: EVOLUCIÓN CMJ ---
     if sel_tipo_evo in ["Ambos Gráficos", "Evolución CMJ (Media de Equipo)"]:
-        target_col = col_cmj_g if sel_tipo_evo == "Ambos Gráficos" else st
-        with target_col:
+        with col_cmj_g:
             st.markdown("### 📈 Evolución CMJ (Media de Equipo)")
             if df_saltos is None or df_saltos.empty:
                 st.warning("⚠️ No se encontró el archivo 'SALTOS.xlsx' local.")
@@ -973,7 +979,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         f_curr = fechas_cmj_str[k]
                         val_curr = df_cmj_eq['Media_Equipo'].iloc[k]
                         sd_curr = df_cmj_eq['SD_Equipo'].iloc[k]
-                        pos_y = val_curr + sd_curr + 2.5  # Se apoya por encima del bigote
+                        pos_y = val_curr + sd_curr + 2.5
 
                         if k == 0:
                             fig_cmj.add_annotation(
@@ -1005,8 +1011,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
     # --- GRÁFICO 2: EVOLUCIÓN DRI ---
     if sel_tipo_evo in ["Ambos Gráficos", "Evolución DRI (Drop Jump 50cm)"]:
-        target_col = col_dri_g if sel_tipo_evo == "Ambos Gráficos" else st
-        with target_col:
+        with col_dri_g:
             st.markdown("### ⚡ Evolución DRI (Drop Jump 50cm)")
             if df_dri_sheet is None or df_dri_sheet.empty:
                 st.warning("⚠️ No se pudo conectar al Google Sheet de Drop Jump.")
@@ -1081,8 +1086,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
                     )
                     st.plotly_chart(fig_dri, use_container_width=True)
-
-    st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
