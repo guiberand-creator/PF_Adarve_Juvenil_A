@@ -366,7 +366,7 @@ else:
         
         if lesionados:
             texto_lista_bajas = "<br>".join([f"• {b} (No disponible)" for b in lesionados])
-            texto_enf = f"Bajas actuales: <b>{len(lesionados)}</b><br><br>🚑 <b>Jugadores en enfermería:</b><br>{texto_lista_bajas}"
+            texto_enf = f"Bajas actuales: <b>{len(lesionados)}</b><br><br>🚑 <b>Jugadores en enfermería / otros:</b><br>{texto_lista_bajas}"
         else:
             texto_enf = "Bajas actuales: <b>0</b><br><br>✅ ¡Toda la plantilla disponible!"
             
