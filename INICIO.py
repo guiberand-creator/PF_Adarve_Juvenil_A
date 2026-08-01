@@ -181,6 +181,7 @@ def analizar_datos_completos():
             col_entrenar = [c for c in df_w_hoy.columns if 'ENTRENAR' in c]
             if col_entrenar:
                 df_w_hoy['Entrenar_Clean'] = df_w_hoy[col_entrenar[0]].astype(str).str.strip().str.lower()
+                # Filtrado robusto devuelto a su estado original
                 df_bajas = df_w_hoy[df_w_hoy['Entrenar_Clean'] == 'no']
                 bajas_actuales = sorted(list(df_bajas['Nombre_Clean'].unique()))
                 df_w_validos = df_w_hoy[df_w_hoy['Entrenar_Clean'] != 'no'].copy()
@@ -262,7 +263,7 @@ def analizar_datos_completos():
         return 0.0, "Sesión", [], 0, 0.0, [], [], 0, [], 22, {}
 
 # ==========================================
-# 3. SISTEMA DE LOGIN (ELIMINACIÓN RADICAL)
+# 3. SISTEMA DE LOGIN
 # ==========================================
 if 'logeado' not in st.session_state:
     st.session_state['logeado'] = False
@@ -273,7 +274,6 @@ if not st.session_state['logeado']:
         [data-testid="stSidebar"] { display: none; } 
         [data-testid="collapsedControl"] { display: none; }
         
-        /* FULMINAR EL TEXTO DEL BOTÓN DE VISIBILIDAD DE CORZÓN */
         div[data-testid="stTextInputRootElement"] button {
             font-size: 0px !important;
             color: transparent !important;
@@ -283,22 +283,16 @@ if not st.session_state['logeado']:
             margin: 0px !important;
             display: none !important;
         }
-        
-        /* Asegurar que la caja e input queden limpios */
         div[data-testid="stTextInputRootElement"] input {
             color: #FFFFFF !important;
         }
-        
-        div.stButton {
-            margin-top: 15px;
-        }
+        div.stButton { margin-top: 15px; }
         </style>
     """, unsafe_allow_html=True)
     
     col_vacia1, col_centro, col_vacia2 = st.columns([1.2, 1.6, 1.2])
     with col_centro:
         st.markdown("<br><br><br><h1 style='text-align: center; margin-bottom: 25px; letter-spacing: 1px;'>ACCESO STAFF</h1>", unsafe_allow_html=True)
-        
         clave_usuario = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Escribe la contraseña aquí...")
         
         if st.button("Entrar", use_container_width=True):
@@ -398,15 +392,10 @@ else:
         df_pos = pd.read_excel(ruta_posiciones)
         df_pos.columns = df_pos.columns.str.strip()
 
-        # Filtrar solo disponibles (los lesionados no se dibujan en el campo)
         df_disponibles_campo = df_pos[~df_pos['Jugador'].isin(lesionados)].copy()
-
-        # Normalizamos el diccionario de wellness para cruzar de forma segura
         dict_well_norm = {str(k).replace('_', ' ').strip().lower(): v for k, v in dict_well_jug.items()}
 
         agrupados = {}
-        
-        # Contadores para el resumen estadístico superior
         num_porteros = 0
         num_campo = 0
 
@@ -415,123 +404,123 @@ else:
             nom_mostrar = nom_original.replace('_', ' ')
             nom_busqueda = nom_mostrar.strip().lower()
             
-            # Estado Wellness
             w_score = dict_well_norm.get(nom_busqueda, None)
             
             # 🛑 EXCLUIR DEL CAMPOGRAMA A LOS QUE NO TIENEN DATOS
             if w_score is None or pd.isna(w_score):
                 continue
                 
-            # Limpiamos y preparamos las posiciones (Motor Inteligente)
-            pos_clean = str(row_j.get('Posicion', '')).strip().title()
-            lat_clean = str(row_j.get('Lateralidad', '')).strip().title()
+            pos_low = str(row_j.get('Posicion', '')).strip().lower()
+            lat_low = str(row_j.get('Lateralidad', '')).strip().lower()
             
-            if 'Portero' in pos_clean:
+            if 'porter' in pos_low:
                 num_porteros += 1
             else:
                 num_campo += 1
 
             # --- MOTOR DE REGLAS DE COORDENADAS (Atacando hacia Y=0, Portero Y=92) ---
-            
-            # COORDENADA Y (Altura del campo)
-            if 'Portero' in pos_clean: y = 92
-            elif 'Central' in pos_clean: y = 78
-            elif 'Lateral' in pos_clean: y = 70
-            elif 'Mediocentro' in pos_clean: y = 55
-            elif 'Mediapunta' in pos_clean: y = 40
-            elif 'Extremo' in pos_clean: y = 25
-            elif 'Delantero' in pos_clean: y = 15
-            else: y = 50
+            if 'porter' in pos_low: y = 92
+            elif 'central' in pos_low or 'defensa c' in pos_low or 'defensa' in pos_low: y = 78
+            elif 'lateral' in pos_low or 'defensa l' in pos_low: y = 70
+            elif 'mediapunta' in pos_low or 'interior' in pos_low: y = 40
+            elif 'medio' in pos_low or 'centrocampista' in pos_low or 'pivote' in pos_low: y = 55
+            elif 'extremo' in pos_low or 'carrilero' in pos_low: y = 25
+            elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: y = 15
+            else: y = 55 # Medio por defecto si no encaja en nada
 
-            # COORDENADA X (Lateralidad) -> INVERTIDO: Izquierda del jugador = Derecha pantalla (X=75-85)
-            if 'Izquierd' in lat_clean:
-                if 'Lateral' in pos_clean or 'Extremo' in pos_clean: x = 85
+            if 'izquierd' in lat_low:
+                if 'lateral' in pos_low or 'extremo' in pos_low: x = 85
                 else: x = 65
-            elif 'Derech' in lat_clean:
-                if 'Lateral' in pos_clean or 'Extremo' in pos_clean: x = 15
+            elif 'derech' in lat_low:
+                if 'lateral' in pos_low or 'extremo' in pos_low: x = 15
                 else: x = 35
             else:
-                x = 50 # Centro
+                x = 50 
                 
             coord_base = (x, y)
             
-            # Asignar el color del semáforo
-            if w_score >= 3.0:
-                color_nodo = "#2ECC71"
-            elif w_score >= 2.5:
-                color_nodo = "#F1C40F"
-            else:
-                color_nodo = "#E74C3C"
+            if w_score >= 3.0: color_nodo = "#2ECC71"
+            elif w_score >= 2.5: color_nodo = "#F1C40F"
+            else: color_nodo = "#E74C3C"
 
-            # Construir la línea HTML del jugador (SIN NÚMERO DE WELLNESS)
+            # Construir la línea HTML del jugador SIN NUMEROS
             texto_jugador = f"<span style='color:{color_nodo}; font-size:16px;'>●</span> {nom_mostrar}"
             
-            if coord_base not in agrupados:
-                agrupados[coord_base] = []
+            if coord_base not in agrupados: agrupados[coord_base] = []
             agrupados[coord_base].append(texto_jugador)
 
-        # Calculamos los ausentes (resto de la plantilla)
         num_ausentes = total_jugadores - (num_porteros + num_campo)
 
-        # Preparar el lienzo de Plotly
         fig_campo = go.Figure()
 
-        # Dibujo de Líneas Tácticas del Campo de Fútbol
         lineas_campo = [
             dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=2)),
             dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.3)", width=2)),
             dict(type="circle", x0=38, y0=42, x1=62, y1=58, line=dict(color="rgba(255,255,255,0.3)", width=2)),
-            dict(type="rect", x0=25, y0=2, x1=75, y1=18, line=dict(color="rgba(255,255,255,0.3)", width=1.5)), # Área abajo
-            dict(type="rect", x0=25, y0=82, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5))  # Área arriba
+            dict(type="rect", x0=25, y0=2, x1=75, y1=18, line=dict(color="rgba(255,255,255,0.3)", width=1.5)), 
+            dict(type="rect", x0=25, y0=82, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5))
         ]
 
-        # Convertir listas agrupadas en Anotaciones
         anotaciones = []
         for (x, y), lista_jugs in agrupados.items():
             texto_final = "<br>".join(lista_jugs)
             anotaciones.append(
                 dict(
-                    x=x, y=y,
-                    text=texto_final,
-                    showarrow=False,
-                    align='left',
-                    font=dict(size=14, color="white"),
-                    bgcolor="rgba(15, 23, 42, 0.85)", # Fondo para máxima legibilidad
-                    bordercolor="rgba(255,255,255,0.2)",
-                    borderwidth=1,
-                    borderpad=8
+                    x=x, y=y, text=texto_final,
+                    showarrow=False, align='left', font=dict(size=14, color="white"),
+                    bgcolor="rgba(15, 23, 42, 0.85)", bordercolor="rgba(255,255,255,0.2)",
+                    borderwidth=1, borderpad=8
                 )
             )
 
-        # Añadimos las etiquetas estilo Métrica limpia en el margen superior del campo
-        anotaciones.append(dict(
-            x=4, y=109,
-            text=f"<span style='font-size:13px; color:#A0AEC0;'>Jugadores de campo disp.</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_campo}</b></span>",
-            showarrow=False, xanchor='left', yanchor='top', align='left'
-        ))
+        # --- ETIQUETAS DE RESUMEN SEPARADAS (CERO SOLAPAMIENTO) ---
         
+        # 1. Jugadores de Campo
         anotaciones.append(dict(
-            x=40, y=109,
-            text=f"<span style='font-size:13px; color:#A0AEC0;'>Porteros disponibles</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_porteros}</b></span>",
-            showarrow=False, xanchor='left', yanchor='top', align='left'
+            x=16, y=107, text="Jugadores de campo",
+            showarrow=False, font=dict(size=14, color="#A0AEC0"),
+            xanchor="center", yanchor="bottom"
         ))
-        
         anotaciones.append(dict(
-            x=76, y=109,
-            text=f"<span style='font-size:13px; color:#A0AEC0;'>Ausentes / Lesionados</span><br><span style='font-size:36px; color:#FFFFFF;'><b>{num_ausentes}</b></span>",
-            showarrow=False, xanchor='left', yanchor='top', align='left'
+            x=16, y=106, text=f"<b>{num_campo}</b>",
+            showarrow=False, font=dict(size=36, color="#FFFFFF"),
+            xanchor="center", yanchor="top"
+        ))
+
+        # 2. Porteros Disponibles
+        anotaciones.append(dict(
+            x=50, y=107, text="Porteros Disponibles",
+            showarrow=False, font=dict(size=14, color="#A0AEC0"),
+            xanchor="center", yanchor="bottom"
+        ))
+        anotaciones.append(dict(
+            x=50, y=106, text=f"<b>{num_porteros}</b>",
+            showarrow=False, font=dict(size=36, color="#FFFFFF"),
+            xanchor="center", yanchor="top"
+        ))
+
+        # 3. Ausentes/Lesionados
+        anotaciones.append(dict(
+            x=84, y=107, text="Ausentes / Lesionados",
+            showarrow=False, font=dict(size=14, color="#A0AEC0"),
+            xanchor="center", yanchor="bottom"
+        ))
+        anotaciones.append(dict(
+            x=84, y=106, text=f"<b>{num_ausentes}</b>",
+            showarrow=False, font=dict(size=36, color="#FFFFFF"),
+            xanchor="center", yanchor="top"
         ))
 
         fig_campo.update_layout(
             shapes=lineas_campo,
             annotations=anotaciones,
             xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            yaxis=dict(range=[0, 112], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True), # Ampliado a 112
+            yaxis=dict(range=[0, 116], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True), # Espacio ampliado arriba
             dragmode=False, 
             template="plotly_dark",
             paper_bgcolor='rgba(15, 23, 42, 0.6)',
             plot_bgcolor='rgba(15, 23, 42, 0.6)',
-            height=820, # Ampliado de 780 a 820 para compensar el margen
+            height=850, # Aumentada la altura total para que respiren las etiquetas
             margin=dict(l=10, r=10, t=10, b=10),
             showlegend=False,
             hovermode=False 
