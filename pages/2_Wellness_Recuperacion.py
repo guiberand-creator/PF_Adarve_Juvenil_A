@@ -332,10 +332,10 @@ else:
         st.info("No hay registros de Wellness para este día.")
 
 # ==========================================
-    # 9. NUEVO: MAPA ANATÓMICO PORCENTUAL DE MOLESTIAS (OPCIÓN A)
+    # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (ANCHO COMPLETO)
     # ==========================================
     st.markdown("---")
-    st.markdown(f"### 🩺 Mapa Anatómico de Molestias y Carga Muscular ({fecha_seleccionada.strftime('%d/%m/%Y')})")
+    st.markdown(f"### 🩺 Estado de Carga Muscular y Molestias ({fecha_seleccionada.strftime('%d/%m/%Y')})")
     st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
 
     # Consideramos disponible a cualquier jugador que NO haya marcado "no" en la disponibilidad
@@ -345,136 +345,91 @@ else:
     if total_disponibles == 0:
         st.warning("⚠️ No hay jugadores disponibles en la sesión seleccionada.")
     else:
-        # Definición de las 5 zonas según la encuesta
-        zonas_definidas = ['Cuadriceps', 'Pubis', 'Adductores', 'Isquios', 'Gemelos']
-        dict_conteo_zonas = {z: [] for z in zonas_definidas}
+        # Definición de zonas musculares individuales
+        zonas_especificas = ['Cuadriceps', 'Pubis', 'Adductores', 'Isquios', 'Gemelos']
+        dict_conteo_zonas = {z: [] for z in zonas_especificas}
+        
+        jugs_sin_molestia = []
+        jugs_duele_todo = []
 
-        # Conteo por zona
+        # Conteo por jugador
         for _, r in df_disp.iterrows():
             j_nom = r['JUGADOR']
             z_resp = str(r['ZONA_DOLOR']).strip()
-            
-            if 'todo' in z_resp.lower():
-                for z in zonas_definidas:
+            z_resp_low = z_resp.lower()
+
+            if 'nada' in z_resp_low or z_resp_low in ['ninguna', '', 'nan', 'none', '-']:
+                jugs_sin_molestia.append(j_nom)
+            elif 'todo' in z_resp_low:
+                jugs_duele_todo.append(j_nom)
+                for z in zonas_especificas:
                     dict_conteo_zonas[z].append(j_nom)
             else:
-                for z in zonas_definidas:
-                    if z.lower() in z_resp.lower():
+                for z in zonas_especificas:
+                    if z.lower() in z_resp_low:
                         dict_conteo_zonas[z].append(j_nom)
 
-        # Mapa de Coordenadas Anatómicas en Plotly (0 a 100)
-        # Vista Anterior (Izquierda) y Vista Posterior (Derecha)
-        coords_zonas = {
-            'Cuadriceps': {'x': 25, 'y': 48, 'vista': 'Anterior'},
-            'Pubis':      {'x': 25, 'y': 58, 'vista': 'Anterior'},
-            'Adductores': {'x': 22, 'y': 52, 'vista': 'Anterior'},
-            'Isquios':    {'x': 75, 'y': 48, 'vista': 'Posterior'},
-            'Gemelos':    {'x': 75, 'y': 28, 'vista': 'Posterior'}
-        }
+        pct_sin_molestia = (len(jugs_sin_molestia) / total_disponibles) * 100
+        pct_duele_todo = (len(jugs_duele_todo) / total_disponibles) * 100
 
-        x_coords, y_coords, text_labels, text_hovers, colors, sizes = [], [], [], [], [], []
+        # --- TARJETAS DESTACADAS DE ESTADO GENERAL ---
+        c_tot1, c_tot2, c_tot3 = st.columns(3)
+        with c_tot1:
+            st.metric("🏃 Plantilla Disponible Hoy", f"{total_disponibles} jugadores")
+        with c_tot2:
+            st.metric("🟢 Sin Molestias", f"{pct_sin_molestia:.1f}%", f"{len(jugs_sin_molestia)} jugadores")
+        with c_tot3:
+            st.metric("💥 Me Duele Todo", f"{pct_duele_todo:.1f}%", f"{len(jugs_duele_todo)} jugadores", delta_color="inverse")
 
-        for z in zonas_definidas:
-            jugs = dict_conteo_zonas[z]
-            num_jugs = len(jugs)
-            pct = (num_jugs / total_disponibles) * 100 if total_disponibles > 0 else 0
-            
-            pos = coords_zonas[z]
-            x_coords.append(pos['x'])
-            y_coords.append(pos['y'])
-            
-            text_labels.append(f"<b>{z}</b><br>{pct:.1f}%")
-            
-            lista_str = "<br>• " + "<br>• ".join(jugs) if jugs else "<br><i>Ninguno</i>"
-            hover_html = f"<b>{z.upper()}</b><br>Porcentaje: <b>{pct:.1f}%</b> ({num_jugs}/{total_disponibles} disp.)<br><b>Jugadores:</b>{lista_str}"
-            text_hovers.append(hover_html)
-            
-            # Color e intensidad según el % de afectación
-            if pct == 0:
-                colors.append("#2ECC71") # Verde
-                sizes.append(28)
-            elif pct < 20:
-                colors.append("#F1C40F") # Amarillo
-                sizes.append(36)
-            elif pct < 40:
-                colors.append("#E67E22") # Naranja
-                sizes.append(42)
-            else:
-                colors.append("#E74C3C") # Rojo Intenso
-                sizes.append(48)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Renderizado de la figura anatómica en Plotly
-        fig_body = go.Figure()
-
-        # Puntos de dolor interactivos (go.Scatter)
-        fig_body.add_trace(go.Scatter(
-            x=x_coords, y=y_coords,
-            mode='markers+text',
-            text=text_labels,
-            textposition='top center',
-            hovertext=text_hovers,
-            hoverinfo='text',
-            marker=dict(
-                size=sizes,
-                color=colors,
-                opacity=0.85,
-                line=dict(width=2, color='white')
-            )
-        ))
-
-        # Siluetas del cuerpo mediante formas geométricas estilizadas (Anterior & Posterior)
-        shapes_body = [
-            # Cabeza Ant
-            dict(type="circle", x0=22, y0=85, x1=28, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            # Torso Ant
-            dict(type="path", path="M 18 83 L 32 83 L 29 62 L 21 62 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            # Piernas Ant
-            dict(type="path", path="M 21 62 L 24 62 L 23 20 L 19 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            dict(type="path", path="M 26 62 L 29 62 L 31 20 L 27 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            
-            # Cabeza Post
-            dict(type="circle", x0=72, y0=85, x1=78, y1=95, fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            # Torso Post
-            dict(type="path", path="M 68 83 L 82 83 L 79 62 L 71 62 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            # Piernas Post
-            dict(type="path", path="M 71 62 L 74 62 L 73 20 L 69 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5)),
-            dict(type="path", path="M 76 62 L 79 62 L 81 20 L 77 20 Z", fillcolor="rgba(255,255,255,0.08)", line=dict(color="#666", width=1.5))
-        ]
-
-        fig_body.update_layout(
-            shapes=shapes_body,
-            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(range=[10, 105], showgrid=False, zeroline=False, showticklabels=False),
-            template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            annotations=[
-                dict(x=25, y=100, text="<b>VISTA ANTERIOR</b>", showarrow=False, font=dict(color="#00A8E8", size=13)),
-                dict(x=75, y=100, text="<b>VISTA POSTERIOR</b>", showarrow=False, font=dict(color="#00A8E8", size=13))
-            ],
-            height=520,
-            margin=dict(l=10, r=10, t=30, b=10)
-        )
-
-        col_mapa, col_desglose = st.columns([6, 4])
+        # --- SECCIÓN 1: ESTADOS GENERALES (SIN MOLESTIA & ME DUELE TODO) ---
+        col_sin, col_todo = st.columns(2)
         
-        with col_mapa:
-            st.plotly_chart(fig_body, use_container_width=True)
+        with col_sin:
+            with st.expander(f"🟢 **Sin Molestias Musculares**: {pct_sin_molestia:.1f}% ({len(jugs_sin_molestia)} jug.)"):
+                if jugs_sin_molestia:
+                    for j_nom in jugs_sin_molestia:
+                        st.markdown(f"• **{j_nom}**")
+                else:
+                    st.caption("Ningún jugador ha reportado estar 100% libre de molestias.")
 
-        with col_desglose:
-            st.markdown("#### 📋 Detalle de Plantilla Disponible Afectada")
-            st.write(f"**Plantilla Disponible Hoy:** `{total_disponibles}` jugadores")
+        with col_todo:
+            with st.expander(f"💥 **Fatiga Generalizada (Me Duele Todo)**: {pct_duele_todo:.1f}% ({len(jugs_duele_todo)} jug.)"):
+                if jugs_duele_todo:
+                    for j_nom in jugs_duele_todo:
+                        st.markdown(f"• 🔴 **{j_nom}**")
+                else:
+                    st.caption("Ningún jugador ha marcado fatiga generalizada.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 📋 Detalle por Zonas Musculares")
+
+        # --- SECCIÓN 2: DESGLOSE POR ZONAS MUSCULARES ---
+        for z in zonas_especificas:
+            jugs = dict_conteo_zonas[z]
+            num_j = len(jugs)
+            pct = (num_j / total_disponibles) * 100
             
-            for z in zonas_definidas:
-                jugs = dict_conteo_zonas[z]
-                pct = (len(jugs) / total_disponibles * 100) if total_disponibles > 0 else 0
-                
-                with st.expander(f"🔴 **{z}**: {pct:.1f}% ({len(jugs)} jug.)"):
-                    if jugs:
-                        for j_nom in jugs:
+            # Icono según % de afectación
+            if pct == 0: icono = "🟢"
+            elif pct < 20: icono = "🟡"
+            elif pct < 40: icono = "🟠"
+            else: icono = "🔴"
+
+            with st.expander(f"{icono} **{z}**: {pct:.1f}% ({num_j} jug. afectados)"):
+                st.progress(min(pct / 100.0, 1.0))
+                if jugs:
+                    col_j1, col_j2 = st.columns(2)
+                    mitad_j = (len(jugs) + 1) // 2
+                    with col_j1:
+                        for j_nom in jugs[:mitad_j]:
                             st.markdown(f"• **{j_nom}**")
-                    else:
-                        st.caption("Sin molestias registradas en esta zona.")
+                    with col_j2:
+                        for j_nom in jugs[mitad_j:]:
+                            st.markdown(f"• **{j_nom}**")
+                else:
+                    st.caption("Sin molestias registradas en esta zona.")
 
     # ==========================================
     # 10. TABLA DESPLEGABLE ADAPTATIVA E INTELIGENTE
