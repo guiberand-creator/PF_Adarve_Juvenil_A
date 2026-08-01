@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
 from datetime import datetime
 import os
 import base64
@@ -13,12 +15,10 @@ _ruta_logo = os.path.join(_dir_raiz, "assets", "logo-guille_blanco.png")
 
 if os.path.exists(_ruta_logo):
     with open(_ruta_logo, "rb") as _f:
-        import base64
         _b64 = base64.b64encode(_f.read()).decode()
         
     st.sidebar.markdown(f"""
         <style>
-        /* Limpiar cualquier marca de agua antigua flotante */
         .watermark-login {{ display: none !important; }}
 
         .footer-sello-unico {{
@@ -33,7 +33,7 @@ if os.path.exists(_ruta_logo):
             background-color: transparent !important;
         }}
         .footer-sello-unico img {{
-            width: 195px !important; /* Forzar el 130% sin que CSS externo lo pise */
+            width: 195px !important;
             max-width: 195px !important;
             min-width: 195px !important;
             height: auto !important;
@@ -62,7 +62,7 @@ aplicar_estilos_globales()
 
 
 # ==========================================
-# 2. FUNCIONES DE EXTRACCIÓN DE DATOS (GOOGLE SHEETS)
+# 2. FUNCIONES DE EXTRACCIÓN DE DATOS
 # ==========================================
 
 @st.cache_data(ttl=30)
@@ -148,9 +148,9 @@ def analizar_datos_completos():
     well_criticos = []
     well_respondieron = 0
     bajas_actuales = []
+    dict_wellness_jugadores = {}
 
     try:
-        # 1. CARGA RPE
         df_rpe = pd.read_csv(url_rpe)
         df_rpe.columns = df_rpe.columns.str.strip().str.upper()
         df_rpe['Fecha_Real'] = pd.to_datetime(df_rpe['MARCA TEMPORAL'], dayfirst=True, errors='coerce')
@@ -158,7 +158,6 @@ def analizar_datos_completos():
         df_rpe['Fecha_Dia'] = df_rpe['Fecha_Real'].dt.date
         df_rpe['Nombre_Clean'] = df_rpe['NOMBRE Y APELLIDOS'].fillna('Anónimo').astype(str).str.strip()
         
-        # 2. CARGA WELLNESS
         df_well = pd.read_csv(url_well)
         df_well.columns = df_well.columns.str.strip().str.upper()
         df_well.columns = (df_well.columns
@@ -172,7 +171,7 @@ def analizar_datos_completos():
         
         plantilla_completa = sorted(list(set(df_rpe['Nombre_Clean'].unique()).union(set(df_well['Nombre_Clean'].unique()))))
         
-        # --- PROCESAMIENTO WELLNESS ---
+        # WELLNESS
         ultima_fecha_well = df_well['Fecha_Dia'].max()
         if pd.notnull(ultima_fecha_well):
             df_w_hoy = df_well[df_well['Fecha_Dia'] == ultima_fecha_well].copy()
@@ -180,9 +179,9 @@ def analizar_datos_completos():
             col_entrenar = [c for c in df_w_hoy.columns if 'ENTRENAR' in c]
             if col_entrenar:
                 df_w_hoy['Entrenar_Clean'] = df_w_hoy[col_entrenar[0]].astype(str).str.strip().str.lower()
-                df_bajas = df_w_hoy[df_w_hoy['Entrenar_Clean'] == 'no']
+                df_bajas = df_w_hoy[df_w_hoy['Entrenar_Clean'].str.startswith('no', na=False)]
                 bajas_actuales = sorted(list(df_bajas['Nombre_Clean'].unique()))
-                df_w_validos = df_w_hoy[df_w_hoy['Entrenar_Clean'] != 'no'].copy()
+                df_w_validos = df_w_hoy[~df_w_hoy['Entrenar_Clean'].str.startswith('no', na=False)].copy()
             else:
                 df_w_validos = df_w_hoy.copy()
             
@@ -200,6 +199,9 @@ def analizar_datos_completos():
                 df_w_validos['Well_Player_Mean'] = (v_sueno + v_dolor + v_estres + v_carga) / 4
                 well_medio_hoy = df_w_validos['Well_Player_Mean'].mean() if not df_w_validos.empty else 0.0
                 
+                for _, r_w in df_w_validos.iterrows():
+                    dict_wellness_jugadores[r_w['Nombre_Clean']] = r_w['Well_Player_Mean']
+
                 df_criticos = df_w_validos[df_w_validos['Well_Player_Mean'] < 3.0]
                 well_criticos = sorted(list(df_criticos['Nombre_Clean'].unique()))
             
@@ -207,7 +209,7 @@ def analizar_datos_completos():
             well_respondieron = len(respondieron_w)
             well_olvidados = [j for j in plantilla_completa if j not in respondieron_w and j not in bajas_actuales]
 
-        # --- PROCESAMIENTO RPE CON FILTROS ---
+        # RPE
         ultima_fecha_rpe = df_rpe['Fecha_Dia'].max()
         if pd.notnull(ultima_fecha_rpe):
             df_r_hoy = df_rpe[df_rpe['Fecha_Dia'] == ultima_fecha_rpe].copy()
@@ -251,13 +253,13 @@ def analizar_datos_completos():
 
         return (rpe_medio_hoy, sesion_tipo_hoy, rpe_olvidados, rpe_respondieron, 
                 well_medio_hoy, well_olvidados, well_criticos, well_respondieron, 
-                bajas_actuales, len(plantilla_completa))
+                bajas_actuales, len(plantilla_completa), dict_wellness_jugadores)
                 
     except Exception as e:
-        return 0.0, "Sesión", [], 0, 0.0, [], [], 0, [], 22
+        return 0.0, "Sesión", [], 0, 0.0, [], [], 0, [], 22, {}
 
 # ==========================================
-# 3. SISTEMA DE LOGIN (ELIMINACIÓN RADICAL)
+# 3. SISTEMA DE LOGIN
 # ==========================================
 if 'logeado' not in st.session_state:
     st.session_state['logeado'] = False
@@ -267,33 +269,17 @@ if not st.session_state['logeado']:
         <style>
         [data-testid="stSidebar"] { display: none; } 
         [data-testid="collapsedControl"] { display: none; }
-        
-        /* FULMINAR EL TEXTO DEL BOTÓN DE VISIBILIDAD DE CORZÓN */
         div[data-testid="stTextInputRootElement"] button {
-            font-size: 0px !important;
-            color: transparent !important;
-            width: 0px !important;
-            height: 0px !important;
-            padding: 0px !important;
-            margin: 0px !important;
-            display: none !important;
+            font-size: 0px !important; color: transparent !important; width: 0px !important; display: none !important;
         }
-        
-        /* Asegurar que la caja e input queden limpios */
-        div[data-testid="stTextInputRootElement"] input {
-            color: #FFFFFF !important;
-        }
-        
-        div.stButton {
-            margin-top: 15px;
-        }
+        div[data-testid="stTextInputRootElement"] input { color: #FFFFFF !important; }
+        div.stButton { margin-top: 15px; }
         </style>
     """, unsafe_allow_html=True)
     
     col_vacia1, col_centro, col_vacia2 = st.columns([1.2, 1.6, 1.2])
     with col_centro:
         st.markdown("<br><br><br><h1 style='text-align: center; margin-bottom: 25px; letter-spacing: 1px;'>ACCESO STAFF</h1>", unsafe_allow_html=True)
-        
         clave_usuario = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Escribe la contraseña aquí...")
         
         if st.button("Entrar", use_container_width=True):
@@ -316,25 +302,22 @@ else:
     st.markdown("---") 
     st.markdown("### PANEL DE CONTROL GENERAL")
     
-    (rpe_val, sesion_lbl, rpe_faltan, rpe_cant, well_val, well_faltan, well_mal, well_cant, lesionados, total_jugadores) = analizar_datos_completos()
+    (rpe_val, sesion_lbl, rpe_faltan, rpe_cant, well_val, well_faltan, well_mal, well_cant, lesionados, total_jugadores, dict_well_jug) = analizar_datos_completos()
     
     col1, col2, col3 = st.columns(3)
     
-    # 1. TARJETA DE DISPONIBILIDAD
+    # 1. TARJETA WELLNESS (SOLO FALTAN POR RELLENAR)
     with col1: 
-        estado_recu = "🟢 Óptimo" if well_val >= 3.0 else "🔴 Fatiga Grupal"
-        texto_well = f"Completados: <b>{well_cant} / {total_jugadores}</b><br><br>Estado: <b>{well_val:.2f} ({estado_recu})</b>"
-        if well_mal:
-            texto_well += f"<br><br>⚠️ <b>Alerta Fatiga (&lt;3):</b><br>" + "<br>".join([f"• {n}" for n in well_mal])
+        texto_well = f"Completados: <b>{well_cant} / {total_jugadores}</b><br><br>"
         if well_faltan:
-            texto_well += f"<br><br>⏳ <b>Faltan por rellenar:</b><br>" + "<br>".join([f"• {n}" for n in well_faltan])
+            texto_well += f"⏳ <b>Faltan por rellenar:</b><br>" + "<br>".join([f"• {n}" for n in well_faltan])
         else:
-            texto_well += f"<br><br>✅ Cuestionarios al día"
+            texto_well += f"✅ ¡Todos los cuestionarios al día!"
             
         st.markdown(
             f"""
             <div style="background-color: rgba(0, 168, 232, 0.05); padding: 20px; border-radius: 8px; border-left: 5px solid #00A8E8; min-height: 220px;">
-                <h5 style="margin: 0; color: #00A8E8; font-size: 0.9em; letter-spacing: 1px;">DISPONIBILIDAD</h5>
+                <h5 style="margin: 0; color: #00A8E8; font-size: 0.9em; letter-spacing: 1px;">WELLNESS</h5>
                 <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_well}</p>
             </div>
             """, 
@@ -379,6 +362,147 @@ else:
             """, 
             unsafe_allow_html=True
         )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ==========================================
+    # 5. CAMPOGRAMA TÁCTICO DE DISPONIBILIDAD Y WELLNESS
+    # ==========================================
+    st.markdown("### ⚽ DISPONIBILIDAD DE PLANTILLA Y ESTADO DE WELLNESS")
+    st.caption("Puntos verdes, amarillos y rojos indican el nivel de Wellness percibido hoy (🟢 Óptimo | 🟡 Alerta Moderada | 🔴 Alta Fatiga).")
+
+    ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
+    
+    if not os.path.exists(ruta_posiciones):
+        st.warning("⚠️ No se encontró el archivo 'Posiciones.xlsx' en la carpeta data/.")
+    else:
+        df_pos = pd.read_excel(ruta_posiciones)
+        df_pos.columns = df_pos.columns.str.strip()
+        
+        # Mapeo de coordenadas tácticas por Posición + Lateralidad
+        # Coordenadas X: 0 (Banda Izq) a 100 (Banda Der)
+        # Coordenadas Y: 0 (Portería propia) a 100 (Campo contrario)
+        mapa_coordenadas = {
+            ('Portero', 'Centro'): (50, 10),
+            
+            ('Defensa Central', 'Izquierdo'): (35, 28),
+            ('Defensa Central', 'Derecho'): (65, 28),
+            ('Defensa Central', 'Centro'): (50, 28),
+            
+            ('Defensa Lateral', 'Izquierdo'): (12, 38),
+            ('Defensa Lateral', 'Derecho'): (88, 38),
+            
+            ('Mediocentro', 'Izquierdo'): (35, 52),
+            ('Mediocentro', 'Derecho'): (65, 52),
+            ('Mediocentro', 'Centro'): (50, 52),
+            
+            ('Mediapunta', 'Izquierdo'): (35, 70),
+            ('Mediapunta', 'Derecho'): (65, 70),
+            ('Mediapunta', 'Centro'): (50, 70),
+            
+            ('Extremo', 'Izquierdo'): (15, 80),
+            ('Extremo', 'Derecho'): (85, 80),
+            
+            ('Delantero', 'Centro'): (50, 90),
+            ('Delantero', 'Izquierdo'): (38, 90),
+            ('Delantero', 'Derecho'): (62, 90)
+        }
+
+        # Filtrar solo disponibles (los lesionados no se dibujan en el campo)
+        df_disponibles_campo = df_pos[~df_pos['Jugador'].isin(lesionados)].copy()
+
+        x_coords, y_coords, nombres, hover_texts, colores, bordes = [], [], [], [], [], []
+
+        # Contadores para desplazar ligeramente si coinciden varios en la misma posición exacta
+        dict_desplazamiento = {}
+
+        for _, row_j in df_disponibles_campo.iterrows():
+            nom = row_j['Jugador']
+            pos = str(row_j.get('Posicion', 'Mediocentro')).strip()
+            lat = str(row_j.get('Lateralidad', 'Centro')).strip()
+
+            # Obtener coordenada base
+            clave_pos = (pos, lat)
+            coord_base = mapa_coordenadas.get(clave_pos, (50, 50))
+            
+            # Ajuste en abanico si hay más de 1 jugador en la misma subposición
+            cant_prev = dict_desplazamiento.get(clave_pos, 0)
+            dict_desplazamiento[clave_pos] = cant_prev + 1
+            
+            offset_x = (cant_prev % 3 - 1) * 7 if cant_prev > 0 else 0
+            offset_y = (cant_prev // 3) * 6 if cant_prev > 0 else 0
+            
+            final_x = max(8, min(92, coord_base[0] + offset_x))
+            final_y = max(8, min(95, coord_base[1] + offset_y))
+
+            # Obtener valor Wellness
+            w_score = dict_well_jug.get(nom, None)
+            
+            if w_score is None:
+                color_nodo = "#95A5A6" # Gris sin cuestionario
+                estado_str = "Sin Cuestionario"
+            elif w_score >= 3.0:
+                color_nodo = "#2ECC71" # Verde
+                estado_str = "🟢 Óptimo"
+            elif w_score >= 2.5:
+                color_nodo = "#F1C40F" # Amarillo
+                estado_str = "🟡 Alerta Moderada"
+            else:
+                color_nodo = "#E74C3C" # Rojo
+                estado_str = "🔴 Fatiga Elevada"
+
+            x_coords.append(final_x)
+            y_coords.append(final_y)
+            nombres.append(f"<b>{nom.replace('_', ' ')}</b>")
+            hover_texts.append(f"<b>{nom}</b><br>Posición: {pos} ({lat})<br>Wellness: <b>{f'{w_score:.2f}' if w_score else 'Sin Datos'}</b> ({estado_str})")
+            colores.append(color_nodo)
+
+        # Dibujar el Campograma en Plotly
+        fig_campo = go.Figure()
+
+        # Puntos de los Jugadores
+        fig_campo.add_trace(go.Scatter(
+            x=x_coords, y=y_coords,
+            mode='markers+text',
+            text=nombres,
+            textposition='top center',
+            hovertext=hover_texts,
+            hoverinfo='text',
+            marker=dict(
+                size=28,
+                color=colores,
+                opacity=0.9,
+                line=dict(width=2, color='white')
+            )
+        ))
+
+        # Dibujo de Líneas Tácticas del Campo de Fútbol
+        lineas_campo = [
+            # Perímetro exterior
+            dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=2)),
+            # Línea de centro de campo
+            dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.3)", width=2)),
+            # Círculo central
+            dict(type="circle", x0=38, y0=42, x1=62, y1=58, line=dict(color="rgba(255,255,255,0.3)", width=2)),
+            # Área propia (Abajo)
+            dict(type="rect", x0=25, y0=2, x1=75, y1=20, line=dict(color="rgba(255,255,255,0.3)", width=1.5)),
+            # Área rival (Arriba)
+            dict(type="rect", x0=25, y0=80, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5))
+        ]
+
+        fig_campo.update_layout(
+            shapes=lineas_campo,
+            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(range=[0, 105], showgrid=False, zeroline=False, showticklabels=False),
+            template="plotly_dark",
+            paper_bgcolor='rgba(15, 23, 42, 0.6)',
+            plot_bgcolor='rgba(15, 23, 42, 0.6)',
+            height=620,
+            margin=dict(l=10, r=10, t=20, b=10),
+            showlegend=False
+        )
+
+        st.plotly_chart(fig_campo, use_container_width=True)
 
     st.markdown("---")
     
