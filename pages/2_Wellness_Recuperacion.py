@@ -331,7 +331,7 @@ else:
     else:
         st.info("No hay registros de Wellness para este día.")
 
-   # ==========================================
+# ==========================================
     # 9. NUEVO: MAPA ANATÓMICO PORCENTUAL DE MOLESTIAS (OPCIÓN A)
     # ==========================================
     st.markdown("---")
@@ -406,8 +406,8 @@ else:
         # Renderizado de la figura anatómica en Plotly
         fig_body = go.Figure()
 
-        # Puntos de dolor interactivos
-        fig_body.add_trace(go.Bar(
+        # Puntos de dolor interactivos (go.Scatter)
+        fig_body.add_trace(go.Scatter(
             x=x_coords, y=y_coords,
             mode='markers+text',
             text=text_labels,
