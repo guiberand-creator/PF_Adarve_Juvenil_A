@@ -15,12 +15,10 @@ _ruta_logo = os.path.join(_dir_raiz, "assets", "logo-guille_blanco.png")
 
 if os.path.exists(_ruta_logo):
     with open(_ruta_logo, "rb") as _f:
-        import base64
         _b64 = base64.b64encode(_f.read()).decode()
         
     st.sidebar.markdown(f"""
         <style>
-        /* Limpiar cualquier marca de agua antigua flotante */
         .watermark-login {{ display: none !important; }}
 
         .footer-sello-unico {{
@@ -35,7 +33,7 @@ if os.path.exists(_ruta_logo):
             background-color: transparent !important;
         }}
         .footer-sello-unico img {{
-            width: 195px !important; /* Forzar el 130% sin que CSS externo lo pise */
+            width: 195px !important;
             max-width: 195px !important;
             min-width: 195px !important;
             height: auto !important;
@@ -64,7 +62,7 @@ aplicar_estilos_globales()
 
 
 # ==========================================
-# 2. FUNCIONES DE EXTRACCIÓN DE DATOS (GOOGLE SHEETS)
+# 2. FUNCIONES DE EXTRACCIÓN DE DATOS
 # ==========================================
 
 @st.cache_data(ttl=30)
@@ -413,6 +411,13 @@ else:
             nom_mostrar = nom_original.replace('_', ' ')
             nom_busqueda = nom_mostrar.strip().lower()
             
+            # Estado Wellness
+            w_score = dict_well_norm.get(nom_busqueda, None)
+            
+            # 🛑 EXCLUIR DEL CAMPOGRAMA A LOS QUE NO TIENEN DATOS (SD)
+            if w_score is None or pd.isna(w_score):
+                continue
+                
             # Limpiamos y preparamos las posiciones (Motor Inteligente)
             pos_clean = str(row_j.get('Posicion', '')).strip().title()
             lat_clean = str(row_j.get('Lateralidad', '')).strip().title()
@@ -441,13 +446,8 @@ else:
                 
             coord_base = (x, y)
             
-            # Estado Wellness
-            w_score = dict_well_norm.get(nom_busqueda, None)
-            
-            if w_score is None or pd.isna(w_score):
-                color_nodo = "#95A5A6"
-                txt_score = "SD"
-            elif w_score >= 3.0:
+            # Asignar el color del semáforo
+            if w_score >= 3.0:
                 color_nodo = "#2ECC71"
                 txt_score = f"{w_score:.1f}"
             elif w_score >= 2.5:
