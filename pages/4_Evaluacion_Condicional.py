@@ -350,8 +350,7 @@ df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_
 # -----------------------------------------------------------------------------
 # 4. CABECERA
 # -----------------------------------------------------------------------------
-st.title("⚡ EVALUACIÓN CONDICIONAL DE PLANTILLA")
-st.markdown("Visión global de rendimiento condicional, asimetrías y evolución del vestuario.")
+st.title("EVALUACIÓN CONDICIONAL DE PLANTILLA")
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
@@ -1586,8 +1585,6 @@ elif pest_sel == "⚡ Velocidad & COD":
 # ÁREA 8: RANKING GLOBAL (LA LIGA DEL VESTUARIO)
 # =============================================================================
 elif pest_sel == "🏆 Ranking Global":
-    st.subheader("🏆 Liga de Rendimiento Condicional del Vestuario")
-    st.markdown("Clasificación general de la plantilla basada en la suma de puestos en todas las evaluaciones físicas.")
     
     if df_pos is None or df_pos.empty:
         st.warning("⚠️ No se encontró la lista de plantilla en 'Posiciones.xlsx'.")
@@ -1705,7 +1702,6 @@ elif pest_sel == "🏆 Ranking Global":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            st.markdown(f"### 🥇 Podio de Rendimiento Físico ({f_sel_str})")
             c_p1, c_p2, c_p3 = st.columns(3)
 
             if len(df_rank_base) >= 1:
