@@ -1742,7 +1742,7 @@ elif pest_sel == "🏆 Ranking Global":
 
             st.markdown("<br><hr>", unsafe_allow_html=True)
 
-            st.markdown(f"### 📋 Clasificación Completa del Vestuario ({f_sel_str})")
+            st.markdown(f"### Clasificación Completa ({f_sel_str})")
             st.caption("Nota: Menos Puntos Totales = Mejor Puesto Global. El número en cada columna representa el lugar obtenido en esa prueba específica (1º = Mejor de la plantilla).")
 
             df_tabla = df_rank_base.copy()
@@ -1757,7 +1757,6 @@ elif pest_sel == "🏆 Ranking Global":
             cols_mostrar = {
                 'POSICION_GLOBAL': 'Posición',
                 'Nombre': 'Jugador',
-                'Posicion': 'Demarcación',
                 'PUNTOS_TOTALES': '🏆 Puntos Totales',
                 'P_Movilidad': '🩺 Movilidad',
                 'P_VAM Aeróbico': '🫁 VAM',
