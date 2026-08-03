@@ -590,7 +590,6 @@ elif pest_sel == "🫁 VAM / Aeróbico":
 # ÁREA 4: DINAMOMETRÍA
 # =============================================================================
 elif pest_sel == "⚙️ Dinamometría":
-    st.subheader("⚙️ Dinamometría Isométrica & RFD (Fuerza Analítica)")
     
     if df_dina is None or df_dina.empty:
         st.warning("⚠️ No se encontró el archivo 'DINAMOMETRIA_ANALITICO.xlsx' en 'data/EVALUACIONES/FUERZA ANALITICA/'.")
@@ -615,8 +614,6 @@ elif pest_sel == "⚙️ Dinamometría":
 
         piv_frel = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='Fmax_Rel', aggfunc='mean')
         piv_rfd = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='RFD_150', aggfunc='mean')
-
-        st.markdown(f"### 📋 Informe de Necesidades y Asimetrías ({ult_fecha_str})")
         
         dict_prescripciones = {}
         for jug in piv_frel.index:
@@ -670,7 +667,6 @@ elif pest_sel == "⚙️ Dinamometría":
         with c_d1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_prescripciones)} / {len(piv_frel)}")
         with c_d2: st.metric("Porcentaje del Vestuario en Objetivo", f"{((len(piv_frel) - len(dict_prescripciones)) / len(piv_frel) * 100):.0f}%")
 
-        st.markdown("#### 🎯 Prescripción Metodológica por Jugador:")
         if dict_prescripciones:
             col_da1, col_da2 = st.columns(2)
             items_d = list(dict_prescripciones.items())
@@ -687,7 +683,7 @@ elif pest_sel == "⚙️ Dinamometría":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-        st.markdown("### 📊 Análisis Biomecánico Simultáneo por Ejercicio")
+        st.markdown("### Análisis Ejercicio")
         bloque_ejercicio = st.selectbox(
             "🎯 Selecciona Ejercicio / Articulación:",
             ["Extensión Rodilla 90°", "Flexión Rodilla 90°", "ABD Cadera de Pie", "ADD Cadera de Pie"]
