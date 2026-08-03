@@ -102,21 +102,16 @@ def obtener_datos_carga_real():
 df_raw, error_hoja = obtener_datos_carga_real()
 
 # ==============================================================================
-# 2. INTERFAZ GENERAL CON LA IDENTIDAD VISUAL DEL UNIÓN ADARVE
+# 2. INTERFAZ GENERAL DE CARGA INTERNA
 # ==============================================================================
-st.title("MONITORIZACIÓN DE CARGA")
-st.caption("Control de métricas de carga interna y externa del equipo ADARVE JUVENIL DH.")
-
-st.markdown("**SELECCIONA EL ÁREA:**")
-area = st.radio("Área", ["CARGA INTERNA (RPE)", "CARGA EXTERNA (GPS)"], label_visibility="collapsed")
+st.title("CARGA INTERNA (RPE)")
+st.caption("Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.")
 
 if error_hoja:
     st.error(f"Error de mapeo o conexión con Google Sheets: {error_hoja}")
 elif df_raw is None or df_raw.empty:
-    st.warning("Base de datos vacía o no structured. Revisa las respuestas del formulario.")
-    
-elif area == "CARGA INTERNA (RPE)":
-    
+    st.warning("Base de datos vacía o no estructurada. Revisa las respuestas del formulario.")
+else:
     # --------------------------------------------------------------------------
     # FILTRADO TÁCTICO DE EXCLUSIONES (Wellness y Minutos)
     # --------------------------------------------------------------------------
@@ -174,7 +169,7 @@ elif area == "CARGA INTERNA (RPE)":
         else: 
             st.success("😊 Índices de bienestar estables en el grupo.")
 
- # ==============================================================================
+    # ==============================================================================
     # BLOCK 2: PANEL DE CONTROL GRUPAL (EQUIPO)
     # ==============================================================================
     st.markdown("---")
@@ -363,6 +358,3 @@ elif area == "CARGA INTERNA (RPE)":
             st.plotly_chart(fig_perfil, use_container_width=True)
     else:
         st.info("No se registran suficientes entrenamientos válidos para este jugador.")
-
-else:
-    st.info("Módulo de Carga Externa (GPS) pendiente de vincular.")
