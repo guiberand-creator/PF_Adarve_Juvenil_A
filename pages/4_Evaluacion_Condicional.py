@@ -683,7 +683,6 @@ elif pest_sel == "⚙️ Dinamometría":
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
-        st.markdown("### Análisis Ejercicio")
         bloque_ejercicio = st.selectbox(
             "🎯 Selecciona Ejercicio / Articulación:",
             ["Extensión Rodilla 90°", "Flexión Rodilla 90°", "ABD Cadera de Pie", "ADD Cadera de Pie"]
@@ -836,7 +835,6 @@ elif pest_sel == "⚙️ Dinamometría":
 # ÁREA 5: SALTOS
 # =============================================================================
 elif pest_sel == "🚀 Saltos (CMJ)":
-    st.subheader("🚀 Evaluación de Capacidad Saltabilidades (CMJ & DRI)")
     
     if df_saltos is not None and not df_saltos.empty:
         ult_f_saltos = df_saltos['Fecha_dt'].max()
@@ -886,12 +884,10 @@ elif pest_sel == "🚀 Saltos (CMJ)":
             if prescripciones_j:
                 dict_prescripciones_saltos[nom_j] = prescripciones_j
 
-        st.markdown(f"### 📋 Informe de Necesidades y Asimetrías ({ult_f_saltos_str})")
         c_s1, c_s2 = st.columns(2)
         with c_s1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_prescripciones_saltos)} / {len(piv_total_j)}")
         with c_s2: st.metric("Porcentaje del Vestuario en Objetivo", f"{((len(piv_total_j) - len(dict_prescripciones_saltos)) / len(piv_total_j) * 100):.0f}%")
 
-        st.markdown("#### 🎯 Prescripción Metodológica por Jugador:")
         if dict_prescripciones_saltos:
             col_sa1, col_sa2 = st.columns(2)
             items_s = list(dict_prescripciones_saltos.items())
@@ -1074,7 +1070,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
-    st.markdown("### ⚽ Perfil de Saltabilidad y Asimetrías Unipodales por Posición")
+    st.markdown("### Evolución individual del salto")
 
     if df_saltos is None or df_saltos.empty:
         st.warning("⚠️ No se encontraron los datos locales de saltos para desglosar por posición.")
