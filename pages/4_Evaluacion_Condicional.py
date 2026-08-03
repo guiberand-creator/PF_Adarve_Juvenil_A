@@ -453,7 +453,6 @@ if pest_sel == "🩺 Movilidad":
 # ÁREA 2: PESO
 # =============================================================================
 elif pest_sel == "⚖️ Peso":
-    st.subheader("⚖️ Control de Peso Corporal y Evolución")
     if df_peso is None or df_peso.empty:
         st.warning("⚠️ No se encontró el archivo 'PESO.xlsx' dentro de 'data/EVALUACIONES/PESO/'.")
     else:
@@ -476,7 +475,6 @@ elif pest_sel == "⚖️ Peso":
 # ÁREA 3: VAM / AERÓBICO
 # =============================================================================
 elif pest_sel == "🫁 VAM / Aeróbico":
-    st.subheader("🫁 Test Aeróbico 5 Minutos (Estimación VAM)")
     if df_vam is None or df_vam.empty:
         st.warning("⚠️ No se encontraron los archivos de VAM en 'data/EVALUACIONES/AEROBICO/'.")
     else:
@@ -499,7 +497,6 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                     if pd.notna(vam_val) and pd.notna(ref_val) and vam_val < ref_val:
                         dict_alertas_vam[nom_j] = ["Trabajo Aeróbico"]
 
-        st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_fecha_vam_str})")
         c_v1, c_v2 = st.columns(2)
         with c_v1: 
             st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_alertas_vam)} / {len(df_v_ult)}")
@@ -507,7 +504,6 @@ elif pest_sel == "🫁 VAM / Aeróbico":
             pct_optimo = ((len(df_v_ult) - len(dict_alertas_vam)) / len(df_v_ult) * 100) if len(df_v_ult) > 0 else 100
             st.metric("Porcentaje del Vestuario en Objetivo", f"{pct_optimo:.0f}%")
 
-        st.markdown("#### 🎯 Prescripción Metodológica por Jugador:")
         if dict_alertas_vam:
             col_va1, col_va2 = st.columns(2)
             items_v = list(dict_alertas_vam.items())
