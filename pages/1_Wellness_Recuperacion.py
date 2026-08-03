@@ -331,7 +331,7 @@ else:
     else:
         st.info("No hay registros de Wellness para este día.")
 
-# ==========================================
+    # ==========================================
     # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (UNIFICADO)
     # ==========================================
     st.markdown("---")
@@ -447,13 +447,12 @@ else:
                 st.caption("Ningún jugador ha marcado fatiga generalizada.")
 
     # ==========================================
-    # 10. TABLA DESPLEGABLE ADAPTATIVA E INTELIGENTE
+    # 10. TABLA FIJA Y VISIBLE ADAPTATIVA E INTELIGENTE
     # ==========================================
     st.markdown("---")
     st.markdown("### 📋 Desglose Analítico de Puntuaciones")
-    mostrar_tabla = st.checkbox("📋 Mostrar / Ocultar la tabla completa de valoraciones individuales", value=False)
     
-    if mostrar_tabla:
+    with st.container():
         df_tabla = df_cruzado.copy()
         
         st.markdown("""
