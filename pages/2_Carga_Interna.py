@@ -125,7 +125,7 @@ else:
     # BLOCK 1 (LO PRIMERO): SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)
     # ==============================================================================
     st.markdown("---")
-    st.markdown("## 🔍 SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)")
+    st.markdown("## SISTEMA DE ALERTAS AUTOMÁTICAS ")
     
     alertas_sobrecarga = []
     alertas_subentreno = []
@@ -242,7 +242,7 @@ else:
     
     # COLUMNA 1: Gestión de Sesión (Día a Día)
     with col_graf1:
-        st.markdown("#### Gestión de Sesión (Día a Día)")
+        st.markdown("#### RPE sesiones")
         fig_diario = make_subplots(specs=[[{"secondary_y": True}]])
         
         fig_diario.add_trace(
@@ -287,7 +287,7 @@ else:
         fig_sem.update_yaxes(title_text="Carga Semanal (UA)", secondary_y=False)
         st.plotly_chart(fig_sem, use_container_width=True)
         
-    st.markdown("#### Historial de Estrés Orgánico (Training Strain Colectivo)")
+    st.markdown("#### Evolución del Training Strain")
     fig_strain = go.Figure()
     fig_strain.add_trace(go.Scatter(x=df_macro['Eje_X_Labels'], y=df_macro['Training_Strain'], name="Strain", fill='tozeroy', line=dict(color='#B31F24', width=2)))
     fig_strain.update_layout(template="plotly_dark", height=180, margin=dict(t=10, b=10), xaxis=dict(type='category'))
@@ -297,9 +297,9 @@ else:
     # BLOCK 3: CONTROL Y FICHA INDIVIDUAL
     # ==============================================================================
     st.markdown("---")
-    st.markdown("## 👤 FICHA DE ANÁLISIS DETALLADO INDIVIDUAL")
+    st.markdown("## 👤 ANÁLISIS INDIVIDUAL")
     
-    jugador_sel = st.selectbox("Selecciona un jugador para inspeccionar su histórico:", df_raw['Nombre'].unique())
+    jugador_sel = st.selectbox("Jugadores:", df_raw['Nombre'].unique())
     df_jugador = df_filtrado[df_filtrado['Nombre'] == jugador_sel].sort_values('Fecha').copy()
     
     if not df_jugador.empty:
@@ -322,7 +322,7 @@ else:
             fig_acwr.add_hline(y=1.5, line_color="#B31F24", line_width=1.5)
             fig_acwr.add_hline(y=1.3, line_dash="dash", line_color="#FFC107")
             fig_acwr.add_hline(y=0.8, line_dash="dash", line_color="#FFC107")
-            fig_acwr.update_layout(title="<b>Evolución del ACWR</b>", template="plotly_dark", yaxis_range=[0, 2.2], height=340, margin=dict(t=60, b=30, l=15, r=15))
+            fig_acwr.update_layout(title="<b>ACWR</b>", template="plotly_dark", yaxis_range=[0, 2.2], height=340, margin=dict(t=60, b=30, l=15, r=15))
             st.plotly_chart(fig_acwr, use_container_width=True)
             
         with c_ind2:
