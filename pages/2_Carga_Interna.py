@@ -125,7 +125,7 @@ else:
     # BLOCK 1 (LO PRIMERO): SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)
     # ==============================================================================
     st.markdown("---")
-    st.markdown("## SISTEMA DE ALERTAS AUTOMÁTICAS ")
+    st.markdown("##")
     
     alertas_sobrecarga = []
     alertas_subentreno = []
