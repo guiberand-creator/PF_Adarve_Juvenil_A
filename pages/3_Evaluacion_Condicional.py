@@ -91,7 +91,7 @@ RUTA_POSICIONES = os.path.join("data", "Posiciones.xlsx")
 RUTA_MOVILIDAD = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "MOVILIDAD.xlsx")
 RUTA_REFERENCIAS_MOV = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "Valores de referencia pruebas.xlsx")
 RUTA_PESO = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
-RUTA_VAM = os.path.join("data", "EVALUACIONES", "AEROBICO", "AERÓBICO_5MIN.xlsx")
+RUTA_VAM = os.path.join("data", "EVALUACIONES", "AEROBICO", "AEROBICO_5MIN.xlsx")
 RUTA_REF_VAM = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
 DIR_FUERZA_ANALITICA = os.path.join("data", "EVALUACIONES", "FUERZA ANALITICA")
 RUTA_SALTOS = os.path.join("data", "EVALUACIONES", "SALTOS", "SALTOS.xlsx")
@@ -104,7 +104,7 @@ URL_SHEET_DRI = "https://docs.google.com/spreadsheets/d/1r7nUPbRWDjKpZW-Jwex1HFN
 COLOR_ADARVE_GRANATE = "#800020"
 COLOR_ADARVE_BORDER = "#B22222"
 
-@st.cache_data
+@st.cache_data(ttl=10)
 def cargar_datos_evaluaciones():
     df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = None, None, None, None, None, None, None, None, None, None, None, None, None
     
