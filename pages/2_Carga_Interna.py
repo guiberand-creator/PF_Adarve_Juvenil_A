@@ -104,8 +104,13 @@ df_raw, error_hoja = obtener_datos_carga_real()
 # ==============================================================================
 # 2. INTERFAZ GENERAL DE CARGA INTERNA
 # ==============================================================================
-st.title("CARGA INTERNA (RPE)")
-st.caption("Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.")
+# 🛠️ AQUI HEMOS CAMBIADO EL TITULO PARA ELIMINAR EL MARGEN 🛠️
+st.markdown("""
+    <div style="margin-bottom: 15px;">
+        <h1 style="margin-bottom: 0px; padding-bottom: 0px;">CARGA INTERNA (RPE)</h1>
+        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.</p>
+    </div>
+""", unsafe_allow_html=True)
 
 if error_hoja:
     st.error(f"Error de mapeo o conexión con Google Sheets: {error_hoja}")
@@ -123,10 +128,7 @@ else:
 
     # ==============================================================================
     # BLOCK 1 (LO PRIMERO): SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)
-    # ==============================================================================
-    st.markdown("---")
-    st.markdown("##")
-    
+    # ==============================================================================   
     alertas_sobrecarga = []
     alertas_subentreno = []
     alertas_desmotivacion = []
