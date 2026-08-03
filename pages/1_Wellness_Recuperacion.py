@@ -182,7 +182,7 @@ def cargar_datos_saltos():
 # 6. CABECERA HOMOGÉNEA
 # ==========================================
 st.title("CONTROL DE WELLNESS Y RECUPERACIÓN")
-st.caption("Control de métricas de estado biológico (Wellness 15s) y estado neuromuscular del SNC (Drop Jump 4s) del ADARVE JUVENIL DH.")
+st.caption("Wellness (media móvil 15 sem) y recuperación SNC (Media móvil DRI 4 sem)")
 st.markdown("---")
 
 df_well, error_w = cargar_datos_wellness()
@@ -296,7 +296,7 @@ else:
                 fig_scatter.add_annotation(x=1.6, y=-1.6, text="🟠 RIESGO OCULTO (SNC)", showarrow=False, font=dict(color="#D35400", size=10, weight="bold"))
                 fig_scatter.add_annotation(x=-1.6, y=-1.6, text="🔴 FATIGA INTEGRAL", showarrow=False, font=dict(color="#B31F24", size=10, weight="bold"))
                 fig_scatter.update_layout(
-                    title="Matriz de Readiness y Toma de Decisiones",
+                    title="Matriz de Readiness",
                     xaxis_title="← Más Fatiga Subjetiva | Wellness Z-Score | Más Frescura →",
                     yaxis_title="← Fatiga Central (SNC) | Salto Z-Score (DRI) | SNC Óptimo →",
                     template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(range=[-3.2, 3.2]), yaxis=dict(range=[-3.2, 3.2]),
@@ -335,7 +335,7 @@ else:
     # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (UNIFICADO)
     # ==========================================
     st.markdown("---")
-    st.markdown(f"### 🩺 Estado de Carga Muscular y Molestias ({fecha_seleccionada.strftime('%d/%m/%Y')})")
+    st.markdown(f"### Molestias pre-sesión ({fecha_seleccionada.strftime('%d/%m/%Y')})")
     st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
 
     # Consideramos disponible a cualquier jugador que NO haya marcado "no" en la disponibilidad
@@ -387,7 +387,7 @@ else:
             st.metric("💥 Me Duele Todo", f"{pct_duele_todo:.1f}%", f"{len(jugs_duele_todo)} jugadores", delta_color="inverse")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### 📋 Detalle Unificado de Carga y Molestias Musculares")
+        st.markdown("#### Molestias Musculares: Zonas y jugadores afectados")
 
         # --- LISTA UNIFICADA DE DESPLEGABLES ---
 
