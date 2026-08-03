@@ -1171,6 +1171,55 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                             )
                             st.plotly_chart(fig_pos, use_container_width=True)
 
+            st.markdown("<br><hr>", unsafe_allow_html=True)
+
+            # --- NUEVA SECCIÓN: EVOLUCIÓN INDIVIDUAL DRI ---
+            st.markdown("### ⚡ Evolución Individual de DRI (Drop Jump)")
+            
+            if df_dri_sheet is None or df_dri_sheet.empty:
+                st.warning("⚠️ No hay datos de DRI registrados en la base de datos.")
+            else:
+                jugadores_dri = sorted(df_dri_sheet['Nombre'].dropna().unique())
+                
+                col_f_dri, col_vacio_dri = st.columns([1, 2])
+                with col_f_dri:
+                    jug_sel_dri = st.selectbox("🏃 Filtrar por Jugador:", jugadores_dri, key="sb_jug_dri")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                df_dri_jug = df_dri_sheet[df_dri_sheet['Nombre'] == jug_sel_dri].groupby(['Fecha', 'Fecha_dt'], as_index=False)['DRI'].mean().sort_values('Fecha_dt')
+                
+                if df_dri_jug.empty:
+                    st.info(f"No hay saltos DRI registrados para {jug_sel_dri}.")
+                else:
+                    media_equipo_dri = df_dri_sheet['DRI'].mean()
+                    
+                    df_dri_jug['DRI_Ant'] = df_dri_jug['DRI'].shift(1)
+                    df_dri_jug['Var_Pct'] = ((df_dri_jug['DRI'] - df_dri_jug['DRI_Ant']) / df_dri_jug['DRI_Ant']) * 100
+                    
+                    fig_dri_ind = go.Figure()
+                    
+                    etiquetas_dri = [f"<b>{r['DRI']:.2f}</b>" if pd.isna(r['Var_Pct']) else f"<b>{r['DRI']:.2f}</b><br><i>{'+' if r['Var_Pct']>0 else ''}{r['Var_Pct']:.1f}%</i>" for _, r in df_dri_jug.iterrows()]
+
+                    fig_dri_ind.add_trace(go.Bar(
+                        x=df_dri_jug['Fecha'], y=df_dri_jug['DRI'],
+                        name=f"DRI - {jug_sel_dri}", marker_color='#00A8E8',
+                        text=etiquetas_dri, textposition='outside'
+                    ))
+                    
+                    fig_dri_ind.add_shape(type="line", x0=-0.5, x1=len(df_dri_jug)-0.5, y0=media_equipo_dri, y1=media_equipo_dri, line=dict(color="#FFC107", width=2.5, dash="dash"))
+                    fig_dri_ind.add_annotation(x=len(df_dri_jug)-1, y=media_equipo_dri, text=f"Media Equipo ({media_equipo_dri:.2f})", showarrow=False, font=dict(color="#FFC107", size=12), align="right", yshift=12)
+                    
+                    max_y_dri_ind = max(df_dri_jug['DRI'].max(), media_equipo_dri) + 0.4
+                    
+                    fig_dri_ind.update_layout(
+                        title=f"Evolución DRI: {jug_sel_dri}",
+                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        xaxis=dict(tickangle=-45), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri_ind]),
+                        height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=False
+                    )
+                    st.plotly_chart(fig_dri_ind, use_container_width=True)
+
 # =============================================================================
 # ÁREA 6: TREN SUPERIOR
 # =============================================================================
