@@ -386,14 +386,12 @@ pest_sel = st.session_state['pestaña_activa']
 # ÁREA 1: MOVILIDAD
 # =============================================================================
 if pest_sel == "🩺 Movilidad":
-    st.subheader("🩺 Test de Movilidad y Rangos Articulares")
     if df_mov is None or df_ref_mov is None:
         st.error("❌ No se encontraron los archivos de movilidad en 'data/EVALUACIONES/MOVILIDAD/'.")
     else:
         ultima_fecha_mov = df_mov['Fecha'].iloc[-1]
         df_fecha_mov = df_mov[df_mov['Fecha'] == ultima_fecha_mov].copy()
         
-        st.markdown(f"### 📋 Informe de Necesidades y Alertas de Movilidad ({ultima_fecha_mov})")
         dict_alertas = {}
         for idx, row in df_fecha_mov.iterrows():
             nombre = row['Nombre']
@@ -418,7 +416,6 @@ if pest_sel == "🩺 Movilidad":
         with col_m1: st.metric("Jugadores con algún Déficit/Asimetría", f"{len(dict_alertas)} / {len(df_fecha_mov)}")
         with col_m2: st.metric("Porcentaje del Vestuario Óptimo", f"{((len(df_fecha_mov) - len(dict_alertas)) / len(df_fecha_mov) * 100):.0f}%")
 
-        st.markdown("#### ⚠️ Detalle de Prescripción de Trabajo Individual:")
         if dict_alertas:
             col_a1, col_a2 = st.columns(2)
             items = list(dict_alertas.items())
