@@ -165,7 +165,7 @@ else:
             st.info("👍 Ningún jugador en niveles críticos de infra-carga.")
     with col_al3:
         if alertas_desmotivacion: 
-            st.error("🧠 **BAJOS DE MOTIVACIÓN / ALERTA WELLNESS**\n\n" + "\n\n".join(alertas_desmotivacion))
+            st.error("🧠 **BAJOS DE MOTIVACIÓN**\n\n" + "\n\n".join(alertas_desmotivacion))
         else: 
             st.success("😊 Índices de bienestar estables en el grupo.")
 
