@@ -80,14 +80,10 @@ def cargar_archivos_gps():
     for f in archivos:
         if "~$" in f: continue  # Ignorar archivos temporales abiertos
         try:
-            # Leer específicamente la página 2 (índice 1)
             df_temp = pd.read_excel(f, sheet_name=1)
-            
-            # Limpieza y mapeo robusto de columnas
             cols_lower = [str(c).lower().strip() for c in df_temp.columns]
             df_temp.columns = cols_lower
             
-            # Buscar columnas clave
             def buscar_col(keywords):
                 for c in df_temp.columns:
                     if any(k in c for k in keywords): return c
@@ -107,19 +103,16 @@ def cargar_archivos_gps():
             col_dec = buscar_col(['desaceleraciones', 'decel'])
             col_vmax = buscar_col(['v. max', 'v.max', 'top speed', 'velocidad maxima'])
             
-            # Si faltan vitales, saltamos
             if not col_fecha or not col_nombre: continue
             
             df_limpio = pd.DataFrame()
             
-            # Arreglar formatos europeos de miles (si viene 4.406 como 4406)
             def fix_num(val):
                 try:
                     v = str(val).replace(',', '.')
                     return float(v)
                 except: return 0.0
             
-            # Asignaciones
             df_limpio['Fecha'] = pd.to_datetime(df_temp[col_fecha], dayfirst=True, errors='coerce').dt.date
             df_limpio['Nombre'] = df_temp[col_nombre].astype(str)
             df_limpio['Posicion'] = df_temp[col_pos].astype(str) if col_pos else 'Sin Posición'
@@ -141,7 +134,6 @@ def cargar_archivos_gps():
             
     if lista_dfs:
         df_final = pd.concat(lista_dfs, ignore_index=True)
-        # Ajuste de escala: Si la distancia viene como 4.406 km, la pasamos a metros
         if df_final['Dist_Total'].max() < 25: 
             df_final['Dist_Total'] = df_final['Dist_Total'] * 1000
             df_final['Dist_18'] = df_final['Dist_18'] * 1000
@@ -157,20 +149,13 @@ df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
 
 if df_gps.empty:
-    st.markdown("""
-        <div style="margin-bottom: 15px;">
-            <h1 style="margin-bottom: 0px; padding-bottom: 0px;">CARGA EXTERNA (GPS)</h1>
-            <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Panel de control y dashboard interactivo de la sesión.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.info("🚧 Aún no hay archivos de GPS en la carpeta `data/GPS`. Sube tu primer archivo para ver la magia.")
+    st.info("🚧 Aún no hay archivos de GPS en la carpeta `data/GPS`.")
     st.stop()
 
-# Cruce de datos (GPS manda, añadimos RPE)
 if not df_rpe.empty:
     df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre'], how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('entreno')
-    df_master['RPE_G'] = df_master['RPE_G'].fillna(5) # Valor medio por defecto
+    df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
 else:
     df_master = df_gps.copy()
@@ -178,7 +163,6 @@ else:
     df_master['RPE_G'] = 5
     df_master['Minutos_RPE'] = df_master['Duracion_GPS']
 
-# FILTRO INTELIGENTE DE EXCLUSIONES (+1, +2 y PARTIDOS)
 def incluir_en_media(row):
     tipo = str(row['Tipo_Dia_Oficial'])
     mins = row['Minutos_RPE']
@@ -187,12 +171,7 @@ def incluir_en_media(row):
     return True
 
 df_master['Valido_Media'] = df_master.apply(incluir_en_media, axis=1)
-
-# CÁLCULO CARGA UA INDICADOR (El que pediste)
-# (Dist Total + (Dist >18 * 1.5) + Dist > 25) * RPE
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
-
-# Fechas ordenadas
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
 # =============================================================================
@@ -205,7 +184,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Barra de herramientas superior
 col_f1, col_f2 = st.columns([1, 1])
 with col_f1:
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
@@ -214,7 +192,6 @@ with col_f2:
     posiciones = ["Equipo Completo"] + sorted(posiciones_validas)
     pos_sel = st.selectbox("⚽ Posición:", posiciones)
 
-# Filtros principales
 if pos_sel == "Equipo Completo":
     df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Valido_Media'] == True)]
 else:
@@ -224,26 +201,19 @@ tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial']
 max_dur = df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()
 duracion_sesion = int(max_dur) if pd.notna(max_dur) else 0
 
-# --- CÁLCULO INTELIGENTE: VMAX 4 SEMANAS (>90%) ---
-# 1. Filtramos los últimos 28 días desde la fecha seleccionada
 fecha_inicio_vmax = fecha_sel - timedelta(days=28)
 df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax) & (df_master['Fecha'] <= fecha_sel)]
 
-# 2. Sacamos la Vmax de cada jugador en ese periodo
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index()
 vmax_hist.rename(columns={'Top_Speed': 'Vmax_4_semanas'}, inplace=True)
 
-# 3. Cruzamos los datos de la sesión con su histórico y calculamos %
 df_vmax_sesion = df_master[df_master['Fecha'] == fecha_sel][['Nombre', 'Top_Speed', 'Posicion']].merge(vmax_hist, on='Nombre', how='left')
-
-# Solo calculamos si la Vmax historica es mayor que 0 para evitar errores matematicos
 df_vmax_sesion['Porcentaje_Vmax'] = np.where(
     df_vmax_sesion['Vmax_4_semanas'] > 0, 
     (df_vmax_sesion['Top_Speed'] / df_vmax_sesion['Vmax_4_semanas']) * 100, 
     0
 )
 
-# Filtramos por posición si es necesario para el desplegable
 if pos_sel != "Equipo Completo":
     df_vmax_sesion = df_vmax_sesion[df_vmax_sesion['Posicion'] == pos_sel]
 
@@ -251,7 +221,6 @@ media_vmax_sesion = df_vmax_sesion['Porcentaje_Vmax'].mean() if not df_vmax_sesi
 alcanzan_90 = df_vmax_sesion[df_vmax_sesion['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
 no_alcanzan_90 = df_vmax_sesion[(df_vmax_sesion['Porcentaje_Vmax'] < 90) & (df_vmax_sesion['Vmax_4_semanas'] > 0)].sort_values(by='Porcentaje_Vmax', ascending=False)
 
-# --- CONSTRUCCIÓN DEL HISTÓRICO 28 DÍAS ---
 df_hist = df_28d[df_28d['Valido_Media'] == True]
 if pos_sel != "Equipo Completo": df_hist = df_hist[df_hist['Posicion'] == pos_sel]
 
@@ -277,22 +246,19 @@ st.markdown("---")
 # PINTAR CABECERA TIPO BULLET
 c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
 with c_dur:
-    st.markdown("<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='color:#8C52FF; font-size:55px; margin-top:0; margin-bottom:0px;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color:#E67E22; font-size:16px; font-weight:bold; margin-top:0;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-top:0;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
     
 with c_hist:
-    st.markdown(f"<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'><b>Last 28 days</b> training schedule</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Last 28 days training schedule</p>", unsafe_allow_html=True)
     st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False}, key="hist_28")
 
 with c_info:
-    st.markdown("<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'>Exposición Velocidad Máxima (>90%)</p>", unsafe_allow_html=True)
-    
-    # Termómetro de color (Verde > 90%, Amarillo > 85%, Rojo < 85%)
+    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Exposición Velocidad Máxima (>90%)</p>", unsafe_allow_html=True)
     color_vmax = "#2ECC71" if media_vmax_sesion >= 90 else "#F1C40F" if media_vmax_sesion >= 85 else "#E74C3C"
     st.markdown(f"<h2 style='color:{color_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media equipo</span></h2>", unsafe_allow_html=True)
     
-    # Desplegable compacto de jugadores
     with st.expander("👁️ Ver Jugadores"):
         st.markdown("**✅ Lograron el 90%:**")
         if not alcanzan_90.empty:
@@ -312,12 +278,10 @@ with c_info:
 # 5. CÁLCULO DE LA LÍNEA ROJA (TARGET 4 PARTIDOS)
 # =============================================================================
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.contains('partido')]
-# Partidos solo validos (> 60 min)
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
 
 target_refs = {}
 if not df_partidos.empty:
-    # Coger ultimos 4 partidos
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
     df_ult_4 = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
     
@@ -332,10 +296,8 @@ if not df_partidos.empty:
         else:
             target_refs[metrica] = 0.0
 else:
-    # Fallback a 0 si no hay partidos grabados aun
     for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']: target_refs[metrica] = 0.0
 
-# Medias de la sesion actual
 medias_sesion = {}
 for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
     medias_sesion[metrica] = df_sesion[metrica].mean() if not df_sesion.empty else 0.0
@@ -345,52 +307,67 @@ for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accel
 # =============================================================================
 st.markdown("### 📊 Metrics Summary vs Match Target")
 
-def pintar_bullet(metrica, nombre_mostrar, row_col, max_val_global):
+def pintar_bullet(metrica, nombre_mostrar, row_col):
     val = medias_sesion.get(metrica, 0)
     target = target_refs.get(metrica, 0)
     
-    # Prevenir bugs de grafico roto si es 0
-    max_range = max(val, target) * 1.3 if max(val, target) > 0 else 10
+    max_range = max(val, target) * 1.2 if max(val, target) > 0 else 10
     
-    fig = go.Figure(go.Indicator(
-        mode = "number+gauge", value = val,
-        number = {'valueformat': ".1f" if val < 100 else ".0f", 'font': {'size': 25, 'color': 'white'}},
-        gauge = {
-            'shape': "bullet",
-            'axis': {'range': [None, max_range], 'visible': False},
-            'bar': {'color': "#E67E22", 'thickness': 0.8},
-            'bgcolor': "rgba(255,255,255,0.1)",
-            'threshold': {
-                'line': {'color': "red", 'width': 3},
-                'thickness': 0.9, 'value': target
-            }
-        }
+    fig = go.Figure()
+    
+    # 1. Barra de fondo (gris)
+    fig.add_trace(go.Bar(
+        x=[max_range], y=["1"], orientation='h',
+        marker=dict(color="rgba(255,255,255,0.1)"),
+        hoverinfo="none", width=0.6
     ))
-    fig.update_layout(height=80, margin=dict(t=20, b=0, l=0, r=40), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+    
+    # 2. Barra de valor (Naranja oscuro para contraste) con el número DENTRO
+    texto_val = f"{val:.1f}" if val < 100 else f"{val:.0f}"
+    fig.add_trace(go.Bar(
+        x=[val], y=["1"], orientation='h',
+        marker=dict(color="#B35900"), 
+        text=[texto_val], 
+        textposition='auto', # 'auto' lo mete dentro si cabe, y si es muy pequeño lo ajusta para que no se corte
+        insidetextanchor='end', 
+        textfont=dict(color="white", size=22, family="Arial Black"),
+        hoverinfo="x", width=0.6
+    ))
+    
+    # 3. Línea roja (Target)
+    if target > 0:
+        fig.add_shape(
+            type="line",
+            x0=target, x1=target,
+            y0=-0.4, y1=0.4,
+            line=dict(color="red", width=4)
+        )
+
+    fig.update_layout(
+        barmode='overlay',
+        height=65, 
+        margin=dict(t=0, b=0, l=0, r=0),
+        paper_bgcolor='rgba(0,0,0,0)', 
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False, zeroline=False),
+        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False)
+    )
     
     with row_col:
-        st.markdown(f"<p style='margin-bottom:0; font-size:14px; color:#CCCCCC;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
-        # FIX: Añadimos un identificador único (key) para que Streamlit no se haga líos
+        # Título en blanco y más grande
+        st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"bullet_{metrica}")
 
 # Fila 1
 r1_1, r1_2, r1_3, r1_4 = st.columns(4)
-pintar_bullet('Dist_Total', 'Total Distance (m)', r1_1, 12000)
-pintar_bullet('Dist_18', 'Distance > 18 km/h (m)', r1_2, 1000)
-pintar_bullet('Dist_25', 'Distance > 25 km/h (m)', r1_3, 400)
-pintar_bullet('Dist_28', 'Distance > 28 km/h (m)', r1_4, 150)
+pintar_bullet('Dist_Total', 'Total Distance (m)', r1_1)
+pintar_bullet('Dist_18', 'Distance > 18 km/h (m)', r1_2)
+pintar_bullet('Dist_25', 'Distance > 25 km/h (m)', r1_3)
+pintar_bullet('Dist_28', 'Distance > 28 km/h (m)', r1_4)
 
 # Fila 2
 r2_1, r2_2, r2_3, r2_4 = st.columns(4)
-pintar_bullet('Sprints', 'Total Sprints', r2_1, 30)
-pintar_bullet('Accels', 'Accelerations', r2_2, 60)
-pintar_bullet('Decels', 'Decelerations', r2_3, 60)
-
-# Para llenar el hueco con una mini-leyenda:
-with r2_4:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("🟠 **Barra Naranja:** Media del grupo (Filtrado)")
-    st.markdown("🔴 **Línea Roja (Target):** (Media + Máx) / 2 de últimos 4 Partidos")
-
-st.markdown("---")
-st.info("🎯 **Próximo paso:** Programar las pestañas inferiores (Dashboard #2 y #3) para ver a los jugadores de forma individual.")
+pintar_bullet('Sprints', 'Total Sprints', r2_1)
+pintar_bullet('Accels', 'Accelerations', r2_2)
+pintar_bullet('Decels', 'Decelerations', r2_3)
