@@ -208,7 +208,9 @@ col_f1, col_f2 = st.columns([1, 1])
 with col_f1:
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
 with col_f2:
-    posiciones = ["Equipo Completo"] + sorted(df_master['Posicion'].unique().tolist())
+    # FIX: Limpiamos los vacíos (nan) antes de ordenar para evitar el TypeError
+    posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
+    posiciones = ["Equipo Completo"] + sorted(posiciones_validas)
     pos_sel = st.selectbox("⚽ Posición:", posiciones)
 
 # Filtro por posición para las medias
@@ -217,8 +219,11 @@ if pos_sel == "Equipo Completo":
 else:
     df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Valido_Media'] == True) & (df_master['Posicion'] == pos_sel)]
 
-tipo_sesion = df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0].upper()
-duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max())
+tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper()
+
+# FIX: Si la duración está vacía, ponemos 0 en vez de que crashee
+max_dur = df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()
+duracion_sesion = int(max_dur) if pd.notna(max_dur) else 0
 
 # --- CONSTRUCCIÓN DEL HISTÓRICO 28 DÍAS ---
 fecha_inicio_28 = fecha_sel - timedelta(days=28)
