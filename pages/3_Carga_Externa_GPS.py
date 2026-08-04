@@ -393,3 +393,88 @@ r2_1, r2_2, r2_3, r2_4 = st.columns(4)
 pintar_bullet('Sprints', 'Total Sprints', r2_1)
 pintar_bullet('Accels', 'Accelerations', r2_2)
 pintar_bullet('Decels', 'Decelerations', r2_3)
+
+# =============================================================================
+# 7. TABLA DE ANÁLISIS INDIVIDUAL POR POSICIÓN (MACRO Y SUB-COLUMNAS)
+# =============================================================================
+st.markdown("---")
+st.markdown("### 🧑‍🤝‍🧑 Análisis Individual (Z-Score y Referencias)")
+
+# Definir las métricas clave que vamos a meter en la tabla
+metricas_tabla = {
+    'Dist_Total': 'Dist. Total',
+    'Dist_25': 'Dist. >25',
+    'Sprints': 'Sprints',
+    'RPE_G': 'RPE'
+}
+
+datos_tabla = []
+# Filtramos la sesión actual y ordenamos por posición para hacer los "bloques"
+df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].sort_values(['Posicion', 'Nombre'])
+
+for _, row in df_sesion_tabla.iterrows():
+    jugador = row['Nombre']
+    pos = row['Posicion']
+    
+    # Histórico del jugador (solo los días que tiene datos) hasta la fecha seleccionada
+    df_hist_jugador = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha')
+    
+    # Tomamos solo las últimas 28 SESIONES REALES CON DATOS
+    df_hist_28 = df_hist_jugador.tail(28)
+    
+    fila = {'Posición': pos, 'Jugador': jugador}
+    
+    for metrica_col, metrica_nombre in metricas_tabla.items():
+        val_sesion = row[metrica_col]
+        target_part = target_refs.get(metrica_col, 0)
+        
+        # 1. Sesión (vs Partido)
+        pct_partido = (val_sesion / target_part * 100) if target_part > 0 else 0
+        
+        # 2. Z-Score (Media móvil 28 sesiones)
+        if len(df_hist_28) > 2:
+            media_28 = df_hist_28[metrica_col].mean()
+            std_28 = df_hist_28[metrica_col].std()
+            z_score = (val_sesion - media_28) / std_28 if std_28 > 0 else 0
+        else:
+            z_score = 0
+            
+        # Nombres de las sub-columnas combinando la Macro-Métrica
+        fila[f"{metrica_nombre} | Sesión"] = val_sesion
+        fila[f"{metrica_nombre} | % Partido"] = pct_partido
+        fila[f"{metrica_nombre} | Z-Score"] = z_score
+
+    datos_tabla.append(fila)
+
+if datos_tabla:
+    df_resumen = pd.DataFrame(datos_tabla)
+    
+    # Agrupamos por Posición para que visualmente se vea en bloques (como en tu foto)
+    df_resumen.set_index(['Posición', 'Jugador'], inplace=True)
+    
+    # Función para pintar los Z-Scores de rojo si superan el umbral 2 o se acercan
+    def resaltar_alertas(val):
+        try:
+            v = float(val)
+            if v > 2.0: return 'background-color: #8B0000; color: white; font-weight: bold;' # Rojo oscuro (Peligro)
+            elif v > 1.5: return 'background-color: #E74C3C; color: white;' # Rojo claro (Alerta / Se aproxima)
+            elif v < -2.0: return 'background-color: #1F618D; color: white;' # Azul (Sub-carga severa)
+            return ''
+        except:
+            return ''
+
+    # Aplicar el estilo solo a las columnas de Z-Score y formatear decimales
+    cols_zscore = [c for c in df_resumen.columns if 'Z-Score' in c]
+    
+    # Formateo visual
+    formato_columnas = {c: "{:.1f}" for c in df_resumen.columns}
+    for c in df_resumen.columns:
+        if '% Partido' in c: formato_columnas[c] = "{:.0f}%"
+        if 'Z-Score' in c: formato_columnas[c] = "{:.2f}"
+        if 'Dist. Total | Sesión' in c: formato_columnas[c] = "{:.0f}"
+
+    df_estilado = df_resumen.style.map(resaltar_alertas, subset=cols_zscore).format(formato_columnas)
+    
+    st.dataframe(df_estilado, use_container_width=True, height=600)
+else:
+    st.info("No hay datos individuales para mostrar en esta fecha.")
