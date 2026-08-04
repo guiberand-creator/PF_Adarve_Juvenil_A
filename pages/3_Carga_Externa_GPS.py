@@ -395,86 +395,119 @@ pintar_bullet('Accels', 'Accelerations', r2_2)
 pintar_bullet('Decels', 'Decelerations', r2_3)
 
 # =============================================================================
-# 7. TABLA DE ANÁLISIS INDIVIDUAL POR POSICIÓN (MACRO Y SUB-COLUMNAS)
+# 7. TABLA WIMU/CATAPULT: ANÁLISIS INDIVIDUAL AVANZADO 
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🧑‍🤝‍🧑 Análisis Individual (Z-Score y Referencias)")
+st.markdown("### 🧑‍🤝‍🧑 Análisis Individual (Dashboard Avanzado)")
 
-# Definir las métricas clave que vamos a meter en la tabla
 metricas_tabla = {
-    'Dist_Total': 'Dist. Total',
-    'Dist_25': 'Dist. >25',
+    'Dist_Total': 'Distancia (m)',
+    'Dist_25': 'Dist. >25km/h',
     'Sprints': 'Sprints',
     'RPE_G': 'RPE'
 }
 
-datos_tabla = []
-# Filtramos la sesión actual y ordenamos por posición para hacer los "bloques"
 df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].sort_values(['Posicion', 'Nombre'])
 
-for _, row in df_sesion_tabla.iterrows():
-    jugador = row['Nombre']
-    pos = row['Posicion']
-    
-    # Histórico del jugador (solo los días que tiene datos) hasta la fecha seleccionada
-    df_hist_jugador = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha')
-    
-    # Tomamos solo las últimas 28 SESIONES REALES CON DATOS
-    df_hist_28 = df_hist_jugador.tail(28)
-    
-    fila = {'Posición': pos, 'Jugador': jugador}
-    
-    for metrica_col, metrica_nombre in metricas_tabla.items():
-        val_sesion = row[metrica_col]
-        target_part = target_refs.get(metrica_col, 0)
+if not df_sesion_tabla.empty:
+    # 1. Preparar las máximas escalas para las barras visuales
+    escalas_max = {}
+    for m in metricas_tabla.keys():
+        max_sesion = df_sesion_tabla[m].max()
+        target = target_refs.get(m, 0)
+        escalas_max[m] = max(max_sesion, target) * 1.2 if max(max_sesion, target) > 0 else 10
+
+    # 2. Funciones de dibujo HTML para las celdas
+    def dibujar_barra(valor, target, max_val, es_decimal=False):
+        if max_val == 0: max_val = 1
+        pct_fill = min((valor / max_val) * 100, 100)
+        pct_target = min((target / max_val) * 100, 100)
         
-        # 1. Sesión (vs Partido)
-        pct_partido = (val_sesion / target_part * 100) if target_part > 0 else 0
+        texto_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        # 2. Z-Score (Media móvil 28 sesiones)
-        if len(df_hist_28) > 2:
-            media_28 = df_hist_28[metrica_col].mean()
-            std_28 = df_hist_28[metrica_col].std()
-            z_score = (val_sesion - media_28) / std_28 if std_28 > 0 else 0
+        return f"""
+        <div style="position: relative; width: 100px; height: 22px; background-color: rgba(255,255,255,0.1); border-radius: 3px; margin: 0 auto;">
+            <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: #4A90E2; border-radius: 3px;"></div>
+            <div style="position: absolute; left: {pct_target}%; top: -2px; height: 26px; width: 2px; background-color: #E74C3C; z-index: 2;"></div>
+            <div style="position: absolute; left: 5px; top: 2px; font-size: 12px; font-weight: bold; color: white; z-index: 3; text-shadow: 1px 1px 2px black;">{texto_val}</div>
+        </div>
+        """
+
+    def color_zscore(z):
+        if z > 2.0: return "background-color: #8B0000; color: white; font-weight: bold;"
+        if z > 1.5: return "background-color: #E74C3C; color: white;"
+        if z < -2.0: return "background-color: #1F618D; color: white;"
+        return "color: #CCCCCC;"
+
+    # 3. Construir la tabla HTML
+    html = """
+    <div style="overflow-x: auto;">
+    <table style="width: 100%; min-width: 1200px; border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 13px;">
+        <thead>
+            <tr style="border-bottom: 2px solid #555; background-color: rgba(0,0,0,0.2);">
+                <th style="padding: 10px; text-align: left;">POSICIÓN</th>
+                <th style="padding: 10px; text-align: left;">JUGADOR</th>
+    """
+    for _, nombre_m in metricas_tabla.items():
+        html += f"<th colspan='3' style='padding: 10px; border-left: 1px solid #444;'>{nombre_m}</th>"
+    
+    html += """
+            </tr>
+            <tr style="border-bottom: 1px solid #555; font-size: 11px; color: #A0AEC0;">
+                <th></th><th></th>
+    """
+    for _ in metricas_tabla:
+        html += "<th style='padding: 5px; border-left: 1px solid #444;'>Sesión (Ref)</th><th>% Partido</th><th>Z-Score</th>"
+    
+    html += "</tr></thead><tbody>"
+
+    # 4. Rellenar filas agrupadas por posición
+    posicion_actual = ""
+    colores_pos = {'Defensa': '#27AE60', 'Medio': '#F39C12', 'Delantero': '#C0392B', 'Portero': '#8E44AD'} # Colores por defecto
+    
+    for _, row in df_sesion_tabla.iterrows():
+        jugador = row['Nombre']
+        pos = row['Posicion']
+        
+        # Lógica de cálculo Z-Score
+        df_hist_28 = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
+        
+        # Fila y separadores de bloque (Posición)
+        if pos != posicion_actual:
+            html += f"<tr style='border-top: 2px solid #555;'><td style='padding: 8px; text-align: left; font-weight: bold; color: #E67E22;'>{pos}</td>"
+            posicion_actual = pos
         else:
-            z_score = 0
+            html += "<tr><td></td>"
             
-        # Nombres de las sub-columnas combinando la Macro-Métrica
-        fila[f"{metrica_nombre} | Sesión"] = val_sesion
-        fila[f"{metrica_nombre} | % Partido"] = pct_partido
-        fila[f"{metrica_nombre} | Z-Score"] = z_score
+        html += f"<td style='padding: 8px; text-align: left; white-space: nowrap;'>{jugador}</td>"
+        
+        for col_m, _ in metricas_tabla.items():
+            val_sesion = row[col_m]
+            target_part = target_refs.get(col_m, 0)
+            max_escala = escalas_max[col_m]
+            
+            # Cálculos
+            pct_partido = (val_sesion / target_part * 100) if target_part > 0 else 0
+            
+            if len(df_hist_28) > 2:
+                media_28 = df_hist_28[col_m].mean()
+                std_28 = df_hist_28[col_m].std()
+                z_score = (val_sesion - media_28) / std_28 if std_28 > 0 else 0
+            else:
+                z_score = 0
+                
+            es_dec = True if col_m == 'RPE_G' else False
+            barra_html = dibujar_barra(val_sesion, target_part, max_escala, es_dec)
+            estilo_z = color_zscore(z_score)
+            
+            html += f"<td style='padding: 5px; border-left: 1px solid #333;'>{barra_html}</td>"
+            html += f"<td style='padding: 5px; color: {'#2ECC71' if pct_partido >= 100 else '#CCCCCC'};'>{pct_partido:.0f}%</td>"
+            html += f"<td style='padding: 5px; {estilo_z} border-radius: 3px;'>{z_score:.2f}</td>"
+            
+        html += "</tr>"
+        
+    html += "</tbody></table></div>"
+    st.markdown(html, unsafe_allow_html=True)
 
-    datos_tabla.append(fila)
-
-if datos_tabla:
-    df_resumen = pd.DataFrame(datos_tabla)
-    
-    # Agrupamos por Posición para que visualmente se vea en bloques (como en tu foto)
-    df_resumen.set_index(['Posición', 'Jugador'], inplace=True)
-    
-    # Función para pintar los Z-Scores de rojo si superan el umbral 2 o se acercan
-    def resaltar_alertas(val):
-        try:
-            v = float(val)
-            if v > 2.0: return 'background-color: #8B0000; color: white; font-weight: bold;' # Rojo oscuro (Peligro)
-            elif v > 1.5: return 'background-color: #E74C3C; color: white;' # Rojo claro (Alerta / Se aproxima)
-            elif v < -2.0: return 'background-color: #1F618D; color: white;' # Azul (Sub-carga severa)
-            return ''
-        except:
-            return ''
-
-    # Aplicar el estilo solo a las columnas de Z-Score y formatear decimales
-    cols_zscore = [c for c in df_resumen.columns if 'Z-Score' in c]
-    
-    # Formateo visual
-    formato_columnas = {c: "{:.1f}" for c in df_resumen.columns}
-    for c in df_resumen.columns:
-        if '% Partido' in c: formato_columnas[c] = "{:.0f}%"
-        if 'Z-Score' in c: formato_columnas[c] = "{:.2f}"
-        if 'Dist. Total | Sesión' in c: formato_columnas[c] = "{:.0f}"
-
-    df_estilado = df_resumen.style.map(resaltar_alertas, subset=cols_zscore).format(formato_columnas)
-    
-    st.dataframe(df_estilado, use_container_width=True, height=600)
 else:
     st.info("No hay datos individuales para mostrar en esta fecha.")
