@@ -45,8 +45,8 @@ if os.path.exists(_ruta_logo):
 @st.cache_data(ttl=10)
 def obtener_rpe_maestro():
     # ⚠️ ¡OJO MÍSTER! Pega aquí el ID de tu Excel de RPE, no el de Wellness
-    sheet_id = "PON_AQUI_TU_ID_DE_RPE" 
-    gid = "PON_AQUI_TU_GID"
+    sheet_id = "1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s" 
+    gid = "1785642271"
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
@@ -55,7 +55,6 @@ def obtener_rpe_maestro():
         df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
-        # Aquí ya hace la media de las dos columnas que me has pasado
         col_c = [c for c in df_rpe.columns if 'CARDIO' in str(c).upper()][0]
         col_m = [c for c in df_rpe.columns if 'MUSCULAR' in str(c).upper()][0]
         df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
@@ -353,13 +352,13 @@ if not df_sesion_tabla.empty:
         target = target_refs.get(m, 0)
         escalas_max[m] = max(max_sesion, target) * 1.2 if max(max_sesion, target) > 0 else 10
 
-   def dibujar_barra(valor, target, max_val, es_decimal=False):
+    def dibujar_barra(valor, target, max_val, es_decimal=False):
         if max_val == 0: max_val = 1
         pct_fill = min((valor / max_val) * 100, 100)
         pct_target = min((target / max_val) * 100, 100)
         texto_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        # LÓGICA DE COLOR: Azul por defecto, Rojo intenso si se acerca al partido (>= 90%)
+        # Color rojo si pasa del 90% del target de partido
         color_barra = "#E74C3C" if (target > 0 and valor >= target * 0.90) else "#3498DB"
         color_linea = "#F1C40F" if color_barra == "#E74C3C" else "#E74C3C"
         
@@ -394,8 +393,6 @@ if not df_sesion_tabla.empty:
         html += "<th style='padding: 5px; border-left: 1px solid #444;'>Sesión (Ref)</th><th style='padding: 5px;'>% Partido</th><th style='padding: 5px;'>Z-Score</th>"
     html += "<th style='border-left: 1px solid #444;'></th></tr></thead><tbody>"
 
-    # Conteo para Rowspan (Agrupar celdas verticalmente)
-    # FIX: dropna=False para no ignorar los jugadores sin posición (nan)
     pos_counts = df_sesion_tabla['Posicion'].value_counts(dropna=False).to_dict()
     pos_actual = ""
     
@@ -408,16 +405,13 @@ if not df_sesion_tabla.empty:
         
         html += "<tr style='border-bottom: 1px solid #333;'>"
         
-        # Lógica de Fusión (Rowspan)
         if pos != pos_actual:
-            # FIX: usamos .get(pos, 1) como salvavidas antierrores
-            filas_pos = pos_counts.get(pos, 1) 
+            filas_pos = pos_counts.get(pos, 1)
             html += f"<td rowspan='{filas_pos}' style='vertical-align: middle; text-align: center; padding: 0 15px; font-weight: bold; color: #E67E22; text-transform: uppercase; white-space: nowrap; border-right: 1px solid #444; border-bottom: 2px solid #555;'>{pos}</td>"
             pos_actual = pos
             
         html += f"<td style='padding: 8px 15px; text-align: left; white-space: nowrap;'>{jugador}</td>"
         
-        # Bucle de Métricas (GPS)
         for col_m, _ in metricas_tabla.items():
             val_sesion = row[col_m]
             target_part = target_refs.get(col_m, 0)
@@ -439,7 +433,6 @@ if not df_sesion_tabla.empty:
             html += f"<td style='padding: 5px 10px; color: {'#2ECC71' if pct_partido >= 100 else '#CCCCCC'};'>{pct_partido:.0f}%</td>"
             html += f"<td style='padding: 5px 10px; {estilo_z} border-radius: 3px;'>{z_score:.2f}</td>"
         
-        # Columna Única RPE al final
         estilo_rpe = "background-color: #E74C3C; color: white;" if rpe_val >= 8 else "color: white;"
         html += f"<td style='padding: 5px 15px; border-left: 1px solid #444; font-weight: bold; text-align: center; {estilo_rpe}'>{rpe_val:.1f}</td>"
         html += "</tr>"
