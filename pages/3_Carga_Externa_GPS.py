@@ -44,8 +44,9 @@ if os.path.exists(_ruta_logo):
 # =============================================================================
 @st.cache_data(ttl=10)
 def obtener_rpe_maestro():
-    sheet_id = "1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s"
-    gid = "1785642271"
+    # ⚠️ ¡OJO MÍSTER! Pega aquí el ID de tu Excel de RPE, no el de Wellness
+    sheet_id = "PON_AQUI_TU_ID_DE_RPE" 
+    gid = "PON_AQUI_TU_GID"
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
@@ -54,8 +55,9 @@ def obtener_rpe_maestro():
         df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
-        col_c = [c for c in df_rpe.columns if 'CARDIO' in c.upper()][0]
-        col_m = [c for c in df_rpe.columns if 'MUSCULAR' in c.upper()][0]
+        # Aquí ya hace la media de las dos columnas que me has pasado
+        col_c = [c for c in df_rpe.columns if 'CARDIO' in str(c).upper()][0]
+        col_m = [c for c in df_rpe.columns if 'MUSCULAR' in str(c).upper()][0]
         df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
         
         df_sesion_dia = df_rpe.groupby('Fecha')['Tipo de Sesión'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
@@ -63,7 +65,8 @@ def obtener_rpe_maestro():
         
         df_rpe = pd.merge(df_rpe, df_sesion_dia, on='Fecha', how='left')
         return df_rpe[['Fecha', 'Nombre', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
-    except:
+    except Exception as e:
+        st.error(f"⚠️ Error leyendo RPE. Revisa el enlace. Detalle: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=10)
@@ -350,16 +353,20 @@ if not df_sesion_tabla.empty:
         target = target_refs.get(m, 0)
         escalas_max[m] = max(max_sesion, target) * 1.2 if max(max_sesion, target) > 0 else 10
 
-    def dibujar_barra(valor, target, max_val, es_decimal=False):
+   def dibujar_barra(valor, target, max_val, es_decimal=False):
         if max_val == 0: max_val = 1
         pct_fill = min((valor / max_val) * 100, 100)
         pct_target = min((target / max_val) * 100, 100)
         texto_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
+        # LÓGICA DE COLOR: Azul por defecto, Rojo intenso si se acerca al partido (>= 90%)
+        color_barra = "#E74C3C" if (target > 0 and valor >= target * 0.90) else "#3498DB"
+        color_linea = "#F1C40F" if color_barra == "#E74C3C" else "#E74C3C"
+        
         return f"""
         <div style="position: relative; width: 65px; height: 18px; background-color: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 auto; overflow: visible;">
-            <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: #3498DB; border-radius: 2px;"></div>
-            <div style="position: absolute; left: {pct_target}%; top: -2px; height: 22px; width: 2px; background-color: #E74C3C; z-index: 2;"></div>
+            <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: {color_barra}; border-radius: 2px;"></div>
+            <div style="position: absolute; left: {pct_target}%; top: -2px; height: 22px; width: 2px; background-color: {color_linea}; z-index: 2;"></div>
             <div style="position: absolute; left: 4px; top: 1px; font-size: 11px; font-weight: bold; color: white; z-index: 3; text-shadow: 1px 1px 1px black;">{texto_val}</div>
         </div>
         """
