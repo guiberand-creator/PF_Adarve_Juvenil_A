@@ -44,14 +44,15 @@ if os.path.exists(_ruta_logo):
 # =============================================================================
 @st.cache_data(ttl=10)
 def obtener_rpe_maestro():
-    # ⚠️ ¡OJO MÍSTER! Pega aquí el ID de tu Excel de RPE, no el de Wellness
     sheet_id = "1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s" 
     gid = "1785642271"
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
-        df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.date
-        df_rpe['Nombre'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip()
+        # Limpieza extrema de fechas y nombres para cruce
+        df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        df_rpe['Nombre_Cruce'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip().str.lower()
+        
         df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
@@ -63,9 +64,9 @@ def obtener_rpe_maestro():
         df_sesion_dia.rename(columns={'Tipo de Sesión': 'Tipo_Dia_Oficial'}, inplace=True)
         
         df_rpe = pd.merge(df_rpe, df_sesion_dia, on='Fecha', how='left')
-        return df_rpe[['Fecha', 'Nombre', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
+        return df_rpe[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
     except Exception as e:
-        st.error(f"⚠️ Error leyendo RPE. Revisa el enlace. Detalle: {e}")
+        st.error(f"⚠️ Error leyendo RPE: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=10)
@@ -115,8 +116,10 @@ def cargar_archivos_gps():
                     return float(v)
                 except: return 0.0
             
-            df_limpio['Fecha'] = pd.to_datetime(df_temp[col_fecha], dayfirst=True, errors='coerce').dt.date
-            df_limpio['Nombre'] = df_temp[col_nombre].astype(str)
+            df_limpio['Fecha'] = pd.to_datetime(df_temp[col_fecha], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+            df_limpio['Nombre'] = df_temp[col_nombre].astype(str).str.strip()
+            df_limpio['Nombre_Cruce'] = df_limpio['Nombre'].str.lower()
+            
             df_limpio['Posicion'] = df_temp[col_pos].astype(str) if col_pos else 'Sin Posición'
             df_limpio['Duracion_GPS'] = df_temp[col_dur].apply(fix_num) if col_dur else 60.0
             
@@ -158,7 +161,8 @@ if df_gps.empty:
     st.stop()
 
 if not df_rpe.empty:
-    df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre'], how='left')
+    # Cruce por Nombre_Cruce (sin espacios y en minúsculas) para evitar fallos
+    df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
     df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
@@ -206,8 +210,9 @@ tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial']
 max_dur = df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()
 duracion_sesion = int(max_dur) if pd.notna(max_dur) else 0
 
-fecha_inicio_vmax = fecha_sel - timedelta(days=28)
-df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax) & (df_master['Fecha'] <= fecha_sel)]
+fecha_inicio_vmax = datetime.strptime(fecha_sel, '%Y-%m-%d').date() - timedelta(days=28)
+fecha_inicio_vmax_str = fecha_inicio_vmax.strftime('%Y-%m-%d')
+df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax_str) & (df_master['Fecha'] <= fecha_sel)]
 
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index()
 vmax_hist.rename(columns={'Top_Speed': 'Vmax_4_semanas'}, inplace=True)
@@ -282,8 +287,9 @@ else:
 medias_sesion = {}
 for m in metricas_todas: medias_sesion[m] = df_sesion[m].mean() if not df_sesion.empty else 0.0
 
-fecha_inicio_sem = fecha_sel - timedelta(days=6)
-df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem) & (df_master['Fecha'] <= fecha_sel) & (df_master['Valido_Media'] == True)]
+fecha_inicio_sem = datetime.strptime(fecha_sel, '%Y-%m-%d').date() - timedelta(days=6)
+fecha_inicio_sem_str = fecha_inicio_sem.strftime('%Y-%m-%d')
+df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem_str) & (df_master['Fecha'] <= fecha_sel) & (df_master['Valido_Media'] == True)]
 if pos_sel != "Equipo Completo": df_sem = df_sem[df_sem['Posicion'] == pos_sel]
 
 weekly_sums = {}
@@ -441,3 +447,4 @@ if not df_sesion_tabla.empty:
     st.markdown(html, unsafe_allow_html=True)
 else:
     st.info("No hay datos individuales para mostrar en esta fecha.")
+    
