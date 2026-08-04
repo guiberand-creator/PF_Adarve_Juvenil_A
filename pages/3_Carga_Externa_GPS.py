@@ -388,7 +388,8 @@ if not df_sesion_tabla.empty:
     html += "<th style='border-left: 1px solid #444;'></th></tr></thead><tbody>"
 
     # Conteo para Rowspan (Agrupar celdas verticalmente)
-    pos_counts = df_sesion_tabla['Posicion'].value_counts().to_dict()
+    # FIX: dropna=False para no ignorar los jugadores sin posición (nan)
+    pos_counts = df_sesion_tabla['Posicion'].value_counts(dropna=False).to_dict()
     pos_actual = ""
     
     for _, row in df_sesion_tabla.iterrows():
@@ -402,8 +403,9 @@ if not df_sesion_tabla.empty:
         
         # Lógica de Fusión (Rowspan)
         if pos != pos_actual:
-            filas_pos = pos_counts[pos]
-            html += f"<td rowspan='{filas_pos}' style='vertical-align: middle; text-align: center; padding: 0 15px; font-weight: bold; color: #E67E22; white-space: nowrap; border-right: 1px solid #444; border-bottom: 2px solid #555;'>{pos}</td>"
+            # FIX: usamos .get(pos, 1) como salvavidas antierrores
+            filas_pos = pos_counts.get(pos, 1) 
+            html += f"<td rowspan='{filas_pos}' style='vertical-align: middle; text-align: center; padding: 0 15px; font-weight: bold; color: #E67E22; text-transform: uppercase; white-space: nowrap; border-right: 1px solid #444; border-bottom: 2px solid #555;'>{pos}</td>"
             pos_actual = pos
             
         html += f"<td style='padding: 8px 15px; text-align: left; white-space: nowrap;'>{jugador}</td>"
