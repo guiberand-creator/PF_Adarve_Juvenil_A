@@ -324,7 +324,8 @@ def pintar_bullet(metrica, nombre_mostrar, row_col, max_val_global):
     
     with row_col:
         st.markdown(f"<p style='margin-bottom:0; font-size:14px; color:#CCCCCC;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        # FIX: Añadimos un identificador único (key) para que Streamlit no se haga líos
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"bullet_{metrica}")
 
 # Fila 1
 r1_1, r1_2, r1_3, r1_4 = st.columns(4)
