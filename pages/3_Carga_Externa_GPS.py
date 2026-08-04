@@ -101,10 +101,11 @@ def cargar_archivos_gps():
             col_dt = buscar_col(['distancia total', 'distance'])
             col_18 = buscar_col(['> 18', '>18'])
             col_25 = buscar_col(['> 25', '>25'])
-            col_28 = buscar_col(['> 28', '>28', 'sprints']) # Ajustado según Excel
+            col_28 = buscar_col(['> 28', '>28', 'sprints']) 
             col_spr = buscar_col(['nº sprints', 'sprints'])
             col_acc = buscar_col(['aceleraciones', 'accel'])
             col_dec = buscar_col(['desaceleraciones', 'decel'])
+            col_vmax = buscar_col(['v. max', 'v.max', 'top speed', 'velocidad maxima'])
             
             # Si faltan vitales, saltamos
             if not col_fecha or not col_nombre: continue
@@ -132,6 +133,7 @@ def cargar_archivos_gps():
             df_limpio['Sprints'] = df_temp[col_spr].apply(fix_num) if col_spr else 0.0
             df_limpio['Accels'] = df_temp[col_acc].apply(fix_num) if col_acc else 0.0
             df_limpio['Decels'] = df_temp[col_dec].apply(fix_num) if col_dec else 0.0
+            df_limpio['Top_Speed'] = df_temp[col_vmax].apply(fix_num) if col_vmax else 0.0
 
             lista_dfs.append(df_limpio.dropna(subset=['Fecha']))
         except Exception as e:
@@ -208,26 +210,49 @@ col_f1, col_f2 = st.columns([1, 1])
 with col_f1:
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
 with col_f2:
-    # FIX: Limpiamos los vacíos (nan) antes de ordenar para evitar el TypeError
     posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
     posiciones = ["Equipo Completo"] + sorted(posiciones_validas)
     pos_sel = st.selectbox("⚽ Posición:", posiciones)
 
-# Filtro por posición para las medias
+# Filtros principales
 if pos_sel == "Equipo Completo":
     df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Valido_Media'] == True)]
 else:
     df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Valido_Media'] == True) & (df_master['Posicion'] == pos_sel)]
 
 tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper()
-
-# FIX: Si la duración está vacía, ponemos 0 en vez de que crashee
 max_dur = df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()
 duracion_sesion = int(max_dur) if pd.notna(max_dur) else 0
 
+# --- CÁLCULO INTELIGENTE: VMAX 4 SEMANAS (>90%) ---
+# 1. Filtramos los últimos 28 días desde la fecha seleccionada
+fecha_inicio_vmax = fecha_sel - timedelta(days=28)
+df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax) & (df_master['Fecha'] <= fecha_sel)]
+
+# 2. Sacamos la Vmax de cada jugador en ese periodo
+vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index()
+vmax_hist.rename(columns={'Top_Speed': 'Vmax_4_semanas'}, inplace=True)
+
+# 3. Cruzamos los datos de la sesión con su histórico y calculamos %
+df_vmax_sesion = df_master[df_master['Fecha'] == fecha_sel][['Nombre', 'Top_Speed', 'Posicion']].merge(vmax_hist, on='Nombre', how='left')
+
+# Solo calculamos si la Vmax historica es mayor que 0 para evitar errores matematicos
+df_vmax_sesion['Porcentaje_Vmax'] = np.where(
+    df_vmax_sesion['Vmax_4_semanas'] > 0, 
+    (df_vmax_sesion['Top_Speed'] / df_vmax_sesion['Vmax_4_semanas']) * 100, 
+    0
+)
+
+# Filtramos por posición si es necesario para el desplegable
+if pos_sel != "Equipo Completo":
+    df_vmax_sesion = df_vmax_sesion[df_vmax_sesion['Posicion'] == pos_sel]
+
+media_vmax_sesion = df_vmax_sesion['Porcentaje_Vmax'].mean() if not df_vmax_sesion.empty else 0
+alcanzan_90 = df_vmax_sesion[df_vmax_sesion['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
+no_alcanzan_90 = df_vmax_sesion[(df_vmax_sesion['Porcentaje_Vmax'] < 90) & (df_vmax_sesion['Vmax_4_semanas'] > 0)].sort_values(by='Porcentaje_Vmax', ascending=False)
+
 # --- CONSTRUCCIÓN DEL HISTÓRICO 28 DÍAS ---
-fecha_inicio_28 = fecha_sel - timedelta(days=28)
-df_hist = df_master[(df_master['Fecha'] >= fecha_inicio_28) & (df_master['Fecha'] <= fecha_sel) & (df_master['Valido_Media'] == True)]
+df_hist = df_28d[df_28d['Valido_Media'] == True]
 if pos_sel != "Equipo Completo": df_hist = df_hist[df_hist['Posicion'] == pos_sel]
 
 df_hist_eq = df_hist.groupby('Fecha').agg({'Carga_UA': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
@@ -253,14 +278,35 @@ st.markdown("---")
 c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
 with c_dur:
     st.markdown("<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='color:#8C52FF; font-size:55px; margin-top:0;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='color:#8C52FF; font-size:55px; margin-top:0; margin-bottom:0px;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#E67E22; font-size:16px; font-weight:bold; margin-top:0;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
+    
 with c_hist:
     st.markdown(f"<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'><b>Last 28 days</b> training schedule</p>", unsafe_allow_html=True)
-    st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False}, key="hist_28")
+
 with c_info:
-    st.markdown(f"<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'>Session Type / Focus</p>", unsafe_allow_html=True)
-    st.markdown(f"<h2>{tipo_sesion}</h2>", unsafe_allow_html=True)
-    st.caption("Filtro Activo: Se ocultan titulares en post-partido y suplentes en partidos para las medias.")
+    st.markdown("<p style='color:#A0AEC0; font-size:14px; margin-bottom:0;'>Exposición Velocidad Máxima (>90%)</p>", unsafe_allow_html=True)
+    
+    # Termómetro de color (Verde > 90%, Amarillo > 85%, Rojo < 85%)
+    color_vmax = "#2ECC71" if media_vmax_sesion >= 90 else "#F1C40F" if media_vmax_sesion >= 85 else "#E74C3C"
+    st.markdown(f"<h2 style='color:{color_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media equipo</span></h2>", unsafe_allow_html=True)
+    
+    # Desplegable compacto de jugadores
+    with st.expander("👁️ Ver Jugadores"):
+        st.markdown("**✅ Lograron el 90%:**")
+        if not alcanzan_90.empty:
+            for _, row in alcanzan_90.iterrows():
+                st.markdown(f"<span style='color:#2ECC71; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
+        else:
+            st.caption("Ninguno")
+            
+        st.markdown("**❌ No llegaron al 90%:**")
+        if not no_alcanzan_90.empty:
+            for _, row in no_alcanzan_90.iterrows():
+                st.markdown(f"<span style='color:#E74C3C; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
+        else:
+            st.caption("Ninguno")
 
 # =============================================================================
 # 5. CÁLCULO DE LA LÍNEA ROJA (TARGET 4 PARTIDOS)
