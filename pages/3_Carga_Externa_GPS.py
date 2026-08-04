@@ -49,7 +49,6 @@ def obtener_rpe_maestro():
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
-        # Limpieza extrema de fechas y nombres para cruce
         df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
         df_rpe['Nombre_Cruce'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip().str.lower()
         
@@ -151,7 +150,7 @@ def cargar_archivos_gps():
     return pd.DataFrame()
 
 # =============================================================================
-# 3. PROCESAMIENTO Y CRUCE 
+# 3. PROCESAMIENTO Y CRUCE (INTELIGENCIA TÁCTICA)
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
@@ -161,7 +160,6 @@ if df_gps.empty:
     st.stop()
 
 if not df_rpe.empty:
-    # Cruce por Nombre_Cruce (sin espacios y en minúsculas) para evitar fallos
     df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
     df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
@@ -172,14 +170,34 @@ else:
     df_master['RPE_G'] = 5
     df_master['Minutos_RPE'] = df_master['Duracion_GPS']
 
-def incluir_en_media(row):
+# LÓGICA DE EXCLUSIÓN BASADA EN EL PARTIDO ANTERIOR
+# 1. Ordenamos cronológicamente
+df_master = df_master.sort_values(by='Fecha')
+
+# 2. Trackeamos los minutos jugados por cada jugador en su ÚLTIMO partido
+ultimos_mins_partido = {}
+validez = []
+
+for _, row in df_master.iterrows():
     tipo = str(row['Tipo_Dia_Oficial']).lower()
     mins = row['Minutos_RPE']
-    if 'partido' in tipo: return mins >= 60
-    if '+1' in tipo or '+2' in tipo: return mins < 60
-    return True
+    jugador = row['Nombre_Cruce']
+    
+    if 'partido' in tipo:
+        ultimos_mins_partido[jugador] = mins # Guardamos en memoria lo que ha jugado hoy
+        validez.append(mins >= 60) # Solo es válido como "Partido real" si jugó >= 60
+        
+    elif '+1' in tipo or '+2' in tipo:
+        # Es día de compensación/recuperación. Miramos su historial:
+        ult_mins = ultimos_mins_partido.get(jugador, 0)
+        # Si jugó MENOS de 60 min en su último partido, compensa -> Sí entra en la media.
+        validez.append(ult_mins < 60)
+        
+    else:
+        # Día normal (-4, -3, etc). Entran todos.
+        validez.append(True)
 
-df_master['Valido_Media'] = df_master.apply(incluir_en_media, axis=1)
+df_master['Valido_Media'] = validez
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
@@ -201,6 +219,7 @@ with col_f2:
     posiciones = ["Equipo Completo"] + sorted(posiciones_validas)
     pos_sel = st.selectbox("⚽ Posición:", posiciones)
 
+# APLICAMOS EL FILTRO INTELIGENTE PARA LA SESIÓN DE HOY
 if pos_sel == "Equipo Completo":
     df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Valido_Media'] == True)]
 else:
@@ -316,7 +335,8 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     
     fig = go.Figure()
     fig.add_trace(go.Bar(x=[max_range], y=["1"], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.6))
-    fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color="#B35900"), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
+    if val > 0:
+        fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color="#B35900"), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
     if target > 0: fig.add_shape(type="line", x0=target, x1=target, y0=-0.4, y1=0.4, line=dict(color="red", width=4))
     fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False, zeroline=False), yaxis=dict(showgrid=False, showticklabels=False, zeroline=False))
     
@@ -349,6 +369,7 @@ metricas_tabla = {
     'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Player Load'
 }
 
+# La tabla individual siempre muestra a TODO el equipo (los que recuperan y los que compensan)
 df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].sort_values(['Posicion', 'Nombre'])
 
 if not df_sesion_tabla.empty:
@@ -364,12 +385,11 @@ if not df_sesion_tabla.empty:
         pct_target = min((target / max_val) * 100, 100)
         texto_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        # Color rojo si pasa del 90% del target de partido
         color_barra = "#E74C3C" if (target > 0 and valor >= target * 0.90) else "#3498DB"
         color_linea = "#F1C40F" if color_barra == "#E74C3C" else "#E74C3C"
         
         return f"""
-        <div style="position: relative; width: 65px; height: 18px; background-color: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 auto; overflow: visible;">
+        <div style="position: relative; width: 100%; min-width: 55px; max-width: 110px; height: 18px; background-color: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 auto; overflow: visible;">
             <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: {color_barra}; border-radius: 2px;"></div>
             <div style="position: absolute; left: {pct_target}%; top: -2px; height: 22px; width: 2px; background-color: {color_linea}; z-index: 2;"></div>
             <div style="position: absolute; left: 4px; top: 1px; font-size: 11px; font-weight: bold; color: white; z-index: 3; text-shadow: 1px 1px 1px black;">{texto_val}</div>
@@ -384,17 +404,17 @@ if not df_sesion_tabla.empty:
 
     html = """
     <div style="overflow-x: auto; padding-bottom: 20px;">
-    <table style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: max-content;">
+    <table style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 13px; width: 100%;">
         <thead>
             <tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
-                <th style="padding: 10px; text-align: center; white-space: nowrap;">POSICIÓN</th>
-                <th style="padding: 10px; text-align: left; white-space: nowrap;">JUGADOR</th>
+                <th style="padding: 10px; text-align: center; white-space: nowrap; width: 8%;">POSICIÓN</th>
+                <th style="padding: 10px; text-align: left; white-space: nowrap; width: 12%;">JUGADOR</th>
     """
     for _, nombre_m in metricas_tabla.items():
         html += f"<th colspan='3' style='padding: 10px; border-left: 1px solid #444; white-space: nowrap;'>{nombre_m}</th>"
     html += "<th style='padding: 10px; border-left: 1px solid #444; white-space: nowrap;'>RPE</th></tr>"
     
-    html += "<tr style='border-bottom: 1px solid #555; font-size: 10px; color: #A0AEC0;'><th></th><th></th>"
+    html += "<tr style='border-bottom: 1px solid #555; font-size: 11px; color: #A0AEC0;'><th></th><th></th>"
     for _ in metricas_tabla:
         html += "<th style='padding: 5px; border-left: 1px solid #444;'>Sesión (Ref)</th><th style='padding: 5px;'>% Partido</th><th style='padding: 5px;'>Z-Score</th>"
     html += "<th style='border-left: 1px solid #444;'></th></tr></thead><tbody>"
@@ -447,4 +467,3 @@ if not df_sesion_tabla.empty:
     st.markdown(html, unsafe_allow_html=True)
 else:
     st.info("No hay datos individuales para mostrar en esta fecha.")
-    
