@@ -51,16 +51,13 @@ def obtener_rpe_maestro():
         df_rpe = pd.read_csv(url_csv)
         df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.date
         df_rpe['Nombre'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip()
-        # FIX: Respetar mayusculas/minusculas originales de "Sesion +2", etc.
         df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
-        # Calcular RPE General
         col_c = [c for c in df_rpe.columns if 'CARDIO' in c.upper()][0]
         col_m = [c for c in df_rpe.columns if 'MUSCULAR' in c.upper()][0]
         df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
         
-        # Determinar el tipo de sesión oficial del día
         df_sesion_dia = df_rpe.groupby('Fecha')['Tipo de Sesión'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
         df_sesion_dia.rename(columns={'Tipo de Sesión': 'Tipo_Dia_Oficial'}, inplace=True)
         
@@ -72,8 +69,7 @@ def obtener_rpe_maestro():
 @st.cache_data(ttl=10)
 def cargar_archivos_gps():
     ruta_gps = os.path.join("data", "GPS")
-    if not os.path.exists(ruta_gps):
-        return pd.DataFrame()
+    if not os.path.exists(ruta_gps): return pd.DataFrame()
         
     archivos = glob.glob(os.path.join(ruta_gps, "*.xlsx"))
     lista_dfs = []
@@ -98,11 +94,14 @@ def cargar_archivos_gps():
             col_dt = buscar_col(['distancia total', 'distance'])
             col_18 = buscar_col(['> 18', '>18'])
             col_25 = buscar_col(['> 25', '>25'])
-            col_28 = buscar_col(['> 28', '>28', 'sprints']) 
+            col_28 = buscar_col(['> 28', '>28']) 
             col_spr = buscar_col(['nº sprints', 'sprints'])
-            col_acc = buscar_col(['aceleraciones', 'accel'])
-            col_dec = buscar_col(['desaceleraciones', 'decel'])
-            col_vmax = buscar_col(['v. max', 'v.max', 'top speed', 'velocidad maxima'])
+            col_acc = buscar_col(['aceleraciones', 'accel', 'nº aceleraciones'])
+            col_dec = buscar_col(['desaceleraciones', 'decel', 'nº desaceleraciones'])
+            col_acc_max = buscar_col(['ac. max', 'acc. max'])
+            col_dec_max = buscar_col(['dec. max', 'desac. max'])
+            col_vmax = buscar_col(['v. max', 'v.max', 'top speed'])
+            col_pload = buscar_col(['player load', 'carga'])
             
             if not col_fecha or not col_nombre: continue
             
@@ -127,7 +126,10 @@ def cargar_archivos_gps():
             df_limpio['Sprints'] = df_temp[col_spr].apply(fix_num) if col_spr else 0.0
             df_limpio['Accels'] = df_temp[col_acc].apply(fix_num) if col_acc else 0.0
             df_limpio['Decels'] = df_temp[col_dec].apply(fix_num) if col_dec else 0.0
+            df_limpio['Acc_Max'] = df_temp[col_acc_max].apply(fix_num) if col_acc_max else 0.0
+            df_limpio['Dec_Max'] = df_temp[col_dec_max].apply(fix_num) if col_dec_max else 0.0
             df_limpio['Top_Speed'] = df_temp[col_vmax].apply(fix_num) if col_vmax else 0.0
+            df_limpio['Player_Load'] = df_temp[col_pload].apply(fix_num) if col_pload else 0.0
 
             lista_dfs.append(df_limpio.dropna(subset=['Fecha']))
         except Exception as e:
@@ -209,14 +211,9 @@ vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index()
 vmax_hist.rename(columns={'Top_Speed': 'Vmax_4_semanas'}, inplace=True)
 
 df_vmax_sesion = df_master[df_master['Fecha'] == fecha_sel][['Nombre', 'Top_Speed', 'Posicion']].merge(vmax_hist, on='Nombre', how='left')
-df_vmax_sesion['Porcentaje_Vmax'] = np.where(
-    df_vmax_sesion['Vmax_4_semanas'] > 0, 
-    (df_vmax_sesion['Top_Speed'] / df_vmax_sesion['Vmax_4_semanas']) * 100, 
-    0
-)
+df_vmax_sesion['Porcentaje_Vmax'] = np.where(df_vmax_sesion['Vmax_4_semanas'] > 0, (df_vmax_sesion['Top_Speed'] / df_vmax_sesion['Vmax_4_semanas']) * 100, 0)
 
-if pos_sel != "Equipo Completo":
-    df_vmax_sesion = df_vmax_sesion[df_vmax_sesion['Posicion'] == pos_sel]
+if pos_sel != "Equipo Completo": df_vmax_sesion = df_vmax_sesion[df_vmax_sesion['Posicion'] == pos_sel]
 
 media_vmax_sesion = df_vmax_sesion['Porcentaje_Vmax'].mean() if not df_vmax_sesion.empty else 0
 alcanzan_90 = df_vmax_sesion[df_vmax_sesion['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
@@ -232,14 +229,11 @@ colores_hist = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in
 textos_hist = ['P' if 'partido' in str(t).lower() else 'Tr' for t in df_hist_eq['Tipo_Dia_Oficial']]
 
 fig_hist.add_trace(go.Bar(
-    x=df_hist_eq['Fecha'], y=df_hist_eq['Carga_UA'],
-    marker_color=colores_hist, text=textos_hist, textposition='outside',
-    hoverinfo='x+y', textfont=dict(color="white", size=12)
+    x=df_hist_eq['Fecha'], y=df_hist_eq['Carga_UA'], marker_color=colores_hist, text=textos_hist, textposition='outside', hoverinfo='x+y', textfont=dict(color="white", size=12)
 ))
 fig_hist.update_layout(
     template="plotly_dark", height=150, margin=dict(l=0, r=0, t=20, b=0),
-    xaxis=dict(showgrid=False, showticklabels=False),
-    yaxis=dict(showgrid=False, showticklabels=False, visible=False),
+    xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False, showticklabels=False, visible=False),
     plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)'
 )
 
@@ -250,30 +244,19 @@ with c_dur:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-top:0;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
-    
 with c_hist:
     st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Last 28 days training schedule</p>", unsafe_allow_html=True)
     st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False}, key="hist_28")
-
 with c_info:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Exposición Velocidad Máxima (>90%)</p>", unsafe_allow_html=True)
     color_vmax = "#2ECC71" if media_vmax_sesion >= 90 else "#F1C40F" if media_vmax_sesion >= 85 else "#E74C3C"
     st.markdown(f"<h2 style='color:{color_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media equipo</span></h2>", unsafe_allow_html=True)
-    
     with st.expander("👁️ Ver Jugadores"):
-        st.markdown("**✅ Lograron el 90%:**")
         if not alcanzan_90.empty:
-            for _, row in alcanzan_90.iterrows():
-                st.markdown(f"<span style='color:#2ECC71; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
-        else:
-            st.caption("Ninguno")
-            
-        st.markdown("**❌ No llegaron al 90%:**")
+            for _, row in alcanzan_90.iterrows(): st.markdown(f"<span style='color:#2ECC71; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
+        else: st.caption("Ninguno llegó")
         if not no_alcanzan_90.empty:
-            for _, row in no_alcanzan_90.iterrows():
-                st.markdown(f"<span style='color:#E74C3C; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
-        else:
-            st.caption("Ninguno")
+            for _, row in no_alcanzan_90.iterrows(): st.markdown(f"<span style='color:#E74C3C; font-size:14px;'>• {row['Nombre']} ({row['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
 
 # =============================================================================
 # 5. CÁLCULO DE LA LÍNEA ROJA Y ACUMULADOS
@@ -281,41 +264,30 @@ with c_info:
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
 
+metricas_todas = ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels', 'Acc_Max', 'Dec_Max', 'Top_Speed', 'Player_Load']
+
 target_refs = {}
 if not df_partidos.empty:
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
     df_ult_4 = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
-    
-    if pos_sel != "Equipo Completo":
-        df_ult_4 = df_ult_4[df_ult_4['Posicion'] == pos_sel]
-        
-    for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
-        if not df_ult_4.empty:
-            mean_m = df_ult_4[metrica].mean()
-            max_m = df_ult_4[metrica].max()
-            target_refs[metrica] = (mean_m + max_m) / 2
-        else:
-            target_refs[metrica] = 0.0
+    if pos_sel != "Equipo Completo": df_ult_4 = df_ult_4[df_ult_4['Posicion'] == pos_sel]
+    for m in metricas_todas:
+        if not df_ult_4.empty: target_refs[m] = (df_ult_4[m].mean() + df_ult_4[m].max()) / 2
+        else: target_refs[m] = 0.0
 else:
-    for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']: target_refs[metrica] = 0.0
+    for m in metricas_todas: target_refs[m] = 0.0
 
 medias_sesion = {}
-for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
-    medias_sesion[metrica] = df_sesion[metrica].mean() if not df_sesion.empty else 0.0
+for m in metricas_todas: medias_sesion[m] = df_sesion[m].mean() if not df_sesion.empty else 0.0
 
-# Calculo de Acumulado Semanal (ultimos 7 dias)
 fecha_inicio_sem = fecha_sel - timedelta(days=6)
 df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem) & (df_master['Fecha'] <= fecha_sel) & (df_master['Valido_Media'] == True)]
-if pos_sel != "Equipo Completo":
-    df_sem = df_sem[df_sem['Posicion'] == pos_sel]
+if pos_sel != "Equipo Completo": df_sem = df_sem[df_sem['Posicion'] == pos_sel]
 
 weekly_sums = {}
-for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
-    if not df_sem.empty:
-        daily_means = df_sem.groupby('Fecha')[metrica].mean()
-        weekly_sums[metrica] = daily_means.sum()
-    else:
-        weekly_sums[metrica] = 0.0
+for m in metricas_todas:
+    if not df_sem.empty: weekly_sums[m] = df_sem.groupby('Fecha')[m].mean().sum()
+    else: weekly_sums[m] = 0.0
 
 # =============================================================================
 # 6. PINTAR LOS BULLET CHARTS ESTILO PROFESIONAL
@@ -327,109 +299,68 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     target = target_refs.get(metrica, 0)
     accum = weekly_sums.get(metrica, 0)
     
-    # Textos matemáticos
     pct_sesion = (val / target * 100) if target > 0 else 0
     multiplier_sem = (accum / target) if target > 0 else 0
     
     texto_val = f"{val:.1f} ({pct_sesion:.0f}%)" if val < 100 else f"{val:.0f} ({pct_sesion:.0f}%)"
     str_acumulado = f"Acumulado semana: {multiplier_sem:.1f}x Partido" if target > 0 else "Acumulado semana: Sin Ref."
-    
     max_range = max(val, target) * 1.2 if max(val, target) > 0 else 10
     
     fig = go.Figure()
-    
-    # 1. Barra de fondo (gris)
-    fig.add_trace(go.Bar(
-        x=[max_range], y=["1"], orientation='h',
-        marker=dict(color="rgba(255,255,255,0.1)"),
-        hoverinfo="none", width=0.6
-    ))
-    
-    # 2. Barra de valor (Naranja oscuro para contraste) con % incluido
-    fig.add_trace(go.Bar(
-        x=[val], y=["1"], orientation='h',
-        marker=dict(color="#B35900"), 
-        text=[texto_val], 
-        textposition='auto', 
-        insidetextanchor='end', 
-        textfont=dict(color="white", size=18, family="Arial Black"),
-        hoverinfo="x", width=0.6
-    ))
-    
-    # 3. Línea roja (Target)
-    if target > 0:
-        fig.add_shape(
-            type="line",
-            x0=target, x1=target,
-            y0=-0.4, y1=0.4,
-            line=dict(color="red", width=4)
-        )
-
-    fig.update_layout(
-        barmode='overlay',
-        height=65, 
-        margin=dict(t=0, b=0, l=0, r=0),
-        paper_bgcolor='rgba(0,0,0,0)', 
-        plot_bgcolor='rgba(0,0,0,0)',
-        showlegend=False,
-        xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False, zeroline=False),
-        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False)
-    )
+    fig.add_trace(go.Bar(x=[max_range], y=["1"], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.6))
+    fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color="#B35900"), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
+    if target > 0: fig.add_shape(type="line", x0=target, x1=target, y0=-0.4, y1=0.4, line=dict(color="red", width=4))
+    fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False, zeroline=False), yaxis=dict(showgrid=False, showticklabels=False, zeroline=False))
     
     with row_col:
         st.markdown(f"<p style='margin-bottom:0px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
         st.markdown(f"<p style='margin-bottom:5px; font-size:12px; color:#A0AEC0;'>{str_acumulado}</p>", unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"bullet_{metrica}")
 
-# Fila 1
 r1_1, r1_2, r1_3, r1_4 = st.columns(4)
 pintar_bullet('Dist_Total', 'Total Distance (m)', r1_1)
 pintar_bullet('Dist_18', 'Distance > 18 km/h (m)', r1_2)
 pintar_bullet('Dist_25', 'Distance > 25 km/h (m)', r1_3)
 pintar_bullet('Dist_28', 'Distance > 28 km/h (m)', r1_4)
 
-# Fila 2
 r2_1, r2_2, r2_3, r2_4 = st.columns(4)
 pintar_bullet('Sprints', 'Total Sprints', r2_1)
 pintar_bullet('Accels', 'Accelerations', r2_2)
 pintar_bullet('Decels', 'Decelerations', r2_3)
+pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
 # 7. TABLA WIMU/CATAPULT: ANÁLISIS INDIVIDUAL AVANZADO 
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🧑‍🤝‍🧑 Análisis Individual (Dashboard Avanzado)")
+st.markdown("### 🧑‍🤝‍🧑 Análisis Individual Avanzado")
 
 metricas_tabla = {
-    'Dist_Total': 'Distancia (m)',
-    'Dist_25': 'Dist. >25km/h',
-    'Sprints': 'Sprints',
-    'RPE_G': 'RPE'
+    'Dist_Total': 'Dist. Total (m)', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25',
+    'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.',
+    'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Player Load'
 }
 
 df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].sort_values(['Posicion', 'Nombre'])
 
 if not df_sesion_tabla.empty:
-    # 1. Preparar las máximas escalas para las barras visuales
     escalas_max = {}
     for m in metricas_tabla.keys():
         max_sesion = df_sesion_tabla[m].max()
         target = target_refs.get(m, 0)
         escalas_max[m] = max(max_sesion, target) * 1.2 if max(max_sesion, target) > 0 else 10
 
-    # 2. Funciones de dibujo HTML para las celdas
     def dibujar_barra(valor, target, max_val, es_decimal=False):
         if max_val == 0: max_val = 1
         pct_fill = min((valor / max_val) * 100, 100)
         pct_target = min((target / max_val) * 100, 100)
-        
         texto_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
         return f"""
-        <div style="position: relative; width: 100px; height: 22px; background-color: rgba(255,255,255,0.1); border-radius: 3px; margin: 0 auto;">
-            <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: #4A90E2; border-radius: 3px;"></div>
-            <div style="position: absolute; left: {pct_target}%; top: -2px; height: 26px; width: 2px; background-color: #E74C3C; z-index: 2;"></div>
-            <div style="position: absolute; left: 5px; top: 2px; font-size: 12px; font-weight: bold; color: white; z-index: 3; text-shadow: 1px 1px 2px black;">{texto_val}</div>
+        <div style="position: relative; width: 65px; height: 18px; background-color: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 auto; overflow: visible;">
+            <div style="position: absolute; left: 0; top: 0; height: 100%; width: {pct_fill}%; background-color: #3498DB; border-radius: 2px;"></div>
+            <div style="position: absolute; left: {pct_target}%; top: -2px; height: 22px; width: 2px; background-color: #E74C3C; z-index: 2;"></div>
+            <div style="position: absolute; left: 4px; top: 1px; font-size: 11px; font-weight: bold; color: white; z-index: 3; text-shadow: 1px 1px 1px black;">{texto_val}</div>
         </div>
         """
 
@@ -439,75 +370,72 @@ if not df_sesion_tabla.empty:
         if z < -2.0: return "background-color: #1F618D; color: white;"
         return "color: #CCCCCC;"
 
-    # 3. Construir la tabla HTML
     html = """
-    <div style="overflow-x: auto;">
-    <table style="width: 100%; min-width: 1200px; border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 13px;">
+    <div style="overflow-x: auto; padding-bottom: 20px;">
+    <table style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: max-content;">
         <thead>
-            <tr style="border-bottom: 2px solid #555; background-color: rgba(0,0,0,0.2);">
-                <th style="padding: 10px; text-align: left;">POSICIÓN</th>
-                <th style="padding: 10px; text-align: left;">JUGADOR</th>
+            <tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
+                <th style="padding: 10px; text-align: center; white-space: nowrap;">POSICIÓN</th>
+                <th style="padding: 10px; text-align: left; white-space: nowrap;">JUGADOR</th>
     """
     for _, nombre_m in metricas_tabla.items():
-        html += f"<th colspan='3' style='padding: 10px; border-left: 1px solid #444;'>{nombre_m}</th>"
+        html += f"<th colspan='3' style='padding: 10px; border-left: 1px solid #444; white-space: nowrap;'>{nombre_m}</th>"
+    html += "<th style='padding: 10px; border-left: 1px solid #444; white-space: nowrap;'>RPE</th></tr>"
     
-    html += """
-            </tr>
-            <tr style="border-bottom: 1px solid #555; font-size: 11px; color: #A0AEC0;">
-                <th></th><th></th>
-    """
+    html += "<tr style='border-bottom: 1px solid #555; font-size: 10px; color: #A0AEC0;'><th></th><th></th>"
     for _ in metricas_tabla:
-        html += "<th style='padding: 5px; border-left: 1px solid #444;'>Sesión (Ref)</th><th>% Partido</th><th>Z-Score</th>"
-    
-    html += "</tr></thead><tbody>"
+        html += "<th style='padding: 5px; border-left: 1px solid #444;'>Sesión (Ref)</th><th style='padding: 5px;'>% Partido</th><th style='padding: 5px;'>Z-Score</th>"
+    html += "<th style='border-left: 1px solid #444;'></th></tr></thead><tbody>"
 
-    # 4. Rellenar filas agrupadas por posición
-    posicion_actual = ""
-    colores_pos = {'Defensa': '#27AE60', 'Medio': '#F39C12', 'Delantero': '#C0392B', 'Portero': '#8E44AD'} # Colores por defecto
+    # Conteo para Rowspan (Agrupar celdas verticalmente)
+    pos_counts = df_sesion_tabla['Posicion'].value_counts().to_dict()
+    pos_actual = ""
     
     for _, row in df_sesion_tabla.iterrows():
         jugador = row['Nombre']
         pos = row['Posicion']
+        rpe_val = row['RPE_G']
         
-        # Lógica de cálculo Z-Score
         df_hist_28 = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
         
-        # Fila y separadores de bloque (Posición)
-        if pos != posicion_actual:
-            html += f"<tr style='border-top: 2px solid #555;'><td style='padding: 8px; text-align: left; font-weight: bold; color: #E67E22;'>{pos}</td>"
-            posicion_actual = pos
-        else:
-            html += "<tr><td></td>"
-            
-        html += f"<td style='padding: 8px; text-align: left; white-space: nowrap;'>{jugador}</td>"
+        html += "<tr style='border-bottom: 1px solid #333;'>"
         
+        # Lógica de Fusión (Rowspan)
+        if pos != pos_actual:
+            filas_pos = pos_counts[pos]
+            html += f"<td rowspan='{filas_pos}' style='vertical-align: middle; text-align: center; padding: 0 15px; font-weight: bold; color: #E67E22; white-space: nowrap; border-right: 1px solid #444; border-bottom: 2px solid #555;'>{pos}</td>"
+            pos_actual = pos
+            
+        html += f"<td style='padding: 8px 15px; text-align: left; white-space: nowrap;'>{jugador}</td>"
+        
+        # Bucle de Métricas (GPS)
         for col_m, _ in metricas_tabla.items():
             val_sesion = row[col_m]
             target_part = target_refs.get(col_m, 0)
             max_escala = escalas_max[col_m]
             
-            # Cálculos
             pct_partido = (val_sesion / target_part * 100) if target_part > 0 else 0
             
             if len(df_hist_28) > 2:
                 media_28 = df_hist_28[col_m].mean()
                 std_28 = df_hist_28[col_m].std()
                 z_score = (val_sesion - media_28) / std_28 if std_28 > 0 else 0
-            else:
-                z_score = 0
+            else: z_score = 0
                 
-            es_dec = True if col_m == 'RPE_G' else False
+            es_dec = True if col_m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed'] else False
             barra_html = dibujar_barra(val_sesion, target_part, max_escala, es_dec)
             estilo_z = color_zscore(z_score)
             
-            html += f"<td style='padding: 5px; border-left: 1px solid #333;'>{barra_html}</td>"
-            html += f"<td style='padding: 5px; color: {'#2ECC71' if pct_partido >= 100 else '#CCCCCC'};'>{pct_partido:.0f}%</td>"
-            html += f"<td style='padding: 5px; {estilo_z} border-radius: 3px;'>{z_score:.2f}</td>"
-            
+            html += f"<td style='padding: 5px 10px; border-left: 1px solid #333;'>{barra_html}</td>"
+            html += f"<td style='padding: 5px 10px; color: {'#2ECC71' if pct_partido >= 100 else '#CCCCCC'};'>{pct_partido:.0f}%</td>"
+            html += f"<td style='padding: 5px 10px; {estilo_z} border-radius: 3px;'>{z_score:.2f}</td>"
+        
+        # Columna Única RPE al final
+        estilo_rpe = "background-color: #E74C3C; color: white;" if rpe_val >= 8 else "color: white;"
+        html += f"<td style='padding: 5px 15px; border-left: 1px solid #444; font-weight: bold; text-align: center; {estilo_rpe}'>{rpe_val:.1f}</td>"
         html += "</tr>"
         
     html += "</tbody></table></div>"
     st.markdown(html, unsafe_allow_html=True)
-
 else:
     st.info("No hay datos individuales para mostrar en esta fecha.")
