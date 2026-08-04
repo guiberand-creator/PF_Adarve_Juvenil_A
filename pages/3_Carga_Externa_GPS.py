@@ -51,7 +51,8 @@ def obtener_rpe_maestro():
         df_rpe = pd.read_csv(url_csv)
         df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.date
         df_rpe['Nombre'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip()
-        df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip().str.lower()
+        # FIX: Respetar mayusculas/minusculas originales de "Sesion +2", etc.
+        df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
         # Calcular RPE General
@@ -59,8 +60,8 @@ def obtener_rpe_maestro():
         col_m = [c for c in df_rpe.columns if 'MUSCULAR' in c.upper()][0]
         df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
         
-        # Determinar el tipo de sesión oficial del día (la respuesta que más se repite)
-        df_sesion_dia = df_rpe.groupby('Fecha')['Tipo de Sesión'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'entreno').reset_index()
+        # Determinar el tipo de sesión oficial del día
+        df_sesion_dia = df_rpe.groupby('Fecha')['Tipo de Sesión'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
         df_sesion_dia.rename(columns={'Tipo de Sesión': 'Tipo_Dia_Oficial'}, inplace=True)
         
         df_rpe = pd.merge(df_rpe, df_sesion_dia, on='Fecha', how='left')
@@ -78,7 +79,7 @@ def cargar_archivos_gps():
     lista_dfs = []
     
     for f in archivos:
-        if "~$" in f: continue  # Ignorar archivos temporales abiertos
+        if "~$" in f: continue
         try:
             df_temp = pd.read_excel(f, sheet_name=1)
             cols_lower = [str(c).lower().strip() for c in df_temp.columns]
@@ -143,7 +144,7 @@ def cargar_archivos_gps():
     return pd.DataFrame()
 
 # =============================================================================
-# 3. PROCESAMIENTO Y CRUCE (EL CEREBRO DEL SISTEMA)
+# 3. PROCESAMIENTO Y CRUCE 
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
@@ -154,17 +155,17 @@ if df_gps.empty:
 
 if not df_rpe.empty:
     df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre'], how='left')
-    df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('entreno')
+    df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
     df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
 else:
     df_master = df_gps.copy()
-    df_master['Tipo_Dia_Oficial'] = 'entreno'
+    df_master['Tipo_Dia_Oficial'] = 'Entreno'
     df_master['RPE_G'] = 5
     df_master['Minutos_RPE'] = df_master['Duracion_GPS']
 
 def incluir_en_media(row):
-    tipo = str(row['Tipo_Dia_Oficial'])
+    tipo = str(row['Tipo_Dia_Oficial']).lower()
     mins = row['Minutos_RPE']
     if 'partido' in tipo: return mins >= 60
     if '+1' in tipo or '+2' in tipo: return mins < 60
@@ -227,8 +228,8 @@ if pos_sel != "Equipo Completo": df_hist = df_hist[df_hist['Posicion'] == pos_se
 df_hist_eq = df_hist.groupby('Fecha').agg({'Carga_UA': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
 
 fig_hist = go.Figure()
-colores_hist = ['#FF9F1C' if 'partido' in str(t) else '#555555' for t in df_hist_eq['Tipo_Dia_Oficial']]
-textos_hist = ['P' if 'partido' in str(t) else 'Tr' for t in df_hist_eq['Tipo_Dia_Oficial']]
+colores_hist = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_hist_eq['Tipo_Dia_Oficial']]
+textos_hist = ['P' if 'partido' in str(t).lower() else 'Tr' for t in df_hist_eq['Tipo_Dia_Oficial']]
 
 fig_hist.add_trace(go.Bar(
     x=df_hist_eq['Fecha'], y=df_hist_eq['Carga_UA'],
@@ -275,9 +276,9 @@ with c_info:
             st.caption("Ninguno")
 
 # =============================================================================
-# 5. CÁLCULO DE LA LÍNEA ROJA (TARGET 4 PARTIDOS)
+# 5. CÁLCULO DE LA LÍNEA ROJA Y ACUMULADOS
 # =============================================================================
-df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.contains('partido')]
+df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
 
 target_refs = {}
@@ -302,6 +303,20 @@ medias_sesion = {}
 for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
     medias_sesion[metrica] = df_sesion[metrica].mean() if not df_sesion.empty else 0.0
 
+# Calculo de Acumulado Semanal (ultimos 7 dias)
+fecha_inicio_sem = fecha_sel - timedelta(days=6)
+df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem) & (df_master['Fecha'] <= fecha_sel) & (df_master['Valido_Media'] == True)]
+if pos_sel != "Equipo Completo":
+    df_sem = df_sem[df_sem['Posicion'] == pos_sel]
+
+weekly_sums = {}
+for metrica in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels']:
+    if not df_sem.empty:
+        daily_means = df_sem.groupby('Fecha')[metrica].mean()
+        weekly_sums[metrica] = daily_means.sum()
+    else:
+        weekly_sums[metrica] = 0.0
+
 # =============================================================================
 # 6. PINTAR LOS BULLET CHARTS ESTILO PROFESIONAL
 # =============================================================================
@@ -310,6 +325,14 @@ st.markdown("### 📊 Metrics Summary vs Match Target")
 def pintar_bullet(metrica, nombre_mostrar, row_col):
     val = medias_sesion.get(metrica, 0)
     target = target_refs.get(metrica, 0)
+    accum = weekly_sums.get(metrica, 0)
+    
+    # Textos matemáticos
+    pct_sesion = (val / target * 100) if target > 0 else 0
+    multiplier_sem = (accum / target) if target > 0 else 0
+    
+    texto_val = f"{val:.1f} ({pct_sesion:.0f}%)" if val < 100 else f"{val:.0f} ({pct_sesion:.0f}%)"
+    str_acumulado = f"Acumulado semana: {multiplier_sem:.1f}x Partido" if target > 0 else "Acumulado semana: Sin Ref."
     
     max_range = max(val, target) * 1.2 if max(val, target) > 0 else 10
     
@@ -322,15 +345,14 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
         hoverinfo="none", width=0.6
     ))
     
-    # 2. Barra de valor (Naranja oscuro para contraste) con el número DENTRO
-    texto_val = f"{val:.1f}" if val < 100 else f"{val:.0f}"
+    # 2. Barra de valor (Naranja oscuro para contraste) con % incluido
     fig.add_trace(go.Bar(
         x=[val], y=["1"], orientation='h',
         marker=dict(color="#B35900"), 
         text=[texto_val], 
-        textposition='auto', # 'auto' lo mete dentro si cabe, y si es muy pequeño lo ajusta para que no se corte
+        textposition='auto', 
         insidetextanchor='end', 
-        textfont=dict(color="white", size=22, family="Arial Black"),
+        textfont=dict(color="white", size=18, family="Arial Black"),
         hoverinfo="x", width=0.6
     ))
     
@@ -355,8 +377,8 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     )
     
     with row_col:
-        # Título en blanco y más grande
-        st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='margin-bottom:0px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='margin-bottom:5px; font-size:12px; color:#A0AEC0;'>{str_acumulado}</p>", unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"bullet_{metrica}")
 
 # Fila 1
