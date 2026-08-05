@@ -918,8 +918,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
 
     with col_sc2:
         if not df_scatter_filt.empty:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
+            st.markdown("<div style='padding-top: 0px;'><p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px;'>Radar de Exigencia Relativa (0-100%)</p></div>", unsafe_allow_html=True)
             
             if len(fechas_radar) > 0:
                 df_radar = df_scatter_filt[df_scatter_filt['Fecha'].isin(fechas_radar)]
@@ -940,9 +939,9 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     ))
                 
                 fig_radar.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=11, color="white"))),
-                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                    template="plotly_dark", height=500, margin=dict(l=40, r=40, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
+                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+                    template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
             else:
