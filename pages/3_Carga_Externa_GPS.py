@@ -267,7 +267,13 @@ for _, row in df_master.iterrows():
 
 df_master['Valido_Media'] = validez
 df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
-df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
+
+# =============================================================================
+# NUEVO CÁLCULO DE CARGA (UA) PONDERADO
+# Carga UA = [ Dist_Total + (Dist_18 * 2) + (Dist_25 * 4) + ((Acel + Desac) * 1.5) ] * RPE_G
+# =============================================================================
+df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 2) + (df_master['Dist_25'] * 4) + ((df_master['Accels'] + df_master['Decels']) * 1.5)) * df_master['RPE_G']
+
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
 if st.session_state.fecha_maestra not in fechas_disp:
@@ -657,7 +663,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA) CON HOVER
+# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -850,7 +856,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        # Filtros combinados: 3 (Marcador) + [Espacio] + 2 (Localización)
         c_r1, c_r2, c_r3, c_espacio, c_r4, c_r5, c_vacio = st.columns([1.1, 1.1, 1.1, 0.5, 0.9, 0.9, 1.5])
         with c_r1: fil_g = st.checkbox("🟢 Ganados", value=True)
         with c_r2: fil_e = st.checkbox("🟡 Empatados", value=True)
@@ -908,13 +913,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     xanchor="center", yanchor="middle"
                 ))
             
-            # Línea de Media Única (Centro de gravedad de todos los filtrados)
             mean_x = df_scatter_filt['Dist_Total'].mean()
             mean_y = df_scatter_filt['Dist_18'].mean()
             fig_sc.add_vline(x=mean_x, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
             fig_sc.add_hline(y=mean_y, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
             
-            # Altura ampliada a 580px
             fig_sc.update_layout(
                 images=images, template="plotly_dark", height=580,
                 xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[x_min - r_x*0.1, x_max + r_x*0.1]),
@@ -932,7 +935,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         cd = p.get('customdata')
                         if cd:
                             val = cd[0] if isinstance(cd, list) else cd
-                            # Lógica Toggle (Interruptor): si está lo quita, si no está lo añade
                             if val in st.session_state.partidos_radar:
                                 st.session_state.partidos_radar.remove(val)
                                 if st.session_state.partidos_radar:
@@ -981,11 +983,12 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
+                # Altura ajustada a 500 para igualar el límite inferior y leyenda vertical a la izquierda
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
                     showlegend=True, 
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-                    template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="right", x=-0.05),
+                    template="plotly_dark", height=500, margin=dict(l=120, r=40, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
             else:
