@@ -3,3 +3,4 @@ pandas
 numpy
 plotly
 openpyxl
+# Forzar reinicio del servidor
