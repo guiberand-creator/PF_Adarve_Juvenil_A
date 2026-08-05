@@ -270,7 +270,6 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# Si no hay fecha seleccionada en sesión, arrancar con la más reciente
 if st.session_state.fecha_maestra not in fechas_disp:
     st.session_state.fecha_maestra = fechas_disp[0] if fechas_disp else None
 
@@ -365,7 +364,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Callback para asegurar que si se cambia arriba, se registre en sesión
 def actualizar_fecha_manual():
     st.session_state.fecha_maestra = st.session_state.widget_fecha
 
@@ -852,7 +850,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        # Los filtros encajados directamente en el área izquierda para dejar libre el radar
         c_r1, c_r2, c_r3 = st.columns(3)
         with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
         with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
@@ -970,11 +967,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
-                # Radar Maxi-Size de 580px para alinearse perfectamente con la columna izquierda
                 fig_radar.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
-                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-                    template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=11, color="white"))),
+                    showlegend=True, 
+                    legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="right", x=-0.05),
+                    template="plotly_dark", height=500, margin=dict(l=120, r=40, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
             else:
