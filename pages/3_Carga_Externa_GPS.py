@@ -397,7 +397,6 @@ opciones_grafico = {
     'Player Load': 'Player_Load'
 }
 
-# Si filtramos por grupo, enseñamos todo para ver tendencias, si no recuperamos solo el válido para medias
 if pos_sel == "Equipo Completo" and jug_sel == "Todos":
     df_hist_eq = df_28d[df_28d['Valido_Media']==True].copy()
 else:
@@ -414,9 +413,13 @@ with c_dur:
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
-    c_h1, c_h2 = st.columns([1.5, 1])
-    with c_h1: st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Training Schedule (28d)</p>", unsafe_allow_html=True)
-    with c_h2: metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
+    
+    # FIX: 3 columnas invisibles para que el selectbox quede pegado al texto y no se expanda al máximo.
+    c_h1, c_h2, c_h3 = st.columns([1.8, 2.2, 3]) 
+    with c_h1: 
+        st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Training Schedule (28d)</p></div>", unsafe_allow_html=True)
+    with c_h2: 
+        metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
     
     m_graf = opciones_grafico[metrica_grafico]
     
@@ -437,7 +440,6 @@ with c_hist:
             marker_color=colores_barras, text=textos_barras, textposition='outside', textfont=dict(color="white", size=10)
         ))
 
-        # Añadir Líneas Target de Referencia
         if m_graf != 'Carga_UA':
             if m_graf in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
                 if m_graf == 'Dec_Max': target_y = [df_agg[m_graf].min() * 0.90] * len(df_agg)
