@@ -902,6 +902,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         ].reset_index(drop=True)
         
         if not df_scatter_filt.empty:
+            st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o añadir/quitar del radar 👉</p>", unsafe_allow_html=True)
             
             x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
             y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
@@ -979,7 +980,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         if not df_scatter_filt.empty:
             c_tit1, c_tit2 = st.columns([3, 1.2])
             with c_tit1:
-               
+                st.markdown("<p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px; margin-top:5px;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
             with c_tit2:
                 if st.button("🧹 Limpiar", use_container_width=True):
                     st.session_state.partidos_radar = []
