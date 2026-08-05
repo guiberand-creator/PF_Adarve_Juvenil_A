@@ -190,7 +190,6 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# --- DICCIONARIO DE RANGOS DE PERIODIZACIÓN TÁCTICA (MIN, MAX) ---
 def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
@@ -252,24 +251,20 @@ else:
 for m in metricas_todas:
     if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
-# Asignación de Objetivos en base a la categoría táctica de la variable
 for m in metricas_todas:
     if m in ['Dist_28', 'Sprints']:
-        # Categoría: UMBRAL EXPLOSIVO (100% Partido Directo, sin rango)
         df_master[f'Target_Min_Pct_{m}'] = 100
         df_master[f'Target_Max_Pct_{m}'] = 100
         df_master[f'Target_Min_{m}'] = target_refs_global[m]
         df_master[f'Target_Max_{m}'] = target_refs_global[m]
         df_master[f'Target_{m}'] = target_refs_global[m]
     elif m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
-        # Categoría: PICO NEUROMUSCULAR (No usa esta lógica volumétrica)
         df_master[f'Target_Min_Pct_{m}'] = 0
         df_master[f'Target_Max_Pct_{m}'] = 0
         df_master[f'Target_Min_{m}'] = 0
         df_master[f'Target_Max_{m}'] = 0
         df_master[f'Target_{m}'] = 0
     else:
-        # Categoría: VOLUMEN PERIODIZADO (Con rango Min-Max)
         df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
         df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
         df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
@@ -424,6 +419,7 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
+    
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
@@ -431,10 +427,8 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     
     if t_max > 0:
         if t_min == t_max:
-            # Para variables Umbral Explosivo (Sprints, Dist >28), se dibuja una sola línea
             fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=3))
         else:
-            # Para variables de Volumen Periodizado
             fig.add_shape(type="rect", x0=t_min, y0=-0.4, x1=t_max, y1=0.4, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
             fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
             fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
@@ -476,7 +470,6 @@ df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
 
 if not df_sesion_tabla.empty:
     
-    # Aseguramos que la escala visual máxima de cada columna se adapte perfectamente
     escalas_max = {}
     for m in metricas_tabla:
         max_sesion = df_sesion_tabla[m].max() if not df_sesion_tabla.empty else 0
@@ -606,6 +599,8 @@ if not df_sesion_tabla.empty:
                 elif val > t_ref and t_ref > 0:
                     diff = val - t_ref
                     diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
+                else:
+                    diff_text = "<span style='color:#2ECC71; font-size:14px;'>✔</span>"
                     
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_umbral(val, t_ref, escalas_max[m], es_dec)}</td>"
                 html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
@@ -626,6 +621,8 @@ if not df_sesion_tabla.empty:
                 elif val > t_max and t_max > 0:
                     diff = val - t_max
                     diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
+                else:
+                    diff_text = "<span style='color:#2ECC71; font-size:14px;'>✔</span>"
 
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
                 html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
