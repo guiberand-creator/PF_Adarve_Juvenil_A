@@ -400,8 +400,6 @@ with c_info:
 # =============================================================================
 # 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO)
 # =============================================================================
-st.markdown("### 📊 Session Mean vs Target Programado")
-
 medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_min = {m: df_sesion[f'Target_Min_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_max = {m: df_sesion[f'Target_Max_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
@@ -459,7 +457,7 @@ pintar_bullet('Player_Load', 'Player Load', r2_4)
 # 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
+st.markdown("### Desglose por jugadores")
 
 metricas_tabla = {'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.', 'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Load'}
 df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].copy()
