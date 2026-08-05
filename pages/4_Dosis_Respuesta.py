@@ -178,18 +178,29 @@ def cargar_matriz_completa():
         d_v['Fecha_dt'] = pd.to_datetime(d_v['Fecha'], dayfirst=True, errors='coerce')
         df_base['VAM_Eval'] = cruzar_evaluacion(d_v, 'VAM', 'VAM_Eval')
 
-    # C) Saltos (CMJ y slCMJ)
+   # C) Saltos (CMJ y slCMJ)
     r_saltos = os.path.join("data", "EVALUACIONES", "SALTOS", "SALTOS.xlsx")
     if os.path.exists(r_saltos):
-        d_s = pd.read_excel(r_saltos)
-        # Buscar el nombre real de la columna de fecha
-        col_fecha_s = next((c for c in d_s.columns if 'fecha' in str(c).lower()), 'Fecha')
-        
-        d_s['Fecha_dt'] = pd.to_datetime(d_s[col_fecha_s].astype(str).str.split('_').str[0], errors='coerce')
-        d_cmj = d_s[d_s['Tipo'].astype(str).str.upper() == 'CMJ']
-        d_sl = d_s[d_s['Tipo'].astype(str).str.lower().str.contains('slcmj', na=False)].groupby(['Fecha_dt', 'Nombre'])['Altura'].mean().reset_index()
-        df_base['CMJ_Eval'] = cruzar_evaluacion(d_cmj, 'Altura', 'CMJ_Eval')
-        df_base['slCMJ_Eval'] = cruzar_evaluacion(d_sl, 'Altura', 'slCMJ_Eval')
+        try:
+            d_s = pd.read_excel(r_saltos)
+            
+            # Buscamos los nombres reales de las columnas en tu Excel dinámicamente
+            c_fecha = next((c for c in d_s.columns if 'fecha' in str(c).lower()), 'Fecha')
+            c_nombre = next((c for c in d_s.columns if 'nombre' in str(c).lower() or 'jugador' in str(c).lower()), 'Nombre')
+            c_altura = next((c for c in d_s.columns if 'altura' in str(c).lower()), 'Altura')
+            c_tipo = next((c for c in d_s.columns if 'tipo' in str(c).lower()), 'Tipo')
+            
+            # Estandarizamos los nombres internamente para que el código no falle
+            d_s = d_s.rename(columns={c_nombre: 'Nombre', c_altura: 'Altura', c_tipo: 'Tipo'})
+            d_s['Fecha_dt'] = pd.to_datetime(d_s[c_fecha].astype(str).str.split('_').str[0], errors='coerce')
+            
+            d_cmj = d_s[d_s['Tipo'].astype(str).str.upper() == 'CMJ']
+            d_sl = d_s[d_s['Tipo'].astype(str).str.lower().str.contains('slcmj', na=False)].groupby(['Fecha_dt', 'Nombre'])['Altura'].mean().reset_index()
+            
+            df_base['CMJ_Eval'] = cruzar_evaluacion(d_cmj, 'Altura', 'CMJ_Eval')
+            df_base['slCMJ_Eval'] = cruzar_evaluacion(d_sl, 'Altura', 'slCMJ_Eval')
+        except Exception:
+            pass # Si el Excel tiene un formato inesperado, no romperá el resto de la app
 
     # D) DRI
     d_dri = descargar_csv_drive("1r7nUPbRWDjKpZW-Jwex1HFNpDcHiCTKTwLPF7YfHL2Y", "0")
