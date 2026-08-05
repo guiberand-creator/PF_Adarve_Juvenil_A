@@ -49,31 +49,37 @@ def obtener_rpe_maestro():
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
+        if df_rpe.empty: return pd.DataFrame()
         
-        # Limpieza robusta de los nombres de columnas
-        cols_lower = [str(c).lower().strip() for c in df_rpe.columns]
-        df_rpe.columns = cols_lower
+        cols = df_rpe.columns
+        # Respaldo posicional exacto según tu foto
+        col_f, col_n, col_t = cols[0], cols[1], cols[2]
+        col_min = cols[3] if len(cols) > 3 else None
+        col_c = cols[4] if len(cols) > 4 else None
+        col_m = cols[5] if len(cols) > 5 else None
+
+        # Intento de búsqueda inteligente por si cambian de orden
+        for c in cols:
+            cl = str(c).lower()
+            if 'fecha' in cl or 'marca' in cl: col_f = c
+            elif 'nombre' in cl or 'apellido' in cl: col_n = c
+            elif 'tipo' in cl or 'sesi' in cl: col_t = c
+            elif 'minuto' in cl or 'tiempo' in cl: col_min = c
+            elif 'cardio' in cl or 'pulmonar' in cl: col_c = c
+            elif 'muscular' in cl: col_m = c
+
+        df_rpe['Fecha'] = pd.to_datetime(df_rpe[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        df_rpe['Nombre_Cruce'] = df_rpe[col_n].fillna('Anónimo').astype(str).str.strip().str.lower()
+        df_rpe['Tipo_Dia_Oficial'] = df_rpe[col_t].fillna('Entreno').astype(str).str.strip().str.title()
         
-        col_fecha = next((c for c in cols_lower if 'marca' in c or 'fecha' in c), None)
-        col_nombre = next((c for c in cols_lower if 'nombre' in c), None)
-        col_tipo = next((c for c in cols_lower if 'tipo' in c), None)
-        col_mins = next((c for c in cols_lower if 'minuto' in c), None)
-        col_c = next((c for c in cols_lower if 'cardio' in c), None)
-        col_m = next((c for c in cols_lower if 'muscular' in c), None)
+        if col_min: df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe[col_min], errors='coerce').fillna(0)
+        else: df_rpe['Minutos_RPE'] = 0
         
-        if not all([col_fecha, col_nombre, col_tipo, col_mins, col_c, col_m]):
-            return pd.DataFrame()
+        val_c = pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) if col_c else 0
+        val_m = pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0) if col_m else 0
+        df_rpe['RPE_G'] = (val_c + val_m) / 2
         
-        df_rpe['Fecha'] = pd.to_datetime(df_rpe[col_fecha], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
-        df_rpe['Nombre_Cruce'] = df_rpe[col_nombre].fillna('Anónimo').astype(str).str.strip().str.lower()
-        df_rpe['Tipo_Dia_Oficial'] = df_rpe[col_tipo].fillna('Entreno').astype(str).str.strip().str.title()
-        df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe[col_mins], errors='coerce').fillna(0)
-        
-        df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
-        
-        # Eliminamos filas que no tengan fecha válida
         df_rpe = df_rpe.dropna(subset=['Fecha'])
-        
         return df_rpe[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
     except Exception as e:
         return pd.DataFrame()
@@ -158,28 +164,31 @@ def obtener_calendario_partidos():
     sheet_id = "1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5"
     gid = "1771990969"
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    
     try:
         df_cal = pd.read_csv(url_csv)
+        if df_cal.empty: return pd.DataFrame()
         
-        # Limpieza robusta de los nombres de columnas
-        cols_lower = [str(c).lower().strip() for c in df_cal.columns]
-        df_cal.columns = cols_lower
+        cols = df_cal.columns
+        # Respaldo posicional según tu foto
+        col_f, col_cf, col_eq, col_esc = cols[0], cols[1], cols[2], cols[3]
+        col_res = cols[4] if len(cols) > 4 else None
         
-        col_fecha = next((c for c in cols_lower if 'fecha' in c), None)
-        col_casafuera = next((c for c in cols_lower if 'casa' in c or 'fuera' in c), None)
-        col_equipo = next((c for c in cols_lower if 'equipo' in c or 'rival' in c), None)
-        col_escudo = next((c for c in cols_lower if 'escudo' in c), None)
-        col_res = next((c for c in cols_lower if 'resultado' in c), None)
-        
-        if not all([col_fecha, col_casafuera, col_equipo, col_escudo, col_res]):
-            return pd.DataFrame()
+        # Búsqueda inteligente
+        for c in cols:
+            cl = str(c).lower()
+            if 'fecha' in cl: col_f = c
+            elif 'casa' in cl or 'fuera' in cl: col_cf = c
+            elif 'equipo' in cl or 'rival' in cl: col_eq = c
+            elif 'escudo' in cl: col_esc = c
+            elif 'resultado' in cl: col_res = c
             
-        df_cal['Fecha'] = pd.to_datetime(df_cal[col_fecha], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
-        df_cal['Local_Visitante'] = df_cal[col_casafuera].astype(str).str.strip().str.title()
-        df_cal['Rival'] = df_cal[col_equipo].astype(str).str.strip()
-        df_cal['Escudo'] = df_cal[col_escudo].astype(str).str.strip()
-        df_cal['Resultado'] = df_cal[col_res].astype(str).str.strip()
+        df_cal['Fecha'] = pd.to_datetime(df_cal[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        df_cal['Local_Visitante'] = df_cal[col_cf].astype(str).str.strip().str.title()
+        df_cal['Rival'] = df_cal[col_eq].astype(str).str.strip()
+        df_cal['Escudo'] = df_cal[col_esc].astype(str).str.strip()
+        
+        if col_res: df_cal['Resultado'] = df_cal[col_res].astype(str).str.strip()
+        else: df_cal['Resultado'] = ""
         
         df_cal = df_cal.dropna(subset=['Fecha'])
         
@@ -197,7 +206,6 @@ def obtener_calendario_partidos():
             except: return None
                 
         df_cal['Resultado_Codificado'] = df_cal.apply(parse_resultado, axis=1)
-        
         return df_cal[['Fecha', 'Rival', 'Local_Visitante', 'Resultado', 'Resultado_Codificado', 'Escudo']]
     except Exception as e:
         return pd.DataFrame()
@@ -214,11 +222,12 @@ if df_gps.empty:
     st.stop()
 
 if not df_rpe.empty:
+    # Cruce Fase 1: Asignar el tipo de día al GPS basado puramente en la fecha (evita errores de nombres)
     df_sesion_dia = df_rpe.groupby('Fecha')['Tipo_Dia_Oficial'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
-    
     df_master = pd.merge(df_gps, df_sesion_dia, on='Fecha', how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
     
+    # Cruce Fase 2: RPE individual
     df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']]
     df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
     
