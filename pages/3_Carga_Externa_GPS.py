@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import os
 import glob
+import requests
+import io
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from utils import aplicar_diseno_responsive
@@ -40,22 +42,29 @@ if os.path.exists(_ruta_logo):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# 2. MOTOR DE EXTRACCIÓN DE DATOS (ANTIBALAS)
+# 2. MOTOR DE EXTRACCIÓN DE DATOS (LECTURA CON REQUESTS Y BÚSQUEDA EXACTA)
 # =============================================================================
+def descargar_csv_drive(sheet_id, gid):
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            return pd.read_csv(io.StringIO(res.text))
+    except:
+        pass
+    return pd.DataFrame()
+
 @st.cache_data(ttl=10)
 def obtener_rpe_maestro():
-    sheet_id = "1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s" 
-    gid = "1785642271"
-    url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
+    if df_rpe.empty: return pd.DataFrame()
+    
     try:
-        df_rpe = pd.read_csv(url_csv)
-        if df_rpe.empty: return pd.DataFrame()
-        
         cols = df_rpe.columns
-        # Búsqueda selectiva que atrapa el primero que encuentra (Evita el bug de la palabra "sesión")
-        col_f = next((c for c in cols if 'fecha' in str(c).lower() or 'marca' in str(c).lower()), cols[0])
-        col_n = next((c for c in cols if 'nombre' in str(c).lower() or 'apellido' in str(c).lower()), cols[1])
-        col_t = next((c for c in cols if 'tipo' in str(c).lower()), cols[2])
+        col_f = next((c for c in cols if 'marca' in str(c).lower() or 'fecha' in str(c).lower()), cols[0])
+        col_n = next((c for c in cols if 'nombre' in str(c).lower()), cols[1])
+        col_t = next((c for c in cols if str(c).lower().strip() == 'tipo de sesión' or 'tipo de sesion' in str(c).lower()), cols[2])
         col_min = next((c for c in cols if 'minuto' in str(c).lower()), cols[3] if len(cols)>3 else None)
         col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
         col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
@@ -71,8 +80,7 @@ def obtener_rpe_maestro():
         val_m = pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0) if col_m else 0
         df_rpe['RPE_G'] = (val_c + val_m) / 2
         
-        df_rpe = df_rpe.dropna(subset=['Fecha'])
-        return df_rpe[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
+        return df_rpe.dropna(subset=['Fecha'])[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
     except Exception as e:
         return pd.DataFrame()
 
@@ -153,15 +161,11 @@ def cargar_archivos_gps():
 
 @st.cache_data(ttl=10)
 def obtener_calendario_partidos():
-    sheet_id = "1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5"
-    gid = "1771990969"
-    url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    df_cal = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
+    if df_cal.empty: return pd.DataFrame()
+    
     try:
-        df_cal = pd.read_csv(url_csv)
-        if df_cal.empty: return pd.DataFrame()
-        
         cols = df_cal.columns
-        # Búsqueda selectiva exacta
         col_f = next((c for c in cols if 'fecha' in str(c).lower()), cols[0])
         col_cf = next((c for c in cols if 'casa' in str(c).lower() or 'fuera' in str(c).lower()), cols[1])
         col_eq = next((c for c in cols if 'equipo' in str(c).lower() or 'rival' in str(c).lower()), cols[2])
@@ -197,7 +201,7 @@ def obtener_calendario_partidos():
         return pd.DataFrame()
 
 # =============================================================================
-# 3. PROCESAMIENTO Y MODELO DE JUEGO (PERIODIZACIÓN POR RANGOS)
+# 3. PROCESAMIENTO Y MODELO DE JUEGO (DETERMINACIÓN DOBLE DE PARTIDO)
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
@@ -207,10 +211,16 @@ if df_gps.empty:
     st.info("🚧 Aún no hay archivos de GPS en la carpeta `data/GPS`.")
     st.stop()
 
+fechas_partidos_cal = set(df_calendario['Fecha'].unique()) if not df_calendario.empty else set()
+
 if not df_rpe.empty:
     df_sesion_dia = df_rpe.groupby('Fecha')['Tipo_Dia_Oficial'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
     df_master = pd.merge(df_gps, df_sesion_dia, on='Fecha', how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
+    
+    df_master['Tipo_Dia_Oficial'] = df_master.apply(
+        lambda r: 'Partido' if r['Fecha'] in fechas_partidos_cal or 'partido' in str(r['Tipo_Dia_Oficial']).lower() else r['Tipo_Dia_Oficial'], axis=1
+    )
     
     df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']]
     df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
@@ -219,7 +229,7 @@ if not df_rpe.empty:
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
 else:
     df_master = df_gps.copy()
-    df_master['Tipo_Dia_Oficial'] = 'Entreno'
+    df_master['Tipo_Dia_Oficial'] = df_master['Fecha'].apply(lambda f: 'Partido' if f in fechas_partidos_cal else 'Entreno')
     df_master['RPE_G'] = 5
     df_master['Minutos_RPE'] = df_master['Duracion_GPS']
 
@@ -808,7 +818,7 @@ else:
     st.info("No hay datos para esta fecha.")
 
 # =============================================================================
-# 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS)
+# 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS) CON INTERACCIÓN DIRECTA
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🏟️ Análisis de Exigencia Competitiva (Partidos)")
@@ -834,16 +844,21 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
         with col_sc1:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Volumen vs Alta Intensidad en Partidos.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Pincha en los escudos para compararlos en el radar 👉</p>", unsafe_allow_html=True)
             
             fig_sc = go.Figure()
             hover_text = df_scatter_filt['Rival'] + '<br>' + df_scatter_filt['Fecha'] + ' (' + df_scatter_filt['Local_Visitante'] + ')<br>Resultado: ' + df_scatter_filt['Resultado']
             
+            # Trazado invisible para capturar los clics encima de los escudos
             fig_sc.add_trace(go.Scatter(
                 x=df_scatter_filt['Dist_Total'], y=df_scatter_filt['Dist_18'],
-                mode='markers', marker=dict(size=25, color='rgba(0,0,0,0)'),
+                mode='markers', marker=dict(size=30, color='rgba(0,0,0,0)'),
                 text=hover_text, hoverinfo='text', hoverlabel=dict(bgcolor="#2C3E50", font_size=14)
             ))
+            
+            # Incorporación de Escudos GRANDES en las Coordenadas
+            r_x = (df_scatter_filt['Dist_Total'].max() - df_scatter_filt['Dist_Total'].min()) or 1000
+            r_y = (df_scatter_filt['Dist_18'].max() - df_scatter_filt['Dist_18'].min()) or 100
             
             images = []
             for _, row in df_scatter_filt.iterrows():
@@ -851,9 +866,19 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     source=row['Escudo'],
                     x=row['Dist_Total'], y=row['Dist_18'],
                     xref="x", yref="y",
-                    sizex=250, sizey=25,
+                    sizex=r_x * 0.35, sizey=r_y * 0.35, # Multiplicador enorme para que se vean grandes
                     xanchor="center", yanchor="middle"
                 ))
+            
+            # Añadimos líneas de medias (cuadrantes)
+            colores_res = {'G': '#2ECC71', 'E': '#F1C40F', 'P': '#E74C3C'}
+            for res in valid_results:
+                df_res = df_scatter_filt[df_scatter_filt['Resultado_Codificado'] == res]
+                if not df_res.empty:
+                    mean_x = df_res['Dist_Total'].mean()
+                    mean_y = df_res['Dist_18'].mean()
+                    fig_sc.add_vline(x=mean_x, line=dict(color=colores_res[res], width=2, dash='dash'), opacity=0.6)
+                    fig_sc.add_hline(y=mean_y, line=dict(color=colores_res[res], width=2, dash='dash'), opacity=0.6)
             
             fig_sc.update_layout(
                 images=images, template="plotly_dark", height=450,
@@ -861,42 +886,58 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                 yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
                 plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
             )
-            st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
+            
+            # SISTEMA INTERACTIVO: Captura los clics del usuario en la gráfica
+            try:
+                seleccion = st.plotly_chart(
+                    fig_sc, 
+                    use_container_width=True, 
+                    config={'displayModeBar': False}, 
+                    on_select="rerun", 
+                    selection_mode=["points", "box", "lasso"]
+                )
+                puntos_seleccionados = seleccion.selection.points if seleccion and hasattr(seleccion, 'selection') else []
+                indices_seleccionados = [p['pointIndex'] for p in puntos_seleccionados]
+                interactivo_nativo = True
+            except TypeError:
+                # Fallback de seguridad si la versión de Streamlit es antigua
+                st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
+                interactivo_nativo = False
+                indices_seleccionados = []
 
         with col_sc2:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Comparador de Exigencia (0-100%)</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
             
-            opciones_partidos = df_scatter_filt['Rival'] + " (" + df_scatter_filt['Fecha'] + ")"
-            p1_idx = 0 if len(opciones_partidos) > 0 else None
-            p2_idx = 1 if len(opciones_partidos) > 1 else p1_idx
+            df_radar = pd.DataFrame()
             
-            p1_sel = st.selectbox("🔴 Partido A", opciones_partidos, index=p1_idx)
-            p2_sel = st.selectbox("🔵 Partido B", opciones_partidos, index=p2_idx)
+            if interactivo_nativo:
+                if len(indices_seleccionados) > 0:
+                    df_radar = df_scatter_filt.iloc[indices_seleccionados]
+                else:
+                    st.info("👆 Haz clic en los escudos de la gráfica (o arrastra un recuadro sobre ellos) para compararlos en el radar.")
+            else:
+                opciones_partidos = df_scatter_filt['Rival'] + " (" + df_scatter_filt['Fecha'] + ")"
+                seleccion_manual = st.multiselect("Selecciona partidos a comparar:", opciones_partidos)
+                if seleccion_manual:
+                    df_radar = df_scatter_filt[opciones_partidos.isin(seleccion_manual)]
+                else:
+                    st.info("Selecciona partidos en el desplegable de arriba para compararlos.")
             
-            if p1_sel and p2_sel:
-                idx_p1 = opciones_partidos[opciones_partidos == p1_sel].index[0]
-                idx_p2 = opciones_partidos[opciones_partidos == p2_sel].index[0]
-                
-                row_p1 = df_scatter_filt.iloc[idx_p1]
-                row_p2 = df_scatter_filt.iloc[idx_p2]
-                
-                df_maximos = df_scatter[metricas_todas].max()
-                df_maximos = df_maximos.replace(0, 1) 
-                
-                vals_p1 = (row_p1[metricas_todas] / df_maximos * 100).tolist()
-                vals_p2 = (row_p2[metricas_todas] / df_maximos * 100).tolist()
-                
+            if not df_radar.empty:
+                df_maximos = df_scatter[metricas_todas].max().replace(0, 1) 
                 nombres_metricas_radar = [metricas_tabla[m] for m in metricas_todas]
                 
+                colores_radar = ['#3498DB', '#E74C3C', '#2ECC71', '#F1C40F', '#9B59B6', '#E67E22', '#1ABC9C']
                 fig_radar = go.Figure()
-                fig_radar.add_trace(go.Scatterpolar(
-                    r=vals_p1 + [vals_p1[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
-                    fill='toself', name=row_p1['Rival'], marker=dict(color='#E74C3C'), fillcolor='rgba(231, 76, 60, 0.4)'
-                ))
-                fig_radar.add_trace(go.Scatterpolar(
-                    r=vals_p2 + [vals_p2[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
-                    fill='toself', name=row_p2['Rival'], marker=dict(color='#3498DB'), fillcolor='rgba(52, 152, 219, 0.4)'
-                ))
+                
+                for i, (_, row) in enumerate(df_radar.iterrows()):
+                    vals = (row[metricas_todas] / df_maximos * 100).tolist()
+                    color_r = colores_radar[i % len(colores_radar)]
+                    
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=vals + [vals[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
+                        fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r.replace(')', ', 0.4)').replace('rgb', 'rgba') if 'rgb' in color_r else color_r, opacity=0.8
+                    ))
                 
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=10, color="white"))),
