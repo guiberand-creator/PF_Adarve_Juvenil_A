@@ -299,13 +299,12 @@ df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
-# --- CÁLCULO DE MICROCICLO ACTUAL Y ANTERIOR (Entre Partidos Reales) ---
+# CÁLCULO DE MICROCICLO ACTUAL Y ANTERIOR
 df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
 if not df_partidos_prev.empty:
     last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
     fecha_inicio_sem = last_match_date + timedelta(days=1)
     
-    # Buscamos el partido anterior para el Microciclo M-1
     df_partidos_prev2 = df_partidos_prev[pd.to_datetime(df_partidos_prev['Fecha']).dt.date < last_match_date]
     if not df_partidos_prev2.empty:
         prev_match_date = pd.to_datetime(df_partidos_prev2['Fecha']).dt.date.max()
@@ -324,7 +323,6 @@ df_sem_prev = df_master[(df_fechas >= fecha_inicio_sem_prev) & (df_fechas <= fec
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
 df_28d = df_master[(df_fechas >= fecha_inicio_vmax) & (df_fechas <= fecha_datetime)]
 
-# Aplicamos los filtros a los históricos
 if pos_sel != "Equipo Completo":
     df_sesion = df_sesion[df_sesion['Posicion'] == pos_sel]
     df_sem = df_sem[df_sem['Posicion'] == pos_sel]
@@ -392,7 +390,7 @@ with st.expander(f"🚨 ALERTAS MICROCICLO ({str_fechas_micro}) - {total_avisos_
     with cols_alertas[5]: st.markdown(generar_lista_html("🔋 Desac.", alertas_metricas['Decels']), unsafe_allow_html=True)
     with cols_alertas[6]: st.markdown(generar_lista_html("🔋 Load", alertas_metricas['Player_Load']), unsafe_allow_html=True)
 
-# --- 2. ALERTAS MESOCICLO (2 Microciclos consecutivos) ---
+# --- 2. ALERTAS MESOCICLO ---
 alertas_meso = []
 metricas_meso = {
     'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 'Dist_28': 'Dist. >28 km/h',
@@ -571,7 +569,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
+# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA) CON HOVER
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -651,9 +649,18 @@ if not df_sesion_tabla.empty:
         </div>
         """
 
+    # --- INYECCIÓN DE CSS PARA EL HOVER DE LA FILA ---
     html = """
+    <style>
+    .tabla-jugadores tbody tr {
+        transition: background-color 0.2s ease;
+    }
+    .tabla-jugadores tbody tr:hover {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    </style>
     <div style="overflow-x: auto; padding-bottom: 20px;">
-    <table style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: 100%;">
+    <table class="tabla-jugadores" style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: 100%;">
         <thead><tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
         <th style="padding: 10px;">POSICIÓN</th><th style="padding: 10px; text-align:left;">JUGADOR</th>
     """
