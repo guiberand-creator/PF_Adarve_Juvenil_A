@@ -920,7 +920,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
         col_cmj_g = st.container()
         col_dri_g = st.container()
 
-    # --- GRÁFICO 1: EVOLUCIÓN CMJ ---
+    # --- GRÁFICO 1: EVOLUCIÓN CMJ (LÍNEAS) ---
     if sel_tipo_evo in ["Ambos Gráficos", "Evolución CMJ (Media de Equipo)"]:
         with col_cmj_g:
             st.markdown("### 📈 Evolución CMJ (Media de Equipo)")
@@ -945,17 +945,17 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_cmj_str = df_cmj_eq['Fecha'].tolist()
                     fig_cmj = go.Figure()
 
-                    fig_cmj.add_trace(go.Bar(
+                    # Transformación a gráfico de LÍNEAS
+                    fig_cmj.add_trace(go.Scatter(
                         x=fechas_cmj_str, 
                         y=df_cmj_eq['Media_Equipo'],
+                        mode='lines+markers',
+                        line=dict(color=COLOR_ADARVE_BORDER, width=3),
+                        marker=dict(size=10, color=COLOR_ADARVE_GRANATE, line=dict(color='#FFFFFF', width=1.5)),
                         error_y=dict(type='data', array=df_cmj_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
                         name='Media Equipo CMJ',
-                        marker_color=COLOR_ADARVE_GRANATE,
-                        marker_line_color=COLOR_ADARVE_BORDER,
-                        marker_line_width=2,
                         text=[f"<b>{v:.1f} cm</b>" for v in df_cmj_eq['Media_Equipo']],
-                        textposition='inside',
-                        insidetextanchor='middle'
+                        textposition='top center'
                     ))
 
                     for k in range(len(df_cmj_eq)):
@@ -992,7 +992,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     )
                     st.plotly_chart(fig_cmj, use_container_width=True)
 
-    # --- GRÁFICO 2: EVOLUCIÓN DRI ---
+    # --- GRÁFICO 2: EVOLUCIÓN DRI (LÍNEAS) ---
     if sel_tipo_evo in ["Ambos Gráficos", "Evolución DRI (Drop Jump 50cm)"]:
         with col_dri_g:
             st.markdown("### ⚡ Evolución DRI (Drop Jump 50cm)")
@@ -1020,17 +1020,17 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_dri_str = df_dri_eq['Fecha'].tolist()
                     fig_dri = go.Figure()
 
-                    fig_dri.add_trace(go.Bar(
+                    # Transformación a gráfico de LÍNEAS
+                    fig_dri.add_trace(go.Scatter(
                         x=fechas_dri_str, 
                         y=df_dri_eq['Media_Equipo'],
+                        mode='lines+markers',
+                        line=dict(color=COLOR_ADARVE_BORDER, width=3),
+                        marker=dict(size=10, color=COLOR_ADARVE_GRANATE, line=dict(color='#FFFFFF', width=1.5)),
                         error_y=dict(type='data', array=df_dri_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
                         name='Media Equipo DRI',
-                        marker_color=COLOR_ADARVE_GRANATE,
-                        marker_line_color=COLOR_ADARVE_BORDER,
-                        marker_line_width=2,
                         text=[f"<b>{v:.2f}</b>" for v in df_dri_eq['Media_Equipo']],
-                        textposition='inside',
-                        insidetextanchor='middle'
+                        textposition='top center'
                     ))
 
                     for k in range(len(df_dri_eq)):
