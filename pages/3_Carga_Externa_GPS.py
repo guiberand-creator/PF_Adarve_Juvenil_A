@@ -197,7 +197,6 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     is_plus = '+1' in t or '+2' in t
     is_minus = '-4' in t or '-3' in t or '-2' in t or '-1' in t
     
-    # FIX: Si no es un día periodizado, no suma NADA al objetivo para no inflarlo.
     if not (is_plus or is_minus): return (0, 0)
     
     if metrica == 'Dist_Total':
@@ -253,12 +252,13 @@ else:
 for m in metricas_todas:
     if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
-# Asignamos los porcentajes mínimos, máximos y el valor absoluto medio para la sesión
+# Asignamos RANGOS ABSOLUTOS DE SESIÓN a la base de datos
 for m in metricas_todas:
     df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
     df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
-    # Target de la sesión es la media del rango programado
-    df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
+    
+    df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
+    df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
 
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS
@@ -280,21 +280,19 @@ with col_f2:
 if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
-# --- CÁLCULO DEL MICROCICLO (ENTRE PARTIDOS) ---
+# --- CÁLCULO DEL MICROCICLO ---
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
-# Buscamos el último partido antes de la fecha seleccionada
 df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
 if not df_partidos_prev.empty:
     last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
     fecha_inicio_sem = last_match_date + timedelta(days=1)
 else:
-    fecha_inicio_sem = fecha_datetime - timedelta(days=6) # Fallback si no hay partidos previos
+    fecha_inicio_sem = fecha_datetime - timedelta(days=6)
 
 df_sem = df_master[(df_fechas >= fecha_inicio_sem) & (df_fechas <= fecha_datetime)]
 
-# --- SISTEMA DE ALERTAS INDEPENDIENTES ---
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
 df_28d = df_master[(df_fechas >= fecha_inicio_vmax) & (df_fechas <= fecha_datetime)]
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
@@ -325,7 +323,6 @@ for jug in df_sem['Nombre'].unique():
         ref_partido = target_refs_global[m_key]
         actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
         
-        # Si el jugador acumula menos % real de partido que el % mínimo exigido
         if expected_min > 0 and actual_pct < expected_min:
             texto_alerta = f"{actual_pct:.0f}% / {expected_min:.0f}-{expected_max:.0f}%"
             alertas_metricas[m_key].append((jug, texto_alerta))
@@ -336,17 +333,15 @@ st.markdown("<br>", unsafe_allow_html=True)
 str_fechas = f"Microciclo desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fecha_datetime.strftime('%d/%m')}"
 with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} Avisos de Subcarga", expanded=False):
     cols_alertas = st.columns(7)
-    
     def generar_lista_html(titulo, lista, es_vmax=False):
-        html = f"<div style='font-size: 16px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
+        html = f"<div style='font-size: 14px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
         if not lista:
-            html += "<div style='font-size: 15px; color: #2ECC71;'>✅ Todo OK</div>"
+            html += "<div style='font-size: 13px; color: #2ECC71;'>✅ Todo OK</div>"
         else:
             color_texto = "#E74C3C" if es_vmax else "#F39C12"
             for item in lista:
                 val_str = f"{item[1]}v" if es_vmax else item[1]
-                # FIX: Fuente a 16px para que se vea claro como el agua
-                html += f"<div style='font-size: 15px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
+                html += f"<div style='font-size: 14px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
         return html
 
     with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
@@ -376,7 +371,6 @@ df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_v
 media_vmax_sesion = df_vmax_hoy['Porcentaje_Vmax'].mean() if not df_vmax_hoy.empty else 0
 alcanzan_90 = df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
 
-# PINTAR CABECERA
 c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
 with c_dur:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
@@ -395,24 +389,38 @@ with c_info:
         else: st.caption("Ninguno")
 
 # =============================================================================
-# 5. BULLET CHARTS (MEDIA DE SESIÓN VS OBJETIVO PROGRAMADO)
+# 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO)
 # =============================================================================
 st.markdown("### 📊 Session Mean vs Target Programado")
 
 medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
-target_programado = {m: df_sesion[f'Target_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
+target_programado_min = {m: df_sesion[f'Target_Min_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
+target_programado_max = {m: df_sesion[f'Target_Max_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 
 def pintar_bullet(metrica, nombre_mostrar, row_col):
     val = medias_sesion.get(metrica, 0)
-    target = target_programado.get(metrica, 0)
-    pct_sesion = (val / target * 100) if target > 0 else 0
-    texto_val = f"{val:.1f} ({pct_sesion:.0f}%)" if val < 100 else f"{val:.0f} ({pct_sesion:.0f}%)"
-    max_range = max(val, target) * 1.2 if max(val, target) > 0 else 10
+    t_min = target_programado_min.get(metrica, 0)
+    t_max = target_programado_max.get(metrica, 0)
+    
+    texto_val = f"{val:.1f}" if val < 100 else f"{val:.0f}"
+    max_range = max(val, t_max) * 1.2 if max(val, t_max) > 0 else 10
+    
+    color_bar = "#2ECC71" # Verde si está en rango
+    if val < t_min: color_bar = "#3498DB" # Azul
+    elif val > t_max: color_bar = "#E74C3C" # Rojo
     
     fig = go.Figure()
     fig.add_trace(go.Bar(x=[max_range], y=["1"], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.6))
-    if val > 0: fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color="#B35900"), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
-    if target > 0: fig.add_shape(type="line", x0=target, x1=target, y0=-0.4, y1=0.4, line=dict(color="red", width=4))
+    
+    if val > 0: 
+        fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color=color_bar), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
+    
+    # Dibujar la "Zona Verde" (Rango Mínimo y Máximo)
+    if t_max > 0: 
+        fig.add_shape(type="rect", x0=t_min, y0=-0.3, x1=t_max, y1=0.3, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
+        fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.4, y1=0.4, line=dict(color="#F1C40F", width=2))
+        fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.4, y1=0.4, line=dict(color="#F1C40F", width=2))
+        
     fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), yaxis=dict(showgrid=False, showticklabels=False))
     
     with row_col:
@@ -431,7 +439,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (OBJETIVOS PERSONALIZADOS)
+# 6. TABLA INDIVIDUAL (OBJETIVOS PERSONALIZADOS POR RANGOS ABSOLUTOS)
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -444,21 +452,28 @@ df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower(
 df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
 
 if not df_sesion_tabla.empty:
-    escalas_max = {m: max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_{m}'].max()) * 1.2 if max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_{m}'].max()) > 0 else 10 for m in metricas_tabla}
+    escalas_max = {m: max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_Max_{m}'].max()) * 1.2 if max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_Max_{m}'].max()) > 0 else 10 for m in metricas_tabla}
 
-    def dibujar_barra(valor, target, max_val, es_decimal):
+    def dibujar_barra_rango(valor, t_min, t_max, max_val, es_decimal):
         if max_val == 0: max_val = 1
-        pct_fill, pct_target = min((valor/max_val)*100, 100), min((target/max_val)*100, 100)
+        pct_fill = min((valor/max_val)*100, 100)
+        pct_t_min = min((t_min/max_val)*100, 100)
+        pct_t_max = min((t_max/max_val)*100, 100)
+        width_target = max(pct_t_max - pct_t_min, 1)
+        
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        c_barra = "#E74C3C" if (target > 0 and valor >= target * 0.90) else "#3498DB"
-        c_linea = "#F1C40F" if c_barra == "#E74C3C" else "#E74C3C"
+        if valor < t_min: c_barra = "#3498DB" # Azul (Se queda corto)
+        elif valor > t_max: c_barra = "#E74C3C" # Rojo (Se pasa)
+        else: c_barra = "#2ECC71" # Verde (En Rango)
         
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
-            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px;"></div>
-            <div style="position:absolute; left:{pct_target}%; top:-2px; height:22px; width:2px; background-color:{c_linea}; z-index:2;"></div>
-            <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:3; text-shadow:1px 1px 1px black;">{t_val}</div>
+            <div style="position:absolute; left:{pct_t_min}%; top:0; height:100%; width:{width_target}%; background-color:rgba(46, 204, 113, 0.2); z-index:1;"></div>
+            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
+            <div style="position:absolute; left:{pct_t_min}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
+            <div style="position:absolute; left:{pct_t_max}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
+            <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
         </div>
         """
 
@@ -471,7 +486,7 @@ if not df_sesion_tabla.empty:
     for _, nombre_m in metricas_tabla.items(): html += f"<th colspan='3' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
     html += "<th style='padding: 10px; border-left: 1px solid #444;'>RPE</th></tr>"
     html += "<tr style='border-bottom: 1px solid #555; font-size: 10px; color: #A0AEC0;'><th></th><th></th>"
-    for _ in metricas_tabla: html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>% Obj</th><th>Z-Score</th>"
+    for _ in metricas_tabla: html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>Obj</th><th>Z-Score</th>"
     html += "<th></th></tr></thead><tbody>"
 
     pos_counts = df_sesion_tabla['Posicion'].value_counts(dropna=False).to_dict()
@@ -488,15 +503,32 @@ if not df_sesion_tabla.empty:
         html += f"<td style='padding:8px; text-align:left; white-space:nowrap;'>{jugador}</td>"
         
         for m, _ in metricas_tabla.items():
-            val, target = row[m], row[f'Target_{m}']
-            pct = (val / target * 100) if target > 0 else 0
-            z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
-            
+            val = row[m]
+            t_min = row[f'Target_Min_{m}']
+            t_max = row[f'Target_Max_{m}']
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
+            
+            # Lógica de la Columna Objetivo (Diferencia Absoluta)
+            diff_text = ""
+            c_obj_bg = "transparent"
+            
+            if val < t_min:
+                diff = t_min - val
+                diff_text = f"-{diff:.1f}" if es_dec else f"-{diff:.0f}"
+                c_obj_bg = "#3498DB" # Azul (le faltan unidades)
+            elif val > t_max:
+                diff = val - t_max
+                diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
+                c_obj_bg = "#E74C3C" # Rojo (se pasa unidades)
+            else:
+                diff_text = "" # En rango, se deja vacío el texto
+                c_obj_bg = "#2ECC71" # Verde (Celda de OK)
+
+            z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
             c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
             
-            html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra(val, target, escalas_max[m], es_dec)}</td>"
-            html += f"<td style='padding:5px; color:{'#2ECC71' if pct>=100 else '#CCC'};'>{pct:.0f}%</td>"
+            html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
+            html += f"<td style='padding:5px; background-color:{c_obj_bg}; border-radius:3px; color:white; font-weight:bold; font-size:11px;'>{diff_text}</td>"
             html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
         
         html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if rpe_val>=8 else 'transparent'};'>{rpe_val:.1f}</td></tr>"
