@@ -190,7 +190,6 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# --- DICCIONARIO DE RANGOS DE PERIODIZACIÓN TÁCTICA (MIN, MAX) ---
 def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
@@ -407,6 +406,7 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
+    
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
@@ -417,7 +417,12 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
         fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         
-    fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), yaxis=dict(range=[-0.5, 0.5], showgrid=False, showticklabels=False))
+    fig.update_layout(
+        barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), 
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, 
+        xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), 
+        yaxis=dict(range=[-0.5, 0.5], showgrid=False, showticklabels=False)
+    )
     
     with row_col:
         st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
@@ -480,7 +485,8 @@ if not df_sesion_tabla.empty:
         
         t_val = f"{valor_real:.1f}" if es_decimal else f"{valor_real:.0f}"
         
-        c_barra = "#2ECC71" if valor_abs >= target_90 and target_90 > 0 else "#3498DB"
+        # FIX: Rojo si supera el 90%, verde si no.
+        c_barra = "#E74C3C" if valor_abs >= target_90 and target_90 > 0 else "#2ECC71"
         
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
@@ -496,10 +502,23 @@ if not df_sesion_tabla.empty:
         <thead><tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
         <th style="padding: 10px;">POSICIÓN</th><th style="padding: 10px; text-align:left;">JUGADOR</th>
     """
-    for _, nombre_m in metricas_tabla.items(): html += f"<th colspan='3' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
+    
+    # FIX: Cabeceras dinámicas. 2 columnas para Picos, 3 para Volumen.
+    for m_key, nombre_m in metricas_tabla.items(): 
+        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+            html += f"<th colspan='2' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
+        else:
+            html += f"<th colspan='3' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
+            
     html += "<th style='padding: 10px; border-left: 1px solid #444;'>RPE</th></tr>"
     html += "<tr style='border-bottom: 1px solid #555; font-size: 10px; color: #A0AEC0;'><th></th><th></th>"
-    for _ in metricas_tabla: html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>Obj</th><th>Z-Score</th>"
+    
+    for m_key in metricas_tabla: 
+        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+            html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>% Max</th>"
+        else:
+            html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>Obj</th><th>Z-Score</th>"
+            
     html += "<th></th></tr></thead><tbody>"
 
     pos_counts = df_sesion_tabla['Posicion'].value_counts(dropna=False).to_dict()
@@ -507,9 +526,8 @@ if not df_sesion_tabla.empty:
     
     for _, row in df_sesion_tabla.iterrows():
         jugador, pos, rpe_val = row['Nombre'], row['Posicion'], row['RPE_G']
-        df_h = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
         
-        # Historial de 28 días exacto para los picos
+        df_h = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
         df_28_player = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
         
         html += "<tr style='border-bottom: 1px solid #333;'>"
@@ -521,8 +539,6 @@ if not df_sesion_tabla.empty:
         for m, _ in metricas_tabla.items():
             val = row[m]
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
-            z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
-            c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
             
             # 1. Lógica Variables PICO (Neuromusculares)
             if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
@@ -534,14 +550,14 @@ if not df_sesion_tabla.empty:
                     v_abs = val
                     
                 t_90 = max_h * 0.90
+                pct_max = (v_abs / max_h * 100) if max_h > 0 else 0
+                
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_pico(val, v_abs, t_90, max_h, es_dec)}</td>"
                 
-                # Checkbox de superación de pico
-                if v_abs >= t_90 and t_90 > 0:
-                    html += f"<td style='padding:5px; background-color:transparent; color:#2ECC71; font-weight:bold; font-size:13px;'>🔥</td>"
-                else:
-                    html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'></td>"
-                    
+                # FIX: Mostrar el porcentaje exacto y colorear el número
+                color_pct = "#E74C3C" if pct_max >= 90 else "#2ECC71"
+                html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
+                
             # 2. Lógica Variables VOLUMEN (Normales)
             else:
                 t_min = row[f'Target_Min_{m}']
@@ -557,8 +573,10 @@ if not df_sesion_tabla.empty:
 
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
                 html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
-            
-            html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
+                
+                z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
+                c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
+                html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
         
         html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if rpe_val>=8 else 'transparent'};'>{rpe_val:.1f}</td></tr>"
         
