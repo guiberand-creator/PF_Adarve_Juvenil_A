@@ -64,7 +64,7 @@ def obtener_rpe_maestro():
         
         df_rpe = pd.merge(df_rpe, df_sesion_dia, on='Fecha', how='left')
         return df_rpe[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
 @st.cache_data(ttl=10)
@@ -107,7 +107,6 @@ def cargar_archivos_gps():
             if not col_fecha or not col_nombre: continue
             
             df_limpio = pd.DataFrame()
-            
             def fix_num(val):
                 try: return float(str(val).replace(',', '.'))
                 except: return 0.0
@@ -122,7 +121,6 @@ def cargar_archivos_gps():
             df_limpio['Dist_18'] = df_temp[col_18].apply(fix_num) if col_18 else 0.0
             df_limpio['Dist_25'] = df_temp[col_25].apply(fix_num) if col_25 else 0.0
             df_limpio['Dist_28'] = df_temp[col_28].apply(fix_num) if col_28 else 0.0
-            
             df_limpio['Sprints'] = df_temp[col_spr].apply(fix_num) if col_spr else 0.0
             df_limpio['Accels'] = df_temp[col_acc].apply(fix_num) if col_acc else 0.0
             df_limpio['Decels'] = df_temp[col_dec].apply(fix_num) if col_dec else 0.0
@@ -192,7 +190,7 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# --- DICCIONARIO DE PERIODIZACIÓN (RANGOS) ---
+# --- DICCIONARIO DE PERIODIZACIÓN ---
 def get_target_pct(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return 100
@@ -208,7 +206,7 @@ def get_target_pct(metrica, tipo_dia, jugo_60):
         if '-4' in t: return 60
         if '-3' in t: return 57.5
         if '-2' in t or '-1' in t: return 25
-        if is_plus: return 30 if jugo_60 else 45
+        if is_plus: return 40 if jugo_60 else 45
     elif metrica == 'Dist_25':
         if '-4' in t: return 10
         if '-3' in t: return 70
@@ -220,26 +218,36 @@ def get_target_pct(metrica, tipo_dia, jugo_60):
         if '-3' in t: return 57.5
         if '-2' in t: return 30
         if '-1' in t: return 15
-        if is_plus: return 15 if jugo_60 else 65
+        if is_plus: return 30 if jugo_60 else 65 
     elif metrica == 'Player_Load':
         if '-4' in t: return 60
         if '-3' in t: return 57.5
         if '-2' in t: return 30
         if '-1' in t: return 25
         if is_plus: return 25 if jugo_60 else 60
-    return 50 # Default genérico
+    return 50
 
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
 metricas_todas = ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels', 'Acc_Max', 'Dec_Max', 'Top_Speed', 'Player_Load']
 
+fallbacks_profesionales = {
+    'Dist_Total': 10000, 'Dist_18': 800, 'Dist_25': 250, 'Dist_28': 100, 
+    'Sprints': 20, 'Accels': 50, 'Decels': 50, 'Acc_Max': 4.5, 'Dec_Max': 4.5, 
+    'Top_Speed': 31, 'Player_Load': 1000
+}
+
 target_refs_global = {}
 if not df_partidos.empty:
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
     df_ult_4 = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
-    for m in metricas_todas: target_refs_global[m] = (df_ult_4[m].mean() + df_ult_4[m].max()) / 2 if not df_ult_4.empty else 0.0
+    for m in metricas_todas: 
+        target_refs_global[m] = (df_ult_4[m].mean() + df_ult_4[m].max()) / 2 if not df_ult_4.empty else fallbacks_profesionales[m]
 else:
-    for m in metricas_todas: target_refs_global[m] = 0.0
+    for m in metricas_todas: target_refs_global[m] = fallbacks_profesionales[m]
+
+for m in metricas_todas:
+    if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
 for m in metricas_todas:
     df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (get_target_pct(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido']) / 100), axis=1)
@@ -254,7 +262,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# FILTROS PRINCIPALES AGRUPADOS ARRIBA (Para no romper el layout)
 col_f1, col_f2 = st.columns(2)
 with col_f1: 
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
@@ -265,7 +272,7 @@ with col_f2:
 if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
-# --- SISTEMA DE ALERTAS (MICROCICLO 7 DÍAS) ---
+# --- SISTEMA DE ALERTAS INDEPENDIENTES (MICROCICLO 7 DÍAS) ---
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 fecha_inicio_sem = fecha_datetime - timedelta(days=6)
 df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
@@ -278,48 +285,79 @@ df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
 
-resumen_sem = []
-# Métricas que vamos a rastrear para la subcarga
 metricas_alerta = {
-    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist >18', 'Dist_25': 'Dist >25', 
-    'Accels': 'Acel.', 'Decels': 'Desac.', 'Player_Load': 'Load'
+    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 
+    'Accels': 'Aceleraciones', 'Decels': 'Desaceleraciones', 'Player_Load': 'Player Load'
 }
+
+jugadores_vmax_peligro = []
+alertas_metricas = {k: [] for k in metricas_alerta.keys()}
 
 for jug in df_sem['Nombre'].unique():
     df_j = df_sem[df_sem['Nombre'] == jug]
     hits_vmax = df_j['Hit_90'].sum()
-    
-    fallos_carga = []
-    for m_key, m_name in metricas_alerta.items():
+    if hits_vmax < 2:
+        jugadores_vmax_peligro.append((jug, hits_vmax))
+        
+    for m_key in metricas_alerta.keys():
         target_sum = df_j[f'Target_{m_key}'].sum()
         real_sum = df_j[m_key].sum()
-        
-        # Si tenía un objetivo programado y no ha llegado al 90% de ese acumulado, anota el fallo
         if target_sum > 0 and (real_sum / target_sum) < 0.90:
-            fallos_carga.append(m_name)
-            
-    resumen_sem.append({'Jugador': jug, 'Hits_Vmax': hits_vmax, 'Fallos': fallos_carga})
+            pct_logrado = (real_sum / target_sum) * 100
+            alertas_metricas[m_key].append((jug, pct_logrado))
 
-df_alertas = pd.DataFrame(resumen_sem)
-alertas_vmax = df_alertas[df_alertas['Hits_Vmax'] < 2]
-alertas_carga = df_alertas[df_alertas['Fallos'].apply(len) > 0]
-total_avisos = len(alertas_vmax) + len(alertas_carga)
+total_avisos = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas_metricas.values())
 
 st.markdown("<br>", unsafe_allow_html=True)
-with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Avisos detectados", expanded=False):
-    col_a1, col_a2 = st.columns(2)
+with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Avisos de Subcarga", expanded=False):
+    
+    # Fila 1 de Cajas
+    col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
-        st.markdown("**🏃‍♂️ Riesgo Isquios (Vmax < 90% menos de 2 veces/sem)**")
-        if not alertas_vmax.empty:
-            for _, r in alertas_vmax.iterrows(): st.error(f"• {r['Jugador']} (Tocado {r['Hits_Vmax']} veces)")
-        else: st.success("Todo el equipo ha estado expuesto a la Vmax.")
+        st.markdown("**🏃‍♂️ Riesgo Isquios (Vmax)**")
+        if jugadores_vmax_peligro:
+            for j, hits in jugadores_vmax_peligro: st.error(f"• {j} ({hits} veces)")
+        else: st.success("Todo el equipo OK")
     with col_a2:
-        st.markdown("**🔋 Subcarga (Acumulado < 90% del objetivo programado)**")
-        if not alertas_carga.empty:
-            for _, r in alertas_carga.iterrows(): 
-                lista_f = ", ".join(r['Fallos'])
-                st.warning(f"• {r['Jugador']} (Falla en: {lista_f})")
-        else: st.success("Todo el equipo ha cumplido la carga táctica programada.")
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_Total']}**")
+        if alertas_metricas['Dist_Total']:
+            for j, pct in alertas_metricas['Dist_Total']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
+    with col_a3:
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_18']}**")
+        if alertas_metricas['Dist_18']:
+            for j, pct in alertas_metricas['Dist_18']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
+        
+    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+    
+    # Fila 2 de Cajas
+    col_a4, col_a5, col_a6 = st.columns(3)
+    with col_a4:
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_25']}**")
+        if alertas_metricas['Dist_25']:
+            for j, pct in alertas_metricas['Dist_25']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
+    with col_a5:
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Accels']}**")
+        if alertas_metricas['Accels']:
+            for j, pct in alertas_metricas['Accels']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
+    with col_a6:
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Decels']}**")
+        if alertas_metricas['Decels']:
+            for j, pct in alertas_metricas['Decels']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
+
+    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+    
+    # Fila 3 de Cajas (Player Load centrado)
+    col_a7, col_a8, col_a9 = st.columns(3)
+    with col_a7:
+        st.markdown(f"**🔋 Subcarga {metricas_alerta['Player_Load']}**")
+        if alertas_metricas['Player_Load']:
+            for j, pct in alertas_metricas['Player_Load']: st.warning(f"• {j} ({pct:.0f}%)")
+        else: st.success("Todo el equipo OK")
 
 st.markdown("---")
 
