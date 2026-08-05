@@ -370,7 +370,23 @@ metricas_tabla = {
 }
 
 # La tabla individual siempre muestra a TODO el equipo (los que recuperan y los que compensan)
-df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].sort_values(['Posicion', 'Nombre'])
+df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].copy()
+
+# Definimos el orden táctico desde atrás hacia adelante
+orden_tactico = {
+    'defensa central': 1,
+    'defensa lateral': 2,
+    'mediocentro': 3,
+    'mediapunta': 4,
+    'extremo': 5,
+    'delantero': 6
+}
+
+# Creamos un sistema de "pesos" oculto: mapeamos tu posición a un número, si no existe (ej. Portero o vacío) le pone 99 para mandarlo al final
+df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower().str.strip().map(orden_tactico).fillna(99)
+
+# Ordenamos primero por ese peso táctico, y luego alfabéticamente por el nombre del jugador
+df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
 
 if not df_sesion_tabla.empty:
     escalas_max = {}
