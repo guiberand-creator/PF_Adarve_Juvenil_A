@@ -831,27 +831,28 @@ else:
 st.markdown("---")
 st.markdown("### 🏟️ Análisis de Exigencia Competitiva (Partidos)")
 
-c_r1, c_r2, c_r3 = st.columns(3)
-with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
-with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
-with c_r3: fil_p = st.checkbox("🔴 Perdidos (P)", value=True)
-
-valid_results = []
-if fil_g: valid_results.append('G')
-if fil_e: valid_results.append('E')
-if fil_p: valid_results.append('P')
-
 df_partidos_analisis = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_master['Valido_Media'] == True)]
 
 if not df_partidos_analisis.empty and not df_calendario.empty:
     df_partidos_agg = df_partidos_analisis.groupby('Fecha')[metricas_todas].mean().reset_index()
     df_scatter = pd.merge(df_partidos_agg, df_calendario, on='Fecha', how='inner')
-    df_scatter_filt = df_scatter[df_scatter['Resultado_Codificado'].isin(valid_results)].reset_index(drop=True)
     
-    if not df_scatter_filt.empty:
-        col_sc1, col_sc2 = st.columns([1.8, 1.2])
+    col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
-        with col_sc1:
+    with col_sc1:
+        c_r1, c_r2, c_r3 = st.columns(3)
+        with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
+        with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
+        with c_r3: fil_p = st.checkbox("🔴 Perdidos (P)", value=True)
+
+        valid_results = []
+        if fil_g: valid_results.append('G')
+        if fil_e: valid_results.append('E')
+        if fil_p: valid_results.append('P')
+        
+        df_scatter_filt = df_scatter[df_scatter['Resultado_Codificado'].isin(valid_results)].reset_index(drop=True)
+        
+        if not df_scatter_filt.empty:
             st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Pincha en los escudos para cargar el partido en el panel superior, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
             
             x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
@@ -899,7 +900,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     fig_sc.add_hline(y=mean_y, line=dict(color=colores_res[res], width=2, dash='dash'), opacity=0.6)
             
             fig_sc.update_layout(
-                images=images, template="plotly_dark", height=450,
+                images=images, template="plotly_dark", height=500,
                 xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[x_min - r_x*0.1, x_max + r_x*0.1]),
                 yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[y_min - r_y*0.1, y_max + r_y*0.1]),
                 plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
@@ -912,8 +913,12 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             except:
                 st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
                 fechas_radar = []
+        else:
+            st.info("No hay partidos con el resultado seleccionado.")
 
-        with col_sc2:
+    with col_sc2:
+        if not df_scatter_filt.empty:
+            st.markdown("<br><br>", unsafe_allow_html=True)
             st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
             
             if len(fechas_radar) > 0:
@@ -935,14 +940,12 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     ))
                 
                 fig_radar.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=10, color="white"))),
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=11, color="white"))),
                     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                    template="plotly_dark", height=350, margin=dict(l=30, r=30, t=20, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    template="plotly_dark", height=500, margin=dict(l=40, r=40, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
             else:
                 st.info("👆 Selecciona uno o varios escudos en el gráfico para ver la comparativa aquí.")
-    else:
-        st.info("No hay partidos con el resultado seleccionado o aún no hay datos cruzados.")
 else:
     st.info("Aún no hay partidos validados de 60 mins para generar la gráfica comparativa.")
