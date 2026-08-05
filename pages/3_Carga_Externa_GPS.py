@@ -657,7 +657,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
+# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA) CON HOVER
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -850,8 +850,8 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        # 5 Filtros combinados en la parte superior izquierda
-        c_r1, c_r2, c_r3, c_r4, c_r5 = st.columns([1, 1, 1, 0.8, 0.8])
+        # Filtros combinados: 3 (Marcador) + [Espacio] + 2 (Localización)
+        c_r1, c_r2, c_r3, c_espacio, c_r4, c_r5, c_vacio = st.columns([1.1, 1.1, 1.1, 0.5, 0.9, 0.9, 1.5])
         with c_r1: fil_g = st.checkbox("🟢 Ganados", value=True)
         with c_r2: fil_e = st.checkbox("🟡 Empatados", value=True)
         with c_r3: fil_p = st.checkbox("🔴 Perdidos", value=True)
@@ -873,7 +873,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         ].reset_index(drop=True)
         
         if not df_scatter_filt.empty:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o añadir/quitar del radar 👉</p>", unsafe_allow_html=True)
             
             x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
             y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
@@ -932,7 +932,13 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         cd = p.get('customdata')
                         if cd:
                             val = cd[0] if isinstance(cd, list) else cd
-                            if val not in st.session_state.partidos_radar:
+                            # Lógica Toggle (Interruptor): si está lo quita, si no está lo añade
+                            if val in st.session_state.partidos_radar:
+                                st.session_state.partidos_radar.remove(val)
+                                if st.session_state.partidos_radar:
+                                    st.session_state.fecha_maestra = st.session_state.partidos_radar[-1]
+                                hubo_cambios = True
+                            else:
                                 st.session_state.partidos_radar.append(val)
                                 st.session_state.fecha_maestra = val
                                 hubo_cambios = True
@@ -975,7 +981,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
-                # Radar altura 580px, leyenda abajo en el centro
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
                     showlegend=True, 
