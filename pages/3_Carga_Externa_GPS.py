@@ -42,7 +42,17 @@ if os.path.exists(_ruta_logo):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# 2. MOTOR DE EXTRACCIÓN DE DATOS (LECTURA CON REQUESTS Y BÚSQUEDA EXACTA)
+# VARIABLES GLOBALES DE SESIÓN (MEMORIA DEL RADAR)
+# =============================================================================
+if 'partidos_radar' not in st.session_state:
+    st.session_state.partidos_radar = []
+if 'grafico_key' not in st.session_state:
+    st.session_state.grafico_key = 0
+if 'fecha_maestra' not in st.session_state:
+    st.session_state.fecha_maestra = None
+
+# =============================================================================
+# 2. MOTOR DE EXTRACCIÓN DE DATOS
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -260,6 +270,10 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
+# Si no hay fecha seleccionada en sesión, arrancar con la más reciente
+if st.session_state.fecha_maestra not in fechas_disp:
+    st.session_state.fecha_maestra = fechas_disp[0] if fechas_disp else None
+
 def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
@@ -342,13 +356,8 @@ for m in metricas_todas:
         df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
-# 4. INTERFAZ Y ESTADO GLOBAL DE RADAR
+# 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
 # =============================================================================
-if 'partidos_radar' not in st.session_state:
-    st.session_state.partidos_radar = []
-if 'grafico_key' not in st.session_state:
-    st.session_state.grafico_key = 0
-
 st.markdown("""
     <div style="margin-bottom: 5px;">
         <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
@@ -356,22 +365,15 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-idx_fecha_seleccionada = 0
-scatter_key = f"scatter_partidos_{st.session_state.grafico_key}"
-if scatter_key in st.session_state:
-    puntos_grafico = st.session_state[scatter_key].get('selection', {}).get('points', []) if isinstance(st.session_state[scatter_key], dict) else []
-    fechas_grafico = [p.get('customdata') for p in puntos_grafico if 'customdata' in p]
-    
-    for fg in fechas_grafico:
-        if fg not in st.session_state.partidos_radar:
-            st.session_state.partidos_radar.append(fg)
-            
-    if fechas_grafico and fechas_grafico[-1] in fechas_disp:
-        idx_fecha_seleccionada = fechas_disp.index(fechas_grafico[-1])
+# Callback para asegurar que si se cambia arriba, se registre en sesión
+def actualizar_fecha_manual():
+    st.session_state.fecha_maestra = st.session_state.widget_fecha
+
+idx_fecha_seleccionada = fechas_disp.index(st.session_state.fecha_maestra) if st.session_state.fecha_maestra in fechas_disp else 0
 
 col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1: 
-    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp, index=idx_fecha_seleccionada)
+    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp, index=idx_fecha_seleccionada, key="widget_fecha", on_change=actualizar_fecha_manual)
 with col_f2:
     posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
     pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
@@ -850,7 +852,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        # Los filtros ahora viven DENTRO de la columna del gráfico de dispersión
+        # Los filtros encajados directamente en el área izquierda para dejar libre el radar
         c_r1, c_r2, c_r3 = st.columns(3)
         with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
         with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
@@ -915,19 +917,30 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                 plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
             )
             
+            scatter_key = f"scatter_{st.session_state.grafico_key}"
             try:
-                seleccion = st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False}, on_select="rerun", selection_mode=["points", "box", "lasso"], key="scatter_partidos")
-                pts = seleccion.get('selection', {}).get('points', []) if seleccion else []
-                fechas_radar = [p.get('customdata') for p in pts if 'customdata' in p]
-            except:
+                seleccion = st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False}, on_select="rerun", selection_mode=["points", "box", "lasso"], key=scatter_key)
+                if seleccion and hasattr(seleccion, 'selection'):
+                    puntos = getattr(seleccion.selection, 'points', [])
+                    hubo_cambios = False
+                    for p in puntos:
+                        cd = p.get('customdata')
+                        if cd:
+                            val = cd[0] if isinstance(cd, list) else cd
+                            if val not in st.session_state.partidos_radar:
+                                st.session_state.partidos_radar.append(val)
+                                st.session_state.fecha_maestra = val
+                                hubo_cambios = True
+                    if hubo_cambios:
+                        st.session_state.grafico_key += 1
+                        st.rerun()
+            except Exception:
                 st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
-                fechas_radar = []
         else:
             st.info("No hay partidos con el resultado seleccionado.")
 
     with col_sc2:
         if not df_scatter_filt.empty:
-            # Quitamos los <br> que lo empujaban hacia abajo para mantener la altura y simetría
             c_tit1, c_tit2 = st.columns([3, 1.2])
             with c_tit1:
                 st.markdown("<p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px; margin-top:5px;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
@@ -957,7 +970,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
-                # Radar Maxi-Size de 580px
+                # Radar Maxi-Size de 580px para alinearse perfectamente con la columna izquierda
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
                     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
