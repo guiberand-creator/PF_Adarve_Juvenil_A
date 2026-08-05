@@ -268,9 +268,10 @@ st.markdown("---")
 c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
 with c_dur:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
-    # Aquí le hemos puesto la etiqueta <h1> y el tamaño 55px igual que arriba
-    st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px;'>TIPO: {tipo_sesion}</h1>", unsafe_allow_html=True)
+    # Le ponemos un line-height más compacto al número
+    st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
+    # Lo pasamos a <p>, le quitamos la negrita (font-weight:normal) y lo "subimos" con margin-top negativo
+    st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
     st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Last 28 days training schedule</p>", unsafe_allow_html=True)
     st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False}, key="hist_28")
