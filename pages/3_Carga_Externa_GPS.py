@@ -252,7 +252,6 @@ else:
 for m in metricas_todas:
     if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
-# Asignamos RANGOS ABSOLUTOS DE SESIÓN a la base de datos
 for m in metricas_todas:
     df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
     df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
@@ -318,7 +317,6 @@ for jug in df_sem['Nombre'].unique():
     for m_key in metricas_alerta.keys():
         expected_min = df_j[f'Target_Min_Pct_{m_key}'].sum()
         expected_max = df_j[f'Target_Max_Pct_{m_key}'].sum()
-        
         actual_abs = df_j[m_key].sum()
         ref_partido = target_refs_global[m_key]
         actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
@@ -334,14 +332,13 @@ str_fechas = f"Microciclo desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fech
 with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} Avisos de Subcarga", expanded=False):
     cols_alertas = st.columns(7)
     def generar_lista_html(titulo, lista, es_vmax=False):
-        html = f"<div style='font-size: 14px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
-        if not lista:
-            html += "<div style='font-size: 13px; color: #2ECC71;'>✅ Todo OK</div>"
+        html = f"<div style='font-size: 16px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
+        if not lista: html += "<div style='font-size: 15px; color: #2ECC71;'>✅ Todo OK</div>"
         else:
             color_texto = "#E74C3C" if es_vmax else "#F39C12"
             for item in lista:
                 val_str = f"{item[1]}v" if es_vmax else item[1]
-                html += f"<div style='font-size: 14px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
+                html += f"<div style='font-size: 15px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
         return html
 
     with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
@@ -410,8 +407,6 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
-    
-    # FIX: Todas las barras usan y=[0] y se fijan los ejes para que el grosor sea exactamente idéntico en todos los gráficos
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
@@ -422,12 +417,7 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
         fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         
-    fig.update_layout(
-        barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), 
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, 
-        xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), 
-        yaxis=dict(range=[-0.5, 0.5], showgrid=False, showticklabels=False)
-    )
+    fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), yaxis=dict(range=[-0.5, 0.5], showgrid=False, showticklabels=False))
     
     with row_col:
         st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
@@ -469,9 +459,9 @@ if not df_sesion_tabla.empty:
         
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        if valor < t_min: c_barra = "#3498DB" # Azul (Se queda corto)
-        elif valor > t_max: c_barra = "#E74C3C" # Rojo (Se pasa)
-        else: c_barra = "#2ECC71" # Verde (En Rango)
+        if valor < t_min: c_barra = "#3498DB" 
+        elif valor > t_max: c_barra = "#E74C3C" 
+        else: c_barra = "#2ECC71" 
         
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
@@ -479,6 +469,23 @@ if not df_sesion_tabla.empty:
             <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
             <div style="position:absolute; left:{pct_t_min}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
             <div style="position:absolute; left:{pct_t_max}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
+            <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
+        </div>
+        """
+
+    def dibujar_barra_pico(valor_real, valor_abs, target_90, max_hist, es_decimal):
+        max_escala = max(max_hist, valor_abs) * 1.1 if max(max_hist, valor_abs) > 0 else 10
+        pct_fill = min((valor_abs / max_escala) * 100, 100)
+        pct_target = min((target_90 / max_escala) * 100, 100)
+        
+        t_val = f"{valor_real:.1f}" if es_decimal else f"{valor_real:.0f}"
+        
+        c_barra = "#2ECC71" if valor_abs >= target_90 and target_90 > 0 else "#3498DB"
+        
+        return f"""
+        <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
+            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
+            <div style="position:absolute; left:{pct_target}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
             <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
         </div>
         """
@@ -501,8 +508,11 @@ if not df_sesion_tabla.empty:
     for _, row in df_sesion_tabla.iterrows():
         jugador, pos, rpe_val = row['Nombre'], row['Posicion'], row['RPE_G']
         df_h = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
-        html += "<tr style='border-bottom: 1px solid #333;'>"
         
+        # Historial de 28 días exacto para los picos
+        df_28_player = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
+        
+        html += "<tr style='border-bottom: 1px solid #333;'>"
         if pos != pos_actual:
             html += f"<td rowspan='{pos_counts.get(pos,1)}' style='vertical-align:middle; font-weight:bold; color:#E67E22; text-transform:uppercase; border-right:1px solid #444; border-bottom:2px solid #555;'>{pos}</td>"
             pos_actual = pos
@@ -510,24 +520,44 @@ if not df_sesion_tabla.empty:
         
         for m, _ in metricas_tabla.items():
             val = row[m]
-            t_min = row[f'Target_Min_{m}']
-            t_max = row[f'Target_Max_{m}']
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
-            
-            # FIX: Columna OBJ limpia de fondos. Solo texto blanco indicando los metros de más o de menos.
-            diff_text = ""
-            if val < t_min:
-                diff = t_min - val
-                diff_text = f"-{diff:.1f}" if es_dec else f"-{diff:.0f}"
-            elif val > t_max and t_max > 0:
-                diff = val - t_max
-                diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
-
             z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
             c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
             
-            html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
-            html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
+            # 1. Lógica Variables PICO (Neuromusculares)
+            if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+                if m == 'Dec_Max':
+                    max_h = abs(df_28_player[m].min()) if not df_28_player.empty else 0
+                    v_abs = abs(val)
+                else:
+                    max_h = df_28_player[m].max() if not df_28_player.empty else 0
+                    v_abs = val
+                    
+                t_90 = max_h * 0.90
+                html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_pico(val, v_abs, t_90, max_h, es_dec)}</td>"
+                
+                # Checkbox de superación de pico
+                if v_abs >= t_90 and t_90 > 0:
+                    html += f"<td style='padding:5px; background-color:transparent; color:#2ECC71; font-weight:bold; font-size:13px;'>🔥</td>"
+                else:
+                    html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'></td>"
+                    
+            # 2. Lógica Variables VOLUMEN (Normales)
+            else:
+                t_min = row[f'Target_Min_{m}']
+                t_max = row[f'Target_Max_{m}']
+                
+                diff_text = ""
+                if val < t_min:
+                    diff = t_min - val
+                    diff_text = f"-{diff:.1f}" if es_dec else f"-{diff:.0f}"
+                elif val > t_max and t_max > 0:
+                    diff = val - t_max
+                    diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
+
+                html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
+                html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
+            
             html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
         
         html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if rpe_val>=8 else 'transparent'};'>{rpe_val:.1f}</td></tr>"
