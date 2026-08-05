@@ -208,7 +208,7 @@ def get_target_pct(metrica, tipo_dia, jugo_60):
         if '-4' in t: return 60
         if '-3' in t: return 57.5
         if '-2' in t or '-1' in t: return 25
-        if is_plus: return 20 if jugo_60 else 45
+        if is_plus: return 30 if jugo_60 else 45
     elif metrica == 'Dist_25':
         if '-4' in t: return 10
         if '-3' in t: return 70
@@ -227,9 +227,8 @@ def get_target_pct(metrica, tipo_dia, jugo_60):
         if '-2' in t: return 30
         if '-1' in t: return 25
         if is_plus: return 25 if jugo_60 else 60
-    return 50 # Default para métricas sin programar (Sprints, etc)
+    return 50 # Default genérico
 
-# Calculamos Target Base de Partido (100%)
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
 metricas_todas = ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Accels', 'Decels', 'Acc_Max', 'Dec_Max', 'Top_Speed', 'Player_Load']
@@ -242,12 +241,11 @@ if not df_partidos.empty:
 else:
     for m in metricas_todas: target_refs_global[m] = 0.0
 
-# Asignamos el Target Personalizado a cada fila según el tipo de día
 for m in metricas_todas:
     df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (get_target_pct(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido']) / 100), axis=1)
 
 # =============================================================================
-# 4. INTERFAZ: CABECERA Y ALERTAS SEMANALES
+# 4. INTERFAZ: CABECERA Y FILTROS
 # =============================================================================
 st.markdown("""
     <div style="margin-bottom: 5px;">
@@ -256,14 +254,22 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-fecha_sel = st.selectbox("📅 Select Date:", fechas_disp, key="sel_fecha_top")
+# FILTROS PRINCIPALES AGRUPADOS ARRIBA (Para no romper el layout)
+col_f1, col_f2 = st.columns(2)
+with col_f1: 
+    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
+with col_f2:
+    posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
+    pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
+
+if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
+else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
 # --- SISTEMA DE ALERTAS (MICROCICLO 7 DÍAS) ---
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 fecha_inicio_sem = fecha_datetime - timedelta(days=6)
 df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
 
-# Calculo Vmax 28 dias
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
 df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
@@ -272,8 +278,8 @@ df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
 
-# Resumen por jugador (Analizando TODAS las variables clave)
 resumen_sem = []
+# Métricas que vamos a rastrear para la subcarga
 metricas_alerta = {
     'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist >18', 'Dist_25': 'Dist >25', 
     'Accels': 'Acel.', 'Decels': 'Desac.', 'Player_Load': 'Load'
@@ -283,13 +289,12 @@ for jug in df_sem['Nombre'].unique():
     df_j = df_sem[df_sem['Nombre'] == jug]
     hits_vmax = df_j['Hit_90'].sum()
     
-    # Calcular cumplimiento de carga para todas las variables
     fallos_carga = []
     for m_key, m_name in metricas_alerta.items():
         target_sum = df_j[f'Target_{m_key}'].sum()
         real_sum = df_j[m_key].sum()
         
-        # Si tenía un objetivo programado y no ha llegado al 90% de ese acumulado, lo apuntamos
+        # Si tenía un objetivo programado y no ha llegado al 90% de ese acumulado, anota el fallo
         if target_sum > 0 and (real_sum / target_sum) < 0.90:
             fallos_carga.append(m_name)
             
@@ -300,7 +305,8 @@ alertas_vmax = df_alertas[df_alertas['Hits_Vmax'] < 2]
 alertas_carga = df_alertas[df_alertas['Fallos'].apply(len) > 0]
 total_avisos = len(alertas_vmax) + len(alertas_carga)
 
-with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Jugadores con Avisos", expanded=False):
+st.markdown("<br>", unsafe_allow_html=True)
+with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Avisos detectados", expanded=False):
     col_a1, col_a2 = st.columns(2)
     with col_a1:
         st.markdown("**🏃‍♂️ Riesgo Isquios (Vmax < 90% menos de 2 veces/sem)**")
@@ -308,22 +314,14 @@ with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} J
             for _, r in alertas_vmax.iterrows(): st.error(f"• {r['Jugador']} (Tocado {r['Hits_Vmax']} veces)")
         else: st.success("Todo el equipo ha estado expuesto a la Vmax.")
     with col_a2:
-        st.markdown("**🔋 Subcarga (Acumulado < 90% de lo programado)**")
+        st.markdown("**🔋 Subcarga (Acumulado < 90% del objetivo programado)**")
         if not alertas_carga.empty:
             for _, r in alertas_carga.iterrows(): 
-                lista_fallos = ", ".join(r['Fallos'])
-                st.warning(f"• {r['Jugador']} (Falla en: {lista_fallos})")
-        else: st.success("Todo el equipo ha cumplido la carga programada en todas las variables.")
+                lista_f = ", ".join(r['Fallos'])
+                st.warning(f"• {r['Jugador']} (Falla en: {lista_f})")
+        else: st.success("Todo el equipo ha cumplido la carga táctica programada.")
 
 st.markdown("---")
-
-col_f1, col_f2 = st.columns([1, 1])
-with col_f2:
-    posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
-    pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
-
-if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
-else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
 tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper()
 duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()) if not df_sesion.empty else 0
@@ -366,7 +364,6 @@ with c_info:
 st.markdown("### 📊 Session Mean vs Target Programado")
 
 medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
-# El Target general de la sesión es la media de los targets individuales de los jugadores presentes
 target_programado = {m: df_sesion[f'Target_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 
 def pintar_bullet(metrica, nombre_mostrar, row_col):
@@ -406,7 +403,6 @@ st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado
 metricas_tabla = {'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.', 'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Load'}
 df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].copy()
 
-# Orden Táctico
 orden_tactico = {'defensa central': 1, 'defensa lateral': 2, 'mediocentro': 3, 'mediapunta': 4, 'extremo': 5, 'delantero': 6}
 df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower().str.strip().map(orden_tactico).fillna(99)
 df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
@@ -419,7 +415,6 @@ if not df_sesion_tabla.empty:
         pct_fill, pct_target = min((valor/max_val)*100, 100), min((target/max_val)*100, 100)
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         
-        # Superar el 90% del objetivo programado lo pinta de rojo (Alerta)
         c_barra = "#E74C3C" if (target > 0 and valor >= target * 0.90) else "#3498DB"
         c_linea = "#F1C40F" if c_barra == "#E74C3C" else "#E74C3C"
         
