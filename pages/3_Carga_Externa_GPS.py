@@ -190,7 +190,6 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# --- DICCIONARIO DE PERIODIZACIÓN ---
 def get_target_pct(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return 100
@@ -272,7 +271,7 @@ with col_f2:
 if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
-# --- SISTEMA DE ALERTAS INDEPENDIENTES (MICROCICLO 7 DÍAS) ---
+# --- SISTEMA DE ALERTAS INDEPENDIENTES (MICROCICLO 7 DÍAS) EN UNA SOLA FILA COMPACTA ---
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 fecha_inicio_sem = fecha_datetime - timedelta(days=6)
 df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
@@ -286,8 +285,8 @@ df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed']
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
 
 metricas_alerta = {
-    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 
-    'Accels': 'Aceleraciones', 'Decels': 'Desaceleraciones', 'Player_Load': 'Player Load'
+    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 
+    'Accels': 'Aceleraciones', 'Decels': 'Desacel.', 'Player_Load': 'Load'
 }
 
 jugadores_vmax_peligro = []
@@ -310,54 +309,27 @@ total_avisos = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas
 
 st.markdown("<br>", unsafe_allow_html=True)
 with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Avisos de Subcarga", expanded=False):
+    # Creamos exactamente 7 columnas limpias para una sola fila
+    cols_alertas = st.columns(7)
     
-    # Fila 1 de Cajas
-    col_a1, col_a2, col_a3 = st.columns(3)
-    with col_a1:
-        st.markdown("**🏃‍♂️ Riesgo Isquios (Vmax)**")
-        if jugadores_vmax_peligro:
-            for j, hits in jugadores_vmax_peligro: st.error(f"• {j} ({hits} veces)")
-        else: st.success("Todo el equipo OK")
-    with col_a2:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_Total']}**")
-        if alertas_metricas['Dist_Total']:
-            for j, pct in alertas_metricas['Dist_Total']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
-    with col_a3:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_18']}**")
-        if alertas_metricas['Dist_18']:
-            for j, pct in alertas_metricas['Dist_18']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
-        
-    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-    
-    # Fila 2 de Cajas
-    col_a4, col_a5, col_a6 = st.columns(3)
-    with col_a4:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Dist_25']}**")
-        if alertas_metricas['Dist_25']:
-            for j, pct in alertas_metricas['Dist_25']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
-    with col_a5:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Accels']}**")
-        if alertas_metricas['Accels']:
-            for j, pct in alertas_metricas['Accels']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
-    with col_a6:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Decels']}**")
-        if alertas_metricas['Decels']:
-            for j, pct in alertas_metricas['Decels']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
+    def generar_lista_html(titulo, lista, es_vmax=False):
+        html = f"<div style='font-size: 13px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
+        if not lista:
+            html += "<div style='font-size: 12px; color: #2ECC71;'>✅ Todo OK</div>"
+        else:
+            color_texto = "#E74C3C" if es_vmax else "#F39C12"
+            for item in lista:
+                val_str = f"{item[1]}v" if es_vmax else f"{item[1]:.0f}%"
+                html += f"<div style='font-size: 11px; color: {color_texto}; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
+        return html
 
-    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-    
-    # Fila 3 de Cajas (Player Load centrado)
-    col_a7, col_a8, col_a9 = st.columns(3)
-    with col_a7:
-        st.markdown(f"**🔋 Subcarga {metricas_alerta['Player_Load']}**")
-        if alertas_metricas['Player_Load']:
-            for j, pct in alertas_metricas['Player_Load']: st.warning(f"• {j} ({pct:.0f}%)")
-        else: st.success("Todo el equipo OK")
+    with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
+    with cols_alertas[1]: st.markdown(generar_lista_html("🔋 Dist. Total", alertas_metricas['Dist_Total']), unsafe_allow_html=True)
+    with cols_alertas[2]: st.markdown(generar_lista_html("🔋 Dist. >18", alertas_metricas['Dist_18']), unsafe_allow_html=True)
+    with cols_alertas[3]: st.markdown(generar_lista_html("🔋 Dist. >25", alertas_metricas['Dist_25']), unsafe_allow_html=True)
+    with cols_alertas[4]: st.markdown(generar_lista_html("🔋 Acel.", alertas_metricas['Accels']), unsafe_allow_html=True)
+    with cols_alertas[5]: st.markdown(generar_lista_html("🔋 Desac.", alertas_metricas['Decels']), unsafe_allow_html=True)
+    with cols_alertas[6]: st.markdown(generar_lista_html("🔋 Load", alertas_metricas['Player_Load']), unsafe_allow_html=True)
 
 st.markdown("---")
 
