@@ -5,8 +5,8 @@ import os
 import glob
 import requests
 import io
-import plotly.graph_objects as go
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 from utils import aplicar_diseno_responsive
 
@@ -47,6 +47,12 @@ if os.path.exists(_ruta_logo):
             <p>© 2026 All Rights Reserved</p>
         </div>
     """, unsafe_allow_html=True)
+
+# Variables de sesión para la selección de jugadores por clic
+if 'jugadores_seleccionados_dosis' not in st.session_state:
+    st.session_state.jugadores_seleccionados_dosis = []
+if 'dosis_key' not in st.session_state:
+    st.session_state.dosis_key = 0
 
 # =============================================================================
 # 2. EXTRACCIÓN Y UNIFICACIÓN DE DATOS (GPS + RPE)
@@ -151,7 +157,6 @@ def cargar_datos_dosis_respuesta():
     # 3. Fusionar GPS + RPE
     df_merged = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
     
-    # Calcular Carga UA con la nueva fórmula ponderada
     # Carga UA = [ Dist_Total + (Dist_18 * 2) + (Dist_25 * 4) + ((Acel + Desac) * 1.5) ] * RPE_G
     df_merged['Carga_UA'] = (
         df_merged['Dist_Total'] + 
@@ -178,54 +183,74 @@ if df_dosis.empty:
     st.info("🚧 No hay suficientes datos coincidentes de GPS y RPE para construir la relación Dosis-Respuesta.")
     st.stop()
 
-# --- FILTROS ---
 st.markdown("---")
-c_f1, c_f2, c_f3 = st.columns(3)
+
+# --- FILTROS ---
+c_f1, c_f2 = st.columns([1, 2.5])
 
 with c_f1:
     tipos_sesion = ["Todos"] + sorted(list(df_dosis['Tipo_Sesion'].unique()))
     tipo_sel = st.selectbox("⚽ Tipo de Sesión:", tipos_sesion)
 
 with c_f2:
-    jugadores_disp = ["Todos los Jugadores"] + sorted(list(df_dosis['Nombre_Oficial'].unique()))
-    jugador_sel = st.selectbox("🏃 Jugador:", jugadores_disp)
+    # 1. FILTRO DE FECHAS EN SLIDER (BARRITA DESLIZANTE)
+    fechas_dt_unicas = sorted([datetime.strptime(f, '%Y-%m-%d').date() for f in df_dosis['Fecha'].unique()])
+    min_date_val, max_date_val = fechas_dt_unicas[0], fechas_dt_unicas[-1]
+    
+    rango_slider = st.slider(
+        "📅 Rango de Fechas:",
+        min_value=min_date_val,
+        max_value=max_date_val,
+        value=(min_date_val, max_date_val),
+        format="DD/MM/YYYY"
+    )
 
-with c_f3:
-    fechas_disponibles = sorted(list(df_dosis['Fecha'].unique()))
-    f_min, f_max = min(fechas_disponibles), max(fechas_disponibles)
-    rango_fechas = st.date_input("📅 Rango de Fechas:", [datetime.strptime(f_min, '%Y-%m-%d'), datetime.strptime(f_max, '%Y-%m-%d')])
-
-# Aplicar Filtros
+# Aplicar Filtro de Fecha y Tipo de Sesión
 df_filtrado = df_dosis.copy()
 
 if tipo_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado['Tipo_Sesion'] == tipo_sel]
 
-if jugador_sel != "Todos los Jugadores":
-    df_filtrado = df_filtrado[df_filtrado['Nombre_Oficial'] == jugador_sel]
+if len(rango_slider) == 2:
+    f_ini_str = rango_slider[0].strftime('%Y-%m-%d')
+    f_fin_str = rango_slider[1].strftime('%Y-%m-%d')
+    df_filtrado = df_filtrado[(df_filtrado['Fecha'] >= f_ini_str) & (df_filtrado['Fecha'] <= f_fin_str)]
 
-if len(rango_fechas) == 2:
-    f_inicio_str = rango_fechas[0].strftime('%Y-%m-%d')
-    f_fin_str = rango_fechas[1].strftime('%Y-%m-%d')
-    df_filtrado = df_filtrado[(df_filtrado['Fecha'] >= f_inicio_str) & (df_filtrado['Fecha'] <= f_fin_str)]
+# Lógica del botón de limpieza de selección de jugador
+c_info_f, c_btn = st.columns([3, 1])
+with c_info_f:
+    if st.session_state.jugadores_seleccionados_dosis:
+        st.markdown(f"🏃 **Filtrado por jugador(es):** `{', '.join(st.session_state.jugadores_seleccionados_dosis)}`")
+    else:
+        st.caption("💡 Haz clic sobre los círculos del gráfico para filtrar/aislar a esos jugadores.")
 
-if df_filtrado.empty:
+with c_btn:
+    if st.session_state.jugadores_seleccionados_dosis:
+        if st.button("🧹 Limpiar Selección", use_container_width=True):
+            st.session_state.jugadores_seleccionados_dosis = []
+            st.session_state.dosis_key += 1
+            st.rerun()
+
+if st.session_state.jugadores_seleccionados_dosis:
+    df_grafico = df_filtrado[df_filtrado['Nombre_Oficial'].isin(st.session_state.jugadores_seleccionados_dosis)]
+else:
+    df_grafico = df_filtrado.copy()
+
+if df_grafico.empty:
     st.warning("No hay registros para los filtros seleccionados.")
     st.stop()
 
 # --- CONSTRUCCIÓN DE LA GRÁFICA DE DISPERSIÓN ---
-st.markdown("<br>", unsafe_allow_html=True)
-
 media_srpe = df_filtrado['sRPE'].mean()
 media_ua = df_filtrado['Carga_UA'].mean()
 
 fig = px.scatter(
-    df_filtrado,
+    df_grafico,
     x="sRPE",
     y="Carga_UA",
     color="Nombre_Oficial",
+    custom_data=["Nombre_Oficial", "Fecha", "Tipo_Sesion"],
     hover_data=["Fecha", "Tipo_Sesion", "Minutos", "RPE_G", "Dist_Total"],
-    title="Matriz Dosis-Respuesta (sRPE vs Carga UA)",
     labels={
         "sRPE": "Carga Interna (sRPE) → [RPE * Duración]",
         "Carga_UA": "Carga Externa Ponderada (UA) ↑",
@@ -234,50 +259,45 @@ fig = px.scatter(
     template="plotly_dark"
 )
 
-# Aumentar tamaño de puntos y estilos
+# Estilo de puntos
 fig.update_traces(marker=dict(size=14, line=dict(width=1, color='White')))
 
-# Líneas de referencia para los cuadrantes (Medias)
-fig.add_vline(x=media_srpe, line=dict(color="#F1C40F", width=2, dash="dash"))
-fig.add_hline(y=media_ua, line=dict(color="#F1C40F", width=2, dash="dash"))
-
-# Anotaciones explicativas de Cuadrantes
-max_x = df_filtrado['sRPE'].max() or 100
-max_y = df_filtrado['Carga_UA'].max() or 100
-
-fig.add_annotation(
-    x=max_x * 0.9, y=max_y * 0.95,
-    text="<b>ALTA EXIGENCIA TOTAL</b><br>(Carga Alta + Percepción Alta)",
-    showarrow=False, font=dict(color="#E74C3C", size=11), align="right"
-)
-fig.add_annotation(
-    x=df_filtrado['sRPE'].min(), y=max_y * 0.95,
-    text="<b>ALTA EFICIENCIA / ASIMILACIÓN</b><br>(Carga Alta + Percepción Baja)",
-    showarrow=False, font=dict(color="#2ECC71", size=11), align="left"
-)
-fig.add_annotation(
-    x=max_x * 0.9, y=df_filtrado['Carga_UA'].min(),
-    text="<b>DESPROPORCIÓN / FATIGA</b><br>(Carga Baja + Percepción Alta)",
-    showarrow=False, font=dict(color="#E67E22", size=11), align="right"
-)
-fig.add_annotation(
-    x=df_filtrado['sRPE'].min(), y=df_filtrado['Carga_UA'].min(),
-    text="<b>RECUPERACIÓN / BAJA CARGA</b><br>(Carga Baja + Percepción Baja)",
-    showarrow=False, font=dict(color="#3498DB", size=11), align="left"
-)
+# Líneas cruzadas de la media global
+fig.add_vline(x=media_srpe, line=dict(color="#F1C40F", width=1.5, dash="dash"))
+fig.add_hline(y=media_ua, line=dict(color="#F1C40F", width=1.5, dash="dash"))
 
 fig.update_layout(
     height=600,
     plot_bgcolor='rgba(0,0,0,0.2)',
     paper_bgcolor='rgba(0,0,0,0)',
-    legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
-    margin=dict(l=20, r=20, t=50, b=100)
+    legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5),
+    margin=dict(l=20, r=20, t=30, b=80)
 )
 
-st.plotly_chart(fig, use_container_width=True)
-
-# --- RESUMEN MÉTRICO ---
-c_m1, c_m2, c_m3 = st.columns(3)
-with c_m1: st.metric("Media Carga Interna (sRPE)", f"{media_srpe:.1f}")
-with c_m2: st.metric("Media Carga Externa (UA)", f"{media_ua:.0f}")
-with c_m3: st.metric("Total Sesiones Analizadas", f"{len(df_filtrado)}")
+# 2. CAPTURA DE CLICS EN LOS CÍRCULOS DEL GRÁFICO
+dosis_chart_key = f"dosis_chart_{st.session_state.dosis_key}"
+try:
+    seleccion_dosis = st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={'displayModeBar': False},
+        on_select="rerun",
+        selection_mode=["points", "box", "lasso"],
+        key=dosis_chart_key
+    )
+    
+    if seleccion_dosis and hasattr(seleccion_dosis, 'selection'):
+        pts = getattr(seleccion_dosis.selection, 'points', [])
+        cambio = False
+        for p in pts:
+            cd = p.get('customdata')
+            if cd:
+                nom_j = cd[0] if isinstance(cd, list) else cd
+                if nom_j not in st.session_state.jugadores_seleccionados_dosis:
+                    st.session_state.jugadores_seleccionados_dosis.append(nom_j)
+                    cambio = True
+        if cambio:
+            st.session_state.dosis_key += 1
+            st.rerun()
+except Exception:
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
