@@ -6,10 +6,12 @@ import glob
 import requests
 import io
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 from utils import aplicar_diseno_responsive
 
-# 1. Configuración básica
+# =============================================================================
+# 1. CONFIGURACIÓN Y SEGURIDAD
+# =============================================================================
 aplicar_diseno_responsive()
 
 st.set_page_config(
@@ -22,11 +24,35 @@ if 'logeado' not in st.session_state or not st.session_state['logeado']:
     st.warning("⚠️ Por favor, inicia sesión en la página principal para acceder.")
     st.stop()
 
-# 2. Variables de sesión
+_carpeta_pages = os.path.dirname(os.path.abspath(__file__))
+_ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
+
+if os.path.exists(_ruta_logo):
+    with open(_ruta_logo, "rb") as _f:
+        import base64
+        _b64 = base64.b64encode(_f.read()).decode()
+        
+    st.sidebar.markdown(f"""
+        <style>
+        .footer-sello-unico {{
+            position: fixed; bottom: 20px; left: 10px; width: 260px; text-align: center;
+            z-index: 999; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }}
+        .footer-sello-unico img {{ width: 195px; height: auto; margin-bottom: 8px; }}
+        .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
+        </style>
+        <div class="footer-sello-unico">
+            <img src="data:image/png;base64,{_b64}">
+            <p>© 2026 All Rights Reserved</p>
+        </div>
+    """, unsafe_allow_html=True)
+
 if 'jugadores_seleccionados_dosis' not in st.session_state:
     st.session_state.jugadores_seleccionados_dosis = []
 
-# 3. Funciones auxiliares
+# =============================================================================
+# 2. CARGA DE DATOS SEGURA Y RÁPIDA
+# =============================================================================
 def descargar_csv_drive(sheet_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -34,15 +60,16 @@ def descargar_csv_drive(sheet_id, gid):
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             return pd.read_csv(io.StringIO(res.text))
-    except:
+    except Exception:
         pass
     return pd.DataFrame()
 
 @st.cache_data(ttl=60)
 def cargar_datos_basicos():
-    # Descargar RPE
+    # RPE
     df_rpe_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
-    if df_rpe_raw.empty: return pd.DataFrame()
+    if df_rpe_raw.empty:
+        return pd.DataFrame()
     
     cols = df_rpe_raw.columns
     col_f = next((c for c in cols if 'marca' in str(c).lower() or 'fecha' in str(c).lower()), cols[0])
@@ -66,7 +93,7 @@ def cargar_datos_basicos():
     df_rpe['RPE_G'] = (val_c + val_m) / 2
     df_rpe['sRPE'] = df_rpe['RPE_G'] * df_rpe['Minutos']
 
-    # Cargar GPS
+    # GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -105,16 +132,18 @@ def cargar_datos_basicos():
                 df_l['V_MAX'] = df_temp[col_vmax].apply(fix_num) if col_vmax else 0.0
 
                 lista_dfs.append(df_l.dropna(subset=['Fecha']))
-            except: continue
+            except Exception:
+                continue
 
         if lista_dfs:
             df_gps = pd.concat(lista_dfs, ignore_index=True)
-            if df_gps['Dist_Total'].max() < 25:
+            if not df_gps.empty and df_gps['Dist_Total'].max() < 25:
                 df_gps['Dist_Total'] *= 1000
                 df_gps['Dist_18'] *= 1000
                 df_gps['Dist_25'] *= 1000
 
-    if df_gps.empty: return pd.DataFrame()
+    if df_gps.empty:
+        return pd.DataFrame()
 
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
     df_base['Carga_UA'] = (
@@ -126,16 +155,17 @@ def cargar_datos_basicos():
 
     return df_base
 
-# 4. Renderizado
+# =============================================================================
+# 3. RENDERIZADO DE INTERFAZ
+# =============================================================================
 st.title("DOSIS - RESPUESTA")
 st.markdown("---")
 
 df_dosis = cargar_datos_basicos()
 
 if df_dosis.empty:
-    st.info("🚧 Cargando o sin datos de GPS/RPE suficientes.")
+    st.info("🚧 No hay suficientes datos coincidentes de GPS y RPE para mostrar el análisis.")
 else:
-    # Filtros
     c1, c2 = st.columns([1, 2])
     with c1:
         tipo_sel = st.selectbox("Tipo Sesión:", ["Todos"] + sorted(list(df_dosis['Tipo_Sesion'].unique())))
@@ -144,25 +174,37 @@ else:
         rango = st.slider("Fechas:", min_value=fechas[0], max_value=fechas[-1], value=(fechas[0], fechas[-1]))
 
     df_f = df_dosis.copy()
-    if tipo_sel != "Todos": df_f = df_f[df_f['Tipo_Sesion'] == tipo_sel]
-    df_f = df_f[(df_f['Fecha'] >= rango[0].strftime('%Y-%m-%d')) & (df_f['Fecha'] <= rango[1].strftime('%Y-%m-%d'))]
-
-    # Gráfico Dispersión
-    fig = px.scatter(
-        df_f, x="sRPE", y="Carga_UA", color="Nombre_Oficial",
-        title="Dosis (Carga UA) vs Respuesta (sRPE)",
-        template="plotly_dark"
-    )
-    fig.update_traces(marker=dict(size=12))
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Matriz de Correlación básica
-    st.markdown("### 📊 Matriz de Correlaciones")
-    cols_corr = ['sRPE', 'Carga_UA', 'Dist_Total', 'Dist_18', 'Dist_25', 'V_MAX']
-    cols_ok = [c for c in cols_corr if c in df_f.columns]
+    if tipo_sel != "Todos":
+        df_f = df_f[df_f['Tipo_Sesion'] == tipo_sel]
     
-    if len(cols_ok) > 1:
-        matriz = df_f[cols_ok].corr()
-        fig_corr = px.imshow(matriz, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
-        fig_corr.update_layout(template="plotly_dark", height=450)
-        st.plotly_chart(fig_corr, use_container_width=True)
+    f_ini_str = rango[0].strftime('%Y-%m-%d')
+    f_fin_str = rango[1].strftime('%Y-%m-%d')
+    df_f = df_f[(df_f['Fecha'] >= f_ini_str) & (df_f['Fecha'] <= f_fin_str)]
+
+    if df_f.empty:
+        st.warning("No hay registros en el rango seleccionado.")
+    else:
+        # Gráfico Dispersión
+        fig = px.scatter(
+            df_f, x="sRPE", y="Carga_UA", color="Nombre_Oficial",
+            title="Dosis (Carga UA) vs Respuesta (sRPE)",
+            labels={
+                "sRPE": "Carga Interna (sRPE)",
+                "Carga_UA": "Carga Externa Ponderada (UA)",
+                "Nombre_Oficial": "Jugador"
+            },
+            template="plotly_dark"
+        )
+        fig.update_traces(marker=dict(size=12))
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Matriz de Correlación
+        st.markdown("### 📊 Matriz de Correlaciones")
+        cols_corr = ['sRPE', 'Carga_UA', 'Dist_Total', 'Dist_18', 'Dist_25', 'V_MAX']
+        cols_ok = [c for c in cols_corr if c in df_f.columns]
+        
+        if len(cols_ok) > 1:
+            matriz = df_f[cols_ok].corr()
+            fig_corr = px.imshow(matriz, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
+            fig_corr.update_layout(template="plotly_dark", height=450)
+            st.plotly_chart(fig_corr, use_container_width=True)
