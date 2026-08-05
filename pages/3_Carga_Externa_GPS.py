@@ -342,8 +342,13 @@ for m in metricas_todas:
         df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
-# 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS CON CONEXIÓN AL GRÁFICO
+# 4. INTERFAZ Y ESTADO GLOBAL DE RADAR
 # =============================================================================
+if 'partidos_radar' not in st.session_state:
+    st.session_state.partidos_radar = []
+if 'grafico_key' not in st.session_state:
+    st.session_state.grafico_key = 0
+
 st.markdown("""
     <div style="margin-bottom: 5px;">
         <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
@@ -351,13 +356,18 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Lógica del Filtro Maestro desde el gráfico de Dispersión
 idx_fecha_seleccionada = 0
-if 'scatter_partidos' in st.session_state:
-    puntos_grafico = st.session_state.scatter_partidos.get('selection', {}).get('points', [])
+scatter_key = f"scatter_partidos_{st.session_state.grafico_key}"
+if scatter_key in st.session_state:
+    puntos_grafico = st.session_state[scatter_key].get('selection', {}).get('points', []) if isinstance(st.session_state[scatter_key], dict) else []
     fechas_grafico = [p.get('customdata') for p in puntos_grafico if 'customdata' in p]
-    if fechas_grafico and fechas_grafico[0] in fechas_disp:
-        idx_fecha_seleccionada = fechas_disp.index(fechas_grafico[0])
+    
+    for fg in fechas_grafico:
+        if fg not in st.session_state.partidos_radar:
+            st.session_state.partidos_radar.append(fg)
+            
+    if fechas_grafico and fechas_grafico[-1] in fechas_disp:
+        idx_fecha_seleccionada = fechas_disp.index(fechas_grafico[-1])
 
 col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1: 
@@ -840,6 +850,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
+        # Los filtros ahora viven DENTRO de la columna del gráfico de dispersión
         c_r1, c_r2, c_r3 = st.columns(3)
         with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
         with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
@@ -853,12 +864,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         df_scatter_filt = df_scatter[df_scatter['Resultado_Codificado'].isin(valid_results)].reset_index(drop=True)
         
         if not df_scatter_filt.empty:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Pincha en los escudos para cargar el partido en el panel superior, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
             
             x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
             y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
             
-            # Anti-Zoom: Si hay solo 1 punto o están muy juntos, forzamos un rango mínimo
             if (x_max - x_min) < 1000:
                 x_center = (x_max + x_min) / 2
                 x_min, x_max = x_center - 500, x_center + 500
@@ -872,7 +882,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             fig_sc = go.Figure()
             hover_text = df_scatter_filt['Rival'] + '<br>' + df_scatter_filt['Fecha'] + ' (' + df_scatter_filt['Local_Visitante'] + ')<br>Resultado: ' + df_scatter_filt['Resultado']
             
-            # Trazado invisible para los clics
             fig_sc.add_trace(go.Scatter(
                 x=df_scatter_filt['Dist_Total'], y=df_scatter_filt['Dist_18'],
                 customdata=df_scatter_filt['Fecha'], 
@@ -918,7 +927,17 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
 
     with col_sc2:
         if not df_scatter_filt.empty:
-            st.markdown("<div style='padding-top: 0px;'><p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px;'>Radar de Exigencia Relativa (0-100%)</p></div>", unsafe_allow_html=True)
+            # Quitamos los <br> que lo empujaban hacia abajo para mantener la altura y simetría
+            c_tit1, c_tit2 = st.columns([3, 1.2])
+            with c_tit1:
+                st.markdown("<p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px; margin-top:5px;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
+            with c_tit2:
+                if st.button("🧹 Limpiar", use_container_width=True):
+                    st.session_state.partidos_radar = []
+                    st.session_state.grafico_key += 1
+                    st.rerun()
+            
+            fechas_radar = st.session_state.partidos_radar
             
             if len(fechas_radar) > 0:
                 df_radar = df_scatter_filt[df_scatter_filt['Fecha'].isin(fechas_radar)]
@@ -938,6 +957,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
+                # Radar Maxi-Size de 580px
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
                     showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
