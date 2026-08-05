@@ -342,7 +342,7 @@ for m in metricas_todas:
         df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
-# 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
+# 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS CON CONEXIÓN AL GRÁFICO
 # =============================================================================
 st.markdown("""
     <div style="margin-bottom: 5px;">
@@ -351,9 +351,17 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# Lógica del Filtro Maestro desde el gráfico de Dispersión
+idx_fecha_seleccionada = 0
+if 'scatter_partidos' in st.session_state:
+    puntos_grafico = st.session_state.scatter_partidos.get('selection', {}).get('points', [])
+    fechas_grafico = [p.get('customdata') for p in puntos_grafico if 'customdata' in p]
+    if fechas_grafico and fechas_grafico[0] in fechas_disp:
+        idx_fecha_seleccionada = fechas_disp.index(fechas_grafico[0])
+
 col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1: 
-    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
+    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp, index=idx_fecha_seleccionada)
 with col_f2:
     posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
     pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
@@ -844,21 +852,32 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
         with col_sc1:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Pincha en los escudos para compararlos en el radar 👉</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Pincha en los escudos para cargar el partido en el panel superior, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
+            
+            x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
+            y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
+            
+            # Anti-Zoom: Si hay solo 1 punto o están muy juntos, forzamos un rango mínimo
+            if (x_max - x_min) < 1000:
+                x_center = (x_max + x_min) / 2
+                x_min, x_max = x_center - 500, x_center + 500
+            if (y_max - y_min) < 100:
+                y_center = (y_max + y_min) / 2
+                y_min, y_max = y_center - 50, y_center + 50
+                
+            r_x = x_max - x_min
+            r_y = y_max - y_min
             
             fig_sc = go.Figure()
             hover_text = df_scatter_filt['Rival'] + '<br>' + df_scatter_filt['Fecha'] + ' (' + df_scatter_filt['Local_Visitante'] + ')<br>Resultado: ' + df_scatter_filt['Resultado']
             
-            # Trazado invisible para capturar los clics encima de los escudos
+            # Trazado invisible para los clics
             fig_sc.add_trace(go.Scatter(
                 x=df_scatter_filt['Dist_Total'], y=df_scatter_filt['Dist_18'],
-                mode='markers', marker=dict(size=30, color='rgba(0,0,0,0)'),
+                customdata=df_scatter_filt['Fecha'], 
+                mode='markers', marker=dict(size=40, color='rgba(0,0,0,0)'),
                 text=hover_text, hoverinfo='text', hoverlabel=dict(bgcolor="#2C3E50", font_size=14)
             ))
-            
-            # Incorporación de Escudos GRANDES en las Coordenadas
-            r_x = (df_scatter_filt['Dist_Total'].max() - df_scatter_filt['Dist_Total'].min()) or 1000
-            r_y = (df_scatter_filt['Dist_18'].max() - df_scatter_filt['Dist_18'].min()) or 100
             
             images = []
             for _, row in df_scatter_filt.iterrows():
@@ -866,11 +885,10 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     source=row['Escudo'],
                     x=row['Dist_Total'], y=row['Dist_18'],
                     xref="x", yref="y",
-                    sizex=r_x * 0.35, sizey=r_y * 0.35, # Multiplicador enorme para que se vean grandes
+                    sizex=r_x * 0.15, sizey=r_y * 0.15, 
                     xanchor="center", yanchor="middle"
                 ))
             
-            # Añadimos líneas de medias (cuadrantes)
             colores_res = {'G': '#2ECC71', 'E': '#F1C40F', 'P': '#E74C3C'}
             for res in valid_results:
                 df_res = df_scatter_filt[df_scatter_filt['Resultado_Codificado'] == res]
@@ -882,48 +900,24 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             
             fig_sc.update_layout(
                 images=images, template="plotly_dark", height=450,
-                xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
-                yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[x_min - r_x*0.1, x_max + r_x*0.1]),
+                yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[y_min - r_y*0.1, y_max + r_y*0.1]),
                 plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
             )
             
-            # SISTEMA INTERACTIVO: Captura los clics del usuario en la gráfica
             try:
-                seleccion = st.plotly_chart(
-                    fig_sc, 
-                    use_container_width=True, 
-                    config={'displayModeBar': False}, 
-                    on_select="rerun", 
-                    selection_mode=["points", "box", "lasso"]
-                )
-                puntos_seleccionados = seleccion.selection.points if seleccion and hasattr(seleccion, 'selection') else []
-                indices_seleccionados = [p['pointIndex'] for p in puntos_seleccionados]
-                interactivo_nativo = True
-            except TypeError:
-                # Fallback de seguridad si la versión de Streamlit es antigua
+                seleccion = st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False}, on_select="rerun", selection_mode=["points", "box", "lasso"], key="scatter_partidos")
+                pts = seleccion.get('selection', {}).get('points', []) if seleccion else []
+                fechas_radar = [p.get('customdata') for p in pts if 'customdata' in p]
+            except:
                 st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
-                interactivo_nativo = False
-                indices_seleccionados = []
+                fechas_radar = []
 
         with col_sc2:
             st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
             
-            df_radar = pd.DataFrame()
-            
-            if interactivo_nativo:
-                if len(indices_seleccionados) > 0:
-                    df_radar = df_scatter_filt.iloc[indices_seleccionados]
-                else:
-                    st.info("👆 Haz clic en los escudos de la gráfica (o arrastra un recuadro sobre ellos) para compararlos en el radar.")
-            else:
-                opciones_partidos = df_scatter_filt['Rival'] + " (" + df_scatter_filt['Fecha'] + ")"
-                seleccion_manual = st.multiselect("Selecciona partidos a comparar:", opciones_partidos)
-                if seleccion_manual:
-                    df_radar = df_scatter_filt[opciones_partidos.isin(seleccion_manual)]
-                else:
-                    st.info("Selecciona partidos en el desplegable de arriba para compararlos.")
-            
-            if not df_radar.empty:
+            if len(fechas_radar) > 0:
+                df_radar = df_scatter_filt[df_scatter_filt['Fecha'].isin(fechas_radar)]
                 df_maximos = df_scatter[metricas_todas].max().replace(0, 1) 
                 nombres_metricas_radar = [metricas_tabla[m] for m in metricas_todas]
                 
@@ -933,10 +927,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                 for i, (_, row) in enumerate(df_radar.iterrows()):
                     vals = (row[metricas_todas] / df_maximos * 100).tolist()
                     color_r = colores_radar[i % len(colores_radar)]
+                    color_r_fill = color_r.replace(')', ', 0.4)').replace('rgb', 'rgba') if 'rgb' in color_r else color_r
                     
                     fig_radar.add_trace(go.Scatterpolar(
                         r=vals + [vals[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
-                        fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r.replace(')', ', 0.4)').replace('rgb', 'rgba') if 'rgb' in color_r else color_r, opacity=0.8
+                        fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
                 fig_radar.update_layout(
@@ -945,6 +940,8 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     template="plotly_dark", height=350, margin=dict(l=30, r=30, t=20, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("👆 Selecciona uno o varios escudos en el gráfico para ver la comparativa aquí.")
     else:
         st.info("No hay partidos con el resultado seleccionado o aún no hay datos cruzados.")
 else:
