@@ -143,7 +143,7 @@ def cargar_archivos_gps():
     return pd.DataFrame()
 
 # =============================================================================
-# 3. PROCESAMIENTO, CRUCE Y MODELO DE JUEGO (PERIODIZACIÓN)
+# 3. PROCESAMIENTO Y MODELO DE JUEGO (PERIODIZACIÓN POR RANGOS)
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
@@ -190,41 +190,42 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-def get_target_pct(metrica, tipo_dia, jugo_60):
+# --- DICCIONARIO DE RANGOS DE PERIODIZACIÓN TÁCTICA (MIN, MAX) ---
+def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
-    if 'partido' in t: return 100
+    if 'partido' in t: return (100, 100)
     is_plus = '+1' in t or '+2' in t
     
     if metrica == 'Dist_Total':
-        if '-4' in t: return 50
-        if '-3' in t: return 62.5
-        if '-2' in t: return 25
-        if '-1' in t: return 35
-        if is_plus: return 25 if jugo_60 else 60
+        if '-4' in t: return (45, 55)
+        if '-3' in t: return (55, 70)
+        if '-2' in t: return (20, 30)
+        if '-1' in t: return (30, 40)
+        if is_plus: return (20, 30) if jugo_60 else (55, 65)
     elif metrica == 'Dist_18':
-        if '-4' in t: return 60
-        if '-3' in t: return 57.5
-        if '-2' in t or '-1' in t: return 25
-        if is_plus: return 40 if jugo_60 else 45
+        if '-4' in t: return (55, 65)
+        if '-3' in t: return (50, 65)
+        if '-2' in t or '-1' in t: return (20, 30)
+        if is_plus: return (0, 40) if jugo_60 else (40, 50)
     elif metrica == 'Dist_25':
-        if '-4' in t: return 10
-        if '-3' in t: return 70
-        if '-2' in t: return 10
-        if '-1' in t: return 2.5
-        if is_plus: return 0 if jugo_60 else 45
+        if '-4' in t: return (0, 20)
+        if '-3' in t: return (50, 90)
+        if '-2' in t: return (5, 15)
+        if '-1' in t: return (0, 5)
+        if is_plus: return (0, 10) if jugo_60 else (40, 50)
     elif metrica in ['Accels', 'Decels']:
-        if '-4' in t: return 65
-        if '-3' in t: return 57.5
-        if '-2' in t: return 30
-        if '-1' in t: return 15
-        if is_plus: return 30 if jugo_60 else 65 
+        if '-4' in t: return (60, 70)
+        if '-3' in t: return (50, 65)
+        if '-2' in t: return (20, 40)
+        if '-1' in t: return (10, 20)
+        if is_plus: return (10, 30) if jugo_60 else (60, 70) 
     elif metrica == 'Player_Load':
-        if '-4' in t: return 60
-        if '-3' in t: return 57.5
-        if '-2' in t: return 30
-        if '-1' in t: return 25
-        if is_plus: return 25 if jugo_60 else 60
-    return 50
+        if '-4' in t: return (55, 65)
+        if '-3' in t: return (50, 65)
+        if '-2' in t: return (20, 40)
+        if '-1' in t: return (20, 30)
+        if is_plus: return (20, 30) if jugo_60 else (55, 65)
+    return (50, 50) # Fallback
 
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
@@ -248,8 +249,11 @@ else:
 for m in metricas_todas:
     if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
+# Asignamos los porcentajes mínimos, máximos y el valor absoluto medio para la sesión
 for m in metricas_todas:
-    df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (get_target_pct(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido']) / 100), axis=1)
+    df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
+    df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
+    df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS
@@ -271,13 +275,23 @@ with col_f2:
 if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
 
-# --- SISTEMA DE ALERTAS INDEPENDIENTES (MICROCICLO 7 DÍAS) EN UNA SOLA FILA COMPACTA ---
+# --- CÁLCULO DEL MICROCICLO (ENTRE PARTIDOS) ---
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
-fecha_inicio_sem = fecha_datetime - timedelta(days=6)
-df_sem = df_master[(df_master['Fecha'] >= fecha_inicio_sem.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
+df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
+# Buscamos el último partido antes de la fecha seleccionada
+df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
+if not df_partidos_prev.empty:
+    last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
+    fecha_inicio_sem = last_match_date + timedelta(days=1)
+else:
+    fecha_inicio_sem = fecha_datetime - timedelta(days=6) # Fallback si no hay partidos previos
+
+df_sem = df_master[(df_fechas >= fecha_inicio_sem) & (df_fechas <= fecha_datetime)]
+
+# --- SISTEMA DE ALERTAS INDEPENDIENTES ---
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
-df_28d = df_master[(df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
+df_28d = df_master[(df_fechas >= fecha_inicio_vmax) & (df_fechas <= fecha_datetime)]
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 
 df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
@@ -285,8 +299,8 @@ df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed']
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
 
 metricas_alerta = {
-    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 
-    'Accels': 'Aceleraciones', 'Decels': 'Desacel.', 'Player_Load': 'Load'
+    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 
+    'Accels': 'Aceleraciones', 'Decels': 'Desacel.', 'Player_Load': 'Player Load'
 }
 
 jugadores_vmax_peligro = []
@@ -299,28 +313,35 @@ for jug in df_sem['Nombre'].unique():
         jugadores_vmax_peligro.append((jug, hits_vmax))
         
     for m_key in metricas_alerta.keys():
-        target_sum = df_j[f'Target_{m_key}'].sum()
-        real_sum = df_j[m_key].sum()
-        if target_sum > 0 and (real_sum / target_sum) < 0.90:
-            pct_logrado = (real_sum / target_sum) * 100
-            alertas_metricas[m_key].append((jug, pct_logrado))
+        expected_min = df_j[f'Target_Min_Pct_{m_key}'].sum()
+        expected_max = df_j[f'Target_Max_Pct_{m_key}'].sum()
+        
+        actual_abs = df_j[m_key].sum()
+        ref_partido = target_refs_global[m_key]
+        actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
+        
+        # Si el jugador acumula menos % real de partido que el % mínimo exigido
+        if expected_min > 0 and actual_pct < expected_min:
+            texto_alerta = f"{actual_pct:.0f}% / {expected_min:.0f}-{expected_max:.0f}%"
+            alertas_metricas[m_key].append((jug, texto_alerta))
 
 total_avisos = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas_metricas.values())
 
 st.markdown("<br>", unsafe_allow_html=True)
-with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Avisos de Subcarga", expanded=False):
-    # Creamos exactamente 7 columnas limpias para una sola fila
+str_fechas = f"Microciclo desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fecha_datetime.strftime('%d/%m')}"
+with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} Avisos de Subcarga", expanded=False):
     cols_alertas = st.columns(7)
     
     def generar_lista_html(titulo, lista, es_vmax=False):
-        html = f"<div style='font-size: 13px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
+        html = f"<div style='font-size: 14px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
         if not lista:
-            html += "<div style='font-size: 12px; color: #2ECC71;'>✅ Todo OK</div>"
+            html += "<div style='font-size: 13px; color: #2ECC71;'>✅ Todo OK</div>"
         else:
             color_texto = "#E74C3C" if es_vmax else "#F39C12"
             for item in lista:
-                val_str = f"{item[1]}v" if es_vmax else f"{item[1]:.0f}%"
-                html += f"<div style='font-size: 11px; color: {color_texto}; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
+                val_str = f"{item[1]}v" if es_vmax else item[1]
+                # Aumentamos fuente a 14px para mejor legibilidad
+                html += f"<div style='font-size: 14px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
         return html
 
     with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
