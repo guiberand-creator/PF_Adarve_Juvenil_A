@@ -272,24 +272,35 @@ df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
 
-# Resumen por jugador
+# Resumen por jugador (Analizando TODAS las variables clave)
 resumen_sem = []
+metricas_alerta = {
+    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist >18', 'Dist_25': 'Dist >25', 
+    'Accels': 'Acel.', 'Decels': 'Desac.', 'Player_Load': 'Load'
+}
+
 for jug in df_sem['Nombre'].unique():
     df_j = df_sem[df_sem['Nombre'] == jug]
     hits_vmax = df_j['Hit_90'].sum()
     
-    # Calcular cumplimiento de carga (usando Dist Total como termómetro general)
-    target_sum = df_j['Target_Dist_Total'].sum()
-    real_sum = df_j['Dist_Total'].sum()
-    cumplimiento = (real_sum / target_sum * 100) if target_sum > 0 else 100
-    
-    resumen_sem.append({'Jugador': jug, 'Hits_Vmax': hits_vmax, 'Cumplimiento': cumplimiento})
+    # Calcular cumplimiento de carga para todas las variables
+    fallos_carga = []
+    for m_key, m_name in metricas_alerta.items():
+        target_sum = df_j[f'Target_{m_key}'].sum()
+        real_sum = df_j[m_key].sum()
+        
+        # Si tenía un objetivo programado y no ha llegado al 90% de ese acumulado, lo apuntamos
+        if target_sum > 0 and (real_sum / target_sum) < 0.90:
+            fallos_carga.append(m_name)
+            
+    resumen_sem.append({'Jugador': jug, 'Hits_Vmax': hits_vmax, 'Fallos': fallos_carga})
 
 df_alertas = pd.DataFrame(resumen_sem)
 alertas_vmax = df_alertas[df_alertas['Hits_Vmax'] < 2]
-alertas_carga = df_alertas[df_alertas['Cumplimiento'] < 90]
+alertas_carga = df_alertas[df_alertas['Fallos'].apply(len) > 0]
+total_avisos = len(alertas_vmax) + len(alertas_carga)
 
-with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {len(alertas_vmax) + len(alertas_carga)} Avisos", expanded=False):
+with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {total_avisos} Jugadores con Avisos", expanded=False):
     col_a1, col_a2 = st.columns(2)
     with col_a1:
         st.markdown("**🏃‍♂️ Riesgo Isquios (Vmax < 90% menos de 2 veces/sem)**")
@@ -297,10 +308,12 @@ with st.expander(f"🚨 ALERTAS MICROCICLO (Últimos 7 días) - {len(alertas_vma
             for _, r in alertas_vmax.iterrows(): st.error(f"• {r['Jugador']} (Tocado {r['Hits_Vmax']} veces)")
         else: st.success("Todo el equipo ha estado expuesto a la Vmax.")
     with col_a2:
-        st.markdown("**🔋 Subcarga (Acumulado Dist. Total < 90% de lo programado)**")
+        st.markdown("**🔋 Subcarga (Acumulado < 90% de lo programado)**")
         if not alertas_carga.empty:
-            for _, r in alertas_carga.iterrows(): st.warning(f"• {r['Jugador']} ({r['Cumplimiento']:.0f}% del objetivo)")
-        else: st.success("Todo el equipo ha cumplido la carga táctica.")
+            for _, r in alertas_carga.iterrows(): 
+                lista_fallos = ", ".join(r['Fallos'])
+                st.warning(f"• {r['Jugador']} (Falla en: {lista_fallos})")
+        else: st.success("Todo el equipo ha cumplido la carga programada en todas las variables.")
 
 st.markdown("---")
 
