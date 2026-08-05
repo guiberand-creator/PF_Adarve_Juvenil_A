@@ -78,8 +78,8 @@ def cargar_matriz_completa():
         col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
         col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
         
-        # Nuevas variables del RPE
-        col_animo = next((c for c in cols if 'animo' in str(c).lower() or 'ánimo' in str(c).lower()), None)
+        # Nuevas variables del RPE (Buscamos las palabras clave)
+        col_animo = next((c for c in cols if 'animo' in str(c).lower() or 'ánimo' in str(c).lower() or 'estado' in str(c).lower()), None)
         col_res = next((c for c in cols if 'resultado' in str(c).lower() or 'partido' in str(c).lower()), None)
 
         df_rpe['Fecha'] = pd.to_datetime(df_rpe_raw[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
@@ -94,7 +94,6 @@ def cargar_matriz_completa():
         
         df_rpe['Estado_Animo'] = pd.to_numeric(df_rpe_raw[col_animo], errors='coerce') if col_animo else np.nan
         
-        # Mapeo numérico del resultado: Ganar=3, Empatar=1, Perder=0
         if col_res:
             df_rpe['Resultado_Partido'] = df_rpe_raw[col_res].astype(str).str.lower().apply(
                 lambda x: 3 if 'gan' in x else (1 if 'emp' in x else (0 if 'perd' in x else np.nan))
@@ -135,10 +134,11 @@ def cargar_matriz_completa():
                 df_l['Nombre_Cruce'] = df_t[cn].astype(str).str.strip().str.lower()
                 df_l['Dist_Total'] = df_t[b_col(['distancia total', 'distance'])].apply(fn) if b_col(['distancia total', 'distance']) else 0.0
                 df_l['Dist_18'] = df_t[b_col(['> 18', '>18'])].apply(fn) if b_col(['> 18', '>18']) else 0.0
+                df_l['Dist_25'] = df_t[b_col(['> 25', '>25'])].apply(fn) if b_col(['> 25', '>25']) else 0.0
                 
                 accels = df_t[b_col(['aceleraciones', 'accel'])].apply(fn) if b_col(['aceleraciones', 'accel']) else 0.0
                 decels = df_t[b_col(['desaceleraciones', 'decel'])].apply(fn) if b_col(['desaceleraciones', 'decel']) else 0.0
-                df_l['Acc_Dec'] = accels + decels  # Suma solicitada
+                df_l['Acc_Dec'] = accels + decels  
                 
                 df_l['V_MAX'] = df_t[b_col(['v. max', 'v.max', 'top speed'])].apply(fn) if b_col(['v. max', 'v.max', 'top speed']) else 0.0
                 df_l['AC_MAX'] = df_t[b_col(['ac. max', 'acc. max'])].apply(fn) if b_col(['ac. max', 'acc. max']) else 0.0
@@ -149,14 +149,16 @@ def cargar_matriz_completa():
                 
         if lista_dfs:
             df_gps = pd.concat(lista_dfs, ignore_index=True)
-            if df_gps['Dist_Total'].max() < 25: 
+            if not df_gps.empty and df_gps['Dist_Total'].max() < 25: 
                 df_gps['Dist_Total'] *= 1000
                 df_gps['Dist_18'] *= 1000
+                df_gps['Dist_25'] *= 1000
 
     if df_gps.empty or df_rpe.empty: return pd.DataFrame()
 
-    # FUSIÓN BASE: GPS + RPE
+    # FUSIÓN BASE: GPS + RPE y Cálculo de Carga UA
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
+    df_base['Carga_UA'] = (df_base['Dist_Total'] + (df_base['Dist_18']*2) + (df_base['Dist_25']*4) + (df_base['Acc_Dec']*1.5)) * df_base['RPE_G']
     df_base['Fecha_dt'] = pd.to_datetime(df_base['Fecha'])
     df_base = df_base.sort_values('Fecha_dt')
 
@@ -169,12 +171,11 @@ def cargar_matriz_completa():
         df_w_raw['Wellness'] = df_w_raw[c_items].apply(pd.to_numeric, errors='coerce').sum(axis=1) if c_items else np.nan
         df_w_raw['Fecha_W'] = pd.to_datetime(df_w_raw[cw_f], dayfirst=True, errors='coerce')
         df_w_raw['Nombre_Cruce'] = df_w_raw[cw_n].fillna('').astype(str).str.strip().str.lower()
-        # Aquí cruzamos CON EL MISMO DÍA (sin restar 1)
         df_w_raw['Fecha'] = df_w_raw['Fecha_W'].dt.strftime('%Y-%m-%d')
         df_w_clean = df_w_raw.groupby(['Fecha', 'Nombre_Cruce'])['Wellness'].mean().reset_index()
         df_base = pd.merge(df_base, df_w_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
 
-    # 4. AÑADIR EVALUACIONES FÍSICAS (Último test previo a la sesión)
+    # 4. AÑADIR EVALUACIONES FÍSICAS (Último test previo)
     def cruzar_evaluacion(df_eval, col_valor, nuevo_nombre):
         if not df_eval.empty and col_valor in df_eval.columns:
             df_eval = df_eval.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
@@ -239,7 +240,7 @@ df_dosis = cargar_matriz_completa()
 st.markdown("""
     <div>
         <h1 style="margin-bottom: 0px;">DOSIS - RESPUESTA</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Análisis de matrices de correlación separadas por variables diarias y evaluaciones periódicas.</p>
+        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Análisis integral de Carga y matrices de correlación separadas.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -273,13 +274,41 @@ with c_b:
 df_g = df_f[df_f['Nombre_Oficial'].isin(st.session_state.jugadores_seleccionados_dosis)] if st.session_state.jugadores_seleccionados_dosis else df_f.copy()
 
 if df_g.empty:
-    st.warning("No hay registros.")
+    st.warning("No hay registros en el rango seleccionado.")
     st.stop()
 
 # =============================================================================
-# 4. MATRICES DE CORRELACIÓN SEPARADAS
+# 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA (Carga UA vs sRPE)
 # =============================================================================
+if 'Carga_UA' in df_g.columns and 'sRPE' in df_g.columns:
+    fig = px.scatter(
+        df_g, x="sRPE", y="Carga_UA", color="Nombre_Oficial", custom_data=["Nombre_Oficial"],
+        hover_data=["Fecha", "Tipo_Sesion", "Minutos", "RPE_G", "Dist_Total"],
+        labels={"sRPE": "Carga Interna (sRPE)", "Carga_UA": "Carga Externa (UA)", "Nombre_Oficial": "Jugador"}, template="plotly_dark",
+        title="Dispersión: Dosis (Carga Externa UA) vs Respuesta (Carga Interna sRPE)"
+    )
+    fig.update_traces(marker=dict(size=14, line=dict(width=1, color='White')))
+    fig.add_vline(x=df_f['sRPE'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
+    fig.add_hline(y=df_f['Carga_UA'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
+    fig.update_layout(height=500, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0.2)', margin=dict(l=20, r=20, t=40, b=80), legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5))
 
+    try:
+        s_d = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode=["points"], key=f"d_k_{st.session_state.dosis_key}")
+        if s_d and hasattr(s_d, 'selection'):
+            cambio = False
+            for p in getattr(s_d.selection, 'points', []):
+                if p.get('customdata') and p['customdata'][0] not in st.session_state.jugadores_seleccionados_dosis:
+                    st.session_state.jugadores_seleccionados_dosis.append(p['customdata'][0])
+                    cambio = True
+            if cambio:
+                st.session_state.dosis_key += 1
+                st.rerun()
+    except: st.plotly_chart(fig, use_container_width=True)
+
+# =============================================================================
+# 5. MATRICES DE CORRELACIÓN SEPARADAS
+# =============================================================================
+st.markdown("---")
 st.markdown("### 📊 Matriz 1: Variables de Frecuencia Diaria (Control y Carga)")
 dic_m1 = {
     'sRPE_prev': 'sRPE (D-1)', 
@@ -293,7 +322,7 @@ dic_m1 = {
 
 cols_1 = [c for c in dic_m1.keys() if c in df_g.columns]
 if len(cols_1) > 1:
-    m_corr1 = df_g[cols_1].rename(columns=dic_m1).corr()
+    m_corr1 = df_g[cols_1].rename(columns=dic_m1).corr(numeric_only=True)
     f_c1 = px.imshow(m_corr1, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
     f_c1.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
     st.plotly_chart(f_c1, use_container_width=True)
@@ -315,7 +344,7 @@ dic_m2 = {
 
 cols_2 = [c for c in dic_m2.keys() if c in df_g.columns]
 if len(cols_2) > 1:
-    m_corr2 = df_g[cols_2].rename(columns=dic_m2).corr()
+    m_corr2 = df_g[cols_2].rename(columns=dic_m2).corr(numeric_only=True)
     f_c2 = px.imshow(m_corr2, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
     f_c2.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
     st.plotly_chart(f_c2, use_container_width=True)
