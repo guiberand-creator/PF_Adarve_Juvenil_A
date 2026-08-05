@@ -299,29 +299,45 @@ df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
+# --- CÁLCULO DE MICROCICLO ACTUAL Y ANTERIOR (Entre Partidos Reales) ---
 df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
 if not df_partidos_prev.empty:
     last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
     fecha_inicio_sem = last_match_date + timedelta(days=1)
+    
+    # Buscamos el partido anterior para el Microciclo M-1
+    df_partidos_prev2 = df_partidos_prev[pd.to_datetime(df_partidos_prev['Fecha']).dt.date < last_match_date]
+    if not df_partidos_prev2.empty:
+        prev_match_date = pd.to_datetime(df_partidos_prev2['Fecha']).dt.date.max()
+        fecha_inicio_sem_prev = prev_match_date + timedelta(days=1)
+    else:
+        fecha_inicio_sem_prev = last_match_date - timedelta(days=6)
+    fecha_fin_sem_prev = last_match_date
 else:
     fecha_inicio_sem = fecha_datetime - timedelta(days=6)
+    fecha_inicio_sem_prev = fecha_inicio_sem - timedelta(days=7)
+    fecha_fin_sem_prev = fecha_inicio_sem - timedelta(days=1)
 
 df_sem = df_master[(df_fechas >= fecha_inicio_sem) & (df_fechas <= fecha_datetime)]
+df_sem_prev = df_master[(df_fechas >= fecha_inicio_sem_prev) & (df_fechas <= fecha_fin_sem_prev)]
+
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
 df_28d = df_master[(df_fechas >= fecha_inicio_vmax) & (df_fechas <= fecha_datetime)]
 
-# Aplicamos los filtros de Posición y Jugador a los DataFrames
+# Aplicamos los filtros a los históricos
 if pos_sel != "Equipo Completo":
     df_sesion = df_sesion[df_sesion['Posicion'] == pos_sel]
     df_sem = df_sem[df_sem['Posicion'] == pos_sel]
+    df_sem_prev = df_sem_prev[df_sem_prev['Posicion'] == pos_sel]
     df_28d = df_28d[df_28d['Posicion'] == pos_sel]
 
 if jug_sel != "Todos":
     df_sesion = df_sesion[df_sesion['Nombre'] == jug_sel]
     df_sem = df_sem[df_sem['Nombre'] == jug_sel]
+    df_sem_prev = df_sem_prev[df_sem_prev['Nombre'] == jug_sel]
     df_28d = df_28d[df_28d['Nombre'] == jug_sel]
 
-# --- SISTEMA DE ALERTAS INDEPENDIENTES ---
+# --- 1. ALERTAS MICROCICLO ---
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
@@ -352,11 +368,11 @@ for jug in df_sem['Nombre'].unique():
             texto_alerta = f"{actual_pct:.0f}% / {expected_min:.0f}-{expected_max:.0f}%"
             alertas_metricas[m_key].append((jug, texto_alerta))
 
-total_avisos = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas_metricas.values())
+total_avisos_micro = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas_metricas.values())
 
 st.markdown("<br>", unsafe_allow_html=True)
-str_fechas = f"Microciclo desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fecha_datetime.strftime('%d/%m')}"
-with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} Avisos de Subcarga", expanded=False):
+str_fechas_micro = f"Desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fecha_datetime.strftime('%d/%m')}"
+with st.expander(f"🚨 ALERTAS MICROCICLO ({str_fechas_micro}) - {total_avisos_micro} Avisos", expanded=False):
     cols_alertas = st.columns(7)
     def generar_lista_html(titulo, lista, es_vmax=False):
         html = f"<div style='font-size: 16px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
@@ -375,6 +391,40 @@ with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} A
     with cols_alertas[4]: st.markdown(generar_lista_html("🔋 Acel.", alertas_metricas['Accels']), unsafe_allow_html=True)
     with cols_alertas[5]: st.markdown(generar_lista_html("🔋 Desac.", alertas_metricas['Decels']), unsafe_allow_html=True)
     with cols_alertas[6]: st.markdown(generar_lista_html("🔋 Load", alertas_metricas['Player_Load']), unsafe_allow_html=True)
+
+# --- 2. ALERTAS MESOCICLO (2 Microciclos consecutivos) ---
+alertas_meso = []
+metricas_meso = {
+    'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 'Dist_28': 'Dist. >28 km/h',
+    'Sprints': 'Sprints', 'Accels': 'Aceleraciones', 'Decels': 'Desacel.', 'Player_Load': 'Player Load'
+}
+
+for m_key, m_name in metricas_meso.items():
+    m0_actual = df_sem[m_key].sum()
+    m0_tmin = df_sem[f'Target_Min_{m_key}'].sum()
+    m0_tmax = df_sem[f'Target_Max_{m_key}'].sum()
+    
+    m1_actual = df_sem_prev[m_key].sum()
+    m1_tmin = df_sem_prev[f'Target_Min_{m_key}'].sum()
+    m1_tmax = df_sem_prev[f'Target_Max_{m_key}'].sum()
+    
+    if m0_tmin > 0 and m1_tmin > 0:
+        if (m0_actual < m0_tmin) and (m1_actual < m1_tmin):
+            alertas_meso.append(f"📉 <b>SUBCARGA en {m_name}:</b> El acumulado se ha quedado por debajo del mínimo programado durante 2 microciclos consecutivos.")
+            
+    if m0_tmax > 0 and m1_tmax > 0:
+        if (m0_actual > m0_tmax) and (m1_actual > m1_tmax):
+            alertas_meso.append(f"📈 <b>SOBRECARGA en {m_name}:</b> El acumulado ha superado el máximo programado durante 2 microciclos consecutivos.")
+
+with st.expander(f"📅 ALERTAS MESOCICLO (Tendencia 2 Microciclos Consecutivos) - {len(alertas_meso)} Avisos", expanded=False):
+    if not alertas_meso:
+        st.markdown("<div style='font-size: 14px; color: #2ECC71; font-weight: bold;'>✅ El equipo se mantiene estable. Ninguna métrica de carga acumula 2 microciclos seguidos fuera de rango.</div>", unsafe_allow_html=True)
+    else:
+        for alerta in alertas_meso:
+            if "SUBCARGA" in alerta:
+                st.markdown(f"<div style='padding:10px; background-color:rgba(52, 152, 219, 0.2); border-left: 4px solid #3498DB; margin-bottom:10px; color:white; font-size:14px;'>{alerta}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div style='padding:10px; background-color:rgba(231, 76, 60, 0.2); border-left: 4px solid #E74C3C; margin-bottom:10px; color:white; font-size:14px;'>{alerta}</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -413,8 +463,6 @@ with c_dur:
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
-    
-    # FIX: 3 columnas invisibles para que el selectbox quede pegado al texto y no se expanda al máximo.
     c_h1, c_h2, c_h3 = st.columns([1.8, 2.2, 3]) 
     with c_h1: 
         st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Training Schedule (28d)</p></div>", unsafe_allow_html=True)
@@ -640,7 +688,6 @@ if not df_sesion_tabla.empty:
             val = row[m]
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
             
-            # --- 1. Lógica Variables PICO (Neuromusculares) ---
             if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
                 if m == 'Dec_Max':
                     max_h = abs(df_28_player[m].min()) if not df_28_player.empty else 0
@@ -656,7 +703,6 @@ if not df_sesion_tabla.empty:
                 color_pct = "#E74C3C" if pct_max >= 90 else "#2ECC71"
                 html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
             
-            # --- 2. Lógica Variables UMBRAL EXPLOSIVO (Sprints, Dist >28) ---
             elif m in ['Dist_28', 'Sprints']:
                 t_ref = target_refs_global[m]
                 diff_text = ""
@@ -676,7 +722,6 @@ if not df_sesion_tabla.empty:
                 c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
                 html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
 
-            # --- 3. Lógica Variables VOLUMEN (Normales con Rango) ---
             else:
                 t_min = row[f'Target_Min_{m}']
                 t_max = row[f'Target_Max_{m}']
