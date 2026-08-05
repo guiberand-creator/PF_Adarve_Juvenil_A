@@ -270,7 +270,6 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
-# Si no hay fecha seleccionada en sesión, arrancar con la más reciente
 if st.session_state.fecha_maestra not in fechas_disp:
     st.session_state.fecha_maestra = fechas_disp[0] if fechas_disp else None
 
@@ -365,7 +364,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Callback para asegurar que si se cambia arriba, se registre en sesión
 def actualizar_fecha_manual():
     st.session_state.fecha_maestra = st.session_state.widget_fecha
 
@@ -659,7 +657,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA) CON HOVER
+# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -852,18 +850,27 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        # Los filtros encajados directamente en el área izquierda para dejar libre el radar
-        c_r1, c_r2, c_r3 = st.columns(3)
-        with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
-        with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
-        with c_r3: fil_p = st.checkbox("🔴 Perdidos (P)", value=True)
+        # 5 Filtros combinados en la parte superior izquierda
+        c_r1, c_r2, c_r3, c_r4, c_r5 = st.columns([1, 1, 1, 0.8, 0.8])
+        with c_r1: fil_g = st.checkbox("🟢 Ganados", value=True)
+        with c_r2: fil_e = st.checkbox("🟡 Empatados", value=True)
+        with c_r3: fil_p = st.checkbox("🔴 Perdidos", value=True)
+        with c_r4: fil_casa = st.checkbox("🏠 Casa", value=True)
+        with c_r5: fil_fuera = st.checkbox("✈️ Fuera", value=True)
 
         valid_results = []
         if fil_g: valid_results.append('G')
         if fil_e: valid_results.append('E')
         if fil_p: valid_results.append('P')
         
-        df_scatter_filt = df_scatter[df_scatter['Resultado_Codificado'].isin(valid_results)].reset_index(drop=True)
+        valid_locs = []
+        if fil_casa: valid_locs.append('Casa')
+        if fil_fuera: valid_locs.append('Fuera')
+        
+        df_scatter_filt = df_scatter[
+            (df_scatter['Resultado_Codificado'].isin(valid_results)) & 
+            (df_scatter['Local_Visitante'].isin(valid_locs))
+        ].reset_index(drop=True)
         
         if not df_scatter_filt.empty:
             st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o selecciona varios para el radar 👉</p>", unsafe_allow_html=True)
@@ -901,17 +908,15 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     xanchor="center", yanchor="middle"
                 ))
             
-            colores_res = {'G': '#2ECC71', 'E': '#F1C40F', 'P': '#E74C3C'}
-            for res in valid_results:
-                df_res = df_scatter_filt[df_scatter_filt['Resultado_Codificado'] == res]
-                if not df_res.empty:
-                    mean_x = df_res['Dist_Total'].mean()
-                    mean_y = df_res['Dist_18'].mean()
-                    fig_sc.add_vline(x=mean_x, line=dict(color=colores_res[res], width=2, dash='dash'), opacity=0.6)
-                    fig_sc.add_hline(y=mean_y, line=dict(color=colores_res[res], width=2, dash='dash'), opacity=0.6)
+            # Línea de Media Única (Centro de gravedad de todos los filtrados)
+            mean_x = df_scatter_filt['Dist_Total'].mean()
+            mean_y = df_scatter_filt['Dist_18'].mean()
+            fig_sc.add_vline(x=mean_x, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
+            fig_sc.add_hline(y=mean_y, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
             
+            # Altura ampliada a 580px
             fig_sc.update_layout(
-                images=images, template="plotly_dark", height=500,
+                images=images, template="plotly_dark", height=580,
                 xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[x_min - r_x*0.1, x_max + r_x*0.1]),
                 yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)', range=[y_min - r_y*0.1, y_max + r_y*0.1]),
                 plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
@@ -937,7 +942,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             except Exception:
                 st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
         else:
-            st.info("No hay partidos con el resultado seleccionado.")
+            st.info("No hay partidos con el resultado y localización seleccionados.")
 
     with col_sc2:
         if not df_scatter_filt.empty:
@@ -970,10 +975,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
-                # Radar Maxi-Size de 580px para alinearse perfectamente con la columna izquierda
+                # Radar altura 580px, leyenda abajo en el centro
                 fig_radar.update_layout(
                     polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
-                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+                    showlegend=True, 
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
                     template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
