@@ -78,7 +78,7 @@ def cargar_matriz_completa():
         col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
         col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
         
-        # Nuevas variables del RPE (Buscamos las palabras clave)
+        # Nuevas variables del RPE
         col_animo = next((c for c in cols if 'animo' in str(c).lower() or 'ánimo' in str(c).lower() or 'estado' in str(c).lower()), None)
         col_res = next((c for c in cols if 'resultado' in str(c).lower() or 'partido' in str(c).lower()), None)
 
@@ -324,6 +324,7 @@ cols_1 = [c for c in dic_m1.keys() if c in df_g.columns]
 if len(cols_1) > 1:
     m_corr1 = df_g[cols_1].rename(columns=dic_m1).corr(numeric_only=True)
     f_c1 = px.imshow(m_corr1, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
+    f_c1.update_traces(opacity=0.5)  # <-- Aquí añadimos la transparencia del 50%
     f_c1.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
     st.plotly_chart(f_c1, use_container_width=True)
 else: 
@@ -346,6 +347,7 @@ cols_2 = [c for c in dic_m2.keys() if c in df_g.columns]
 if len(cols_2) > 1:
     m_corr2 = df_g[cols_2].rename(columns=dic_m2).corr(numeric_only=True)
     f_c2 = px.imshow(m_corr2, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
+    f_c2.update_traces(opacity=0.5)  # <-- Aquí añadimos la transparencia del 50%
     f_c2.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
     st.plotly_chart(f_c2, use_container_width=True)
 else: 
