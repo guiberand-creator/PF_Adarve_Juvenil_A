@@ -49,20 +49,19 @@ def obtener_rpe_maestro():
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     try:
         df_rpe = pd.read_csv(url_csv)
-        df_rpe['Fecha'] = pd.to_datetime(df_rpe['Marca temporal'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
-        df_rpe['Nombre_Cruce'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip().str.lower()
         
-        df_rpe['Tipo de Sesión'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip()
+        # Detectar la columna de fecha (normalmente 'Marca temporal' en Google Forms)
+        col_fecha = 'Marca temporal' if 'Marca temporal' in df_rpe.columns else df_rpe.columns[0]
+        df_rpe['Fecha'] = pd.to_datetime(df_rpe[col_fecha], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        
+        df_rpe['Nombre_Cruce'] = df_rpe['Nombre y apellidos'].fillna('Anónimo').astype(str).str.strip().str.lower()
+        df_rpe['Tipo_Dia_Oficial'] = df_rpe['Tipo de sesión'].fillna('Entreno').astype(str).str.strip().str.title()
         df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe['Minutos entreno/partido'], errors='coerce').fillna(0)
         
         col_c = [c for c in df_rpe.columns if 'CARDIO' in str(c).upper()][0]
         col_m = [c for c in df_rpe.columns if 'MUSCULAR' in str(c).upper()][0]
         df_rpe['RPE_G'] = (pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0)) / 2
         
-        df_sesion_dia = df_rpe.groupby('Fecha')['Tipo de Sesión'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
-        df_sesion_dia.rename(columns={'Tipo de Sesión': 'Tipo_Dia_Oficial'}, inplace=True)
-        
-        df_rpe = pd.merge(df_rpe, df_sesion_dia, on='Fecha', how='left')
         return df_rpe[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
     except:
         return pd.DataFrame()
@@ -144,7 +143,6 @@ def cargar_archivos_gps():
 
 @st.cache_data(ttl=10)
 def obtener_calendario_partidos():
-    # URL al CSV de tu calendario oficial
     sheet_id = "1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5"
     gid = "1771990969"
     url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -193,8 +191,17 @@ if df_gps.empty:
     st.stop()
 
 if not df_rpe.empty:
-    df_master = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='left')
+    # NUEVA LÓGICA DE CRUCE: 
+    # 1. Asignamos el "Tipo de Día" general cruzando solo por fecha (Evita fallos si el nombre está mal escrito)
+    df_sesion_dia = df_rpe.groupby('Fecha')['Tipo_Dia_Oficial'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
+    
+    df_master = pd.merge(df_gps, df_sesion_dia, on='Fecha', how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
+    
+    # 2. Cruzamos los datos individuales (RPE, Minutos). Si no coinciden los nombres, se asigna valor por defecto.
+    df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']]
+    df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
+    
     df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
 else:
@@ -466,7 +473,7 @@ with st.expander(f"📅 ALERTAS MESOCICLO (Tendencia 2 Microciclos Consecutivos)
 
 st.markdown("---")
 
-tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper()
+tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper() if not df_master[df_master['Fecha'] == fecha_sel].empty else "ENTRENO"
 duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()) if not df_sesion.empty else 0
 
 # --- HISTÓRICO 28 DÍAS DINÁMICO ---
@@ -888,4 +895,3 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         st.info("No hay partidos con el resultado seleccionado o aún no hay datos cruzados.")
 else:
     st.info("Aún no hay partidos validados de 60 mins para generar la gráfica comparativa.")
-    
