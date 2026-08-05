@@ -142,11 +142,51 @@ def cargar_archivos_gps():
         return df_final
     return pd.DataFrame()
 
+@st.cache_data(ttl=10)
+def obtener_calendario_partidos():
+    # URL al CSV de tu calendario oficial
+    sheet_id = "1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5"
+    gid = "1771990969"
+    url_csv = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    
+    try:
+        df_cal = pd.read_csv(url_csv)
+        
+        # Mapeo y limpieza de columnas
+        df_cal.rename(columns={'Casa/fuera': 'Local_Visitante', 'Equipo': 'Rival', 'Escudos': 'Escudo'}, inplace=True)
+        df_cal['Fecha'] = pd.to_datetime(df_cal['Fecha'], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+        df_cal['Local_Visitante'] = df_cal['Local_Visitante'].astype(str).str.strip().str.title()
+        
+        def parse_resultado(row):
+            res = str(row['Resultado']).strip()
+            cf = str(row['Local_Visitante']).strip().lower()
+            if '-' not in res:
+                return None 
+            try:
+                home, away = res.split('-')
+                home = int(home.strip())
+                away = int(away.strip())
+                
+                if home == away: return 'E'
+                if cf == 'casa': return 'G' if home > away else 'P'
+                elif cf == 'fuera': return 'G' if away > home else 'P'
+                return None
+            except:
+                return None
+                
+        df_cal['Resultado_Clasificado'] = df_cal.apply(parse_resultado, axis=1)
+        df_cal.rename(columns={'Resultado_Clasificado': 'Resultado_Codificado'}, inplace=True)
+        
+        return df_cal[['Fecha', 'Rival', 'Local_Visitante', 'Resultado', 'Resultado_Codificado', 'Escudo']]
+    except Exception as e:
+        return pd.DataFrame()
+
 # =============================================================================
 # 3. PROCESAMIENTO Y MODELO DE JUEGO (PERIODIZACIÓN POR RANGOS)
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
+df_calendario = obtener_calendario_partidos()
 
 if df_gps.empty:
     st.info("🚧 Aún no hay archivos de GPS en la carpeta `data/GPS`.")
@@ -602,13 +642,10 @@ if not df_sesion_tabla.empty:
         pct_t_min = min((t_min/max_val)*100, 100)
         pct_t_max = min((t_max/max_val)*100, 100)
         width_target = max(pct_t_max - pct_t_min, 1)
-        
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
-        
         if valor < t_min: c_barra = "#3498DB" 
         elif valor > t_max: c_barra = "#E74C3C" 
         else: c_barra = "#2ECC71" 
-        
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
             <div style="position:absolute; left:{pct_t_min}%; top:0; height:100%; width:{width_target}%; background-color:rgba(46, 204, 113, 0.2); z-index:1;"></div>
@@ -625,7 +662,6 @@ if not df_sesion_tabla.empty:
         pct_target = min((target/max_val)*100, 100)
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
         c_barra = "#E74C3C" if valor > target and target > 0 else "#3498DB"
-        
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
             <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
@@ -640,7 +676,6 @@ if not df_sesion_tabla.empty:
         pct_target = min((target_90 / max_escala) * 100, 100)
         t_val = f"{valor_real:.1f}" if es_decimal else f"{valor_real:.0f}"
         c_barra = "#E74C3C" if valor_abs >= target_90 and target_90 > 0 else "#2ECC71"
-        
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
             <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
@@ -649,15 +684,10 @@ if not df_sesion_tabla.empty:
         </div>
         """
 
-    # --- INYECCIÓN DE CSS PARA EL HOVER DE LA FILA ---
     html = """
     <style>
-    .tabla-jugadores tbody tr {
-        transition: background-color 0.2s ease;
-    }
-    .tabla-jugadores tbody tr:hover {
-        background-color: rgba(255, 255, 255, 0.08) !important;
-    }
+    .tabla-jugadores tbody tr { transition: background-color 0.2s ease; }
+    .tabla-jugadores tbody tr:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
     </style>
     <div style="overflow-x: auto; padding-bottom: 20px;">
     <table class="tabla-jugadores" style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: 100%;">
@@ -756,3 +786,106 @@ if not df_sesion_tabla.empty:
     st.markdown(html, unsafe_allow_html=True)
 else:
     st.info("No hay datos para esta fecha.")
+
+# =============================================================================
+# 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS)
+# =============================================================================
+st.markdown("---")
+st.markdown("### 🏟️ Análisis de Exigencia Competitiva (Partidos)")
+
+c_r1, c_r2, c_r3 = st.columns(3)
+with c_r1: fil_g = st.checkbox("🟢 Ganados (G)", value=True)
+with c_r2: fil_e = st.checkbox("🟡 Empatados (E)", value=True)
+with c_r3: fil_p = st.checkbox("🔴 Perdidos (P)", value=True)
+
+valid_results = []
+if fil_g: valid_results.append('G')
+if fil_e: valid_results.append('E')
+if fil_p: valid_results.append('P')
+
+df_partidos_analisis = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_master['Valido_Media'] == True)]
+
+if not df_partidos_analisis.empty and not df_calendario.empty:
+    df_partidos_agg = df_partidos_analisis.groupby('Fecha')[metricas_todas].mean().reset_index()
+    df_scatter = pd.merge(df_partidos_agg, df_calendario, on='Fecha', how='inner')
+    df_scatter_filt = df_scatter[df_scatter['Resultado_Codificado'].isin(valid_results)].reset_index(drop=True)
+    
+    if not df_scatter_filt.empty:
+        col_sc1, col_sc2 = st.columns([1.8, 1.2])
+
+        with col_sc1:
+            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Volumen vs Alta Intensidad en Partidos.</p>", unsafe_allow_html=True)
+            
+            fig_sc = go.Figure()
+            hover_text = df_scatter_filt['Rival'] + '<br>' + df_scatter_filt['Fecha'] + ' (' + df_scatter_filt['Local_Visitante'] + ')<br>Resultado: ' + df_scatter_filt['Resultado']
+            
+            fig_sc.add_trace(go.Scatter(
+                x=df_scatter_filt['Dist_Total'], y=df_scatter_filt['Dist_18'],
+                mode='markers', marker=dict(size=25, color='rgba(0,0,0,0)'),
+                text=hover_text, hoverinfo='text', hoverlabel=dict(bgcolor="#2C3E50", font_size=14)
+            ))
+            
+            images = []
+            for _, row in df_scatter_filt.iterrows():
+                images.append(dict(
+                    source=row['Escudo'],
+                    x=row['Dist_Total'], y=row['Dist_18'],
+                    xref="x", yref="y",
+                    sizex=250, sizey=25,
+                    xanchor="center", yanchor="middle"
+                ))
+            
+            fig_sc.update_layout(
+                images=images, template="plotly_dark", height=450,
+                xaxis=dict(title="Distancia Total (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(title="Distancia > 18 km/h (m)", showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+                plot_bgcolor='rgba(0,0,0,0.2)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0)
+            )
+            st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
+
+        with col_sc2:
+            st.markdown("<p style='font-size:14px; color:#A0AEC0;'>Comparador de Exigencia (0-100%)</p>", unsafe_allow_html=True)
+            
+            opciones_partidos = df_scatter_filt['Rival'] + " (" + df_scatter_filt['Fecha'] + ")"
+            p1_idx = 0 if len(opciones_partidos) > 0 else None
+            p2_idx = 1 if len(opciones_partidos) > 1 else p1_idx
+            
+            p1_sel = st.selectbox("🔴 Partido A", opciones_partidos, index=p1_idx)
+            p2_sel = st.selectbox("🔵 Partido B", opciones_partidos, index=p2_idx)
+            
+            if p1_sel and p2_sel:
+                idx_p1 = opciones_partidos[opciones_partidos == p1_sel].index[0]
+                idx_p2 = opciones_partidos[opciones_partidos == p2_sel].index[0]
+                
+                row_p1 = df_scatter_filt.iloc[idx_p1]
+                row_p2 = df_scatter_filt.iloc[idx_p2]
+                
+                df_maximos = df_scatter[metricas_todas].max()
+                df_maximos = df_maximos.replace(0, 1) 
+                
+                vals_p1 = (row_p1[metricas_todas] / df_maximos * 100).tolist()
+                vals_p2 = (row_p2[metricas_todas] / df_maximos * 100).tolist()
+                
+                nombres_metricas_radar = [metricas_tabla[m] for m in metricas_todas]
+                
+                fig_radar = go.Figure()
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=vals_p1 + [vals_p1[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
+                    fill='toself', name=row_p1['Rival'], marker=dict(color='#E74C3C'), fillcolor='rgba(231, 76, 60, 0.4)'
+                ))
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=vals_p2 + [vals_p2[0]], theta=nombres_metricas_radar + [nombres_metricas_radar[0]],
+                    fill='toself', name=row_p2['Rival'], marker=dict(color='#3498DB'), fillcolor='rgba(52, 152, 219, 0.4)'
+                ))
+                
+                fig_radar.update_layout(
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=10, color="white"))),
+                    showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                    template="plotly_dark", height=350, margin=dict(l=30, r=30, t=20, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("No hay partidos con el resultado seleccionado o aún no hay datos cruzados.")
+else:
+    st.info("Aún no hay partidos validados de 60 mins para generar la gráfica comparativa.")
+    
