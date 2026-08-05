@@ -40,7 +40,7 @@ if os.path.exists(_ruta_logo):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# 2. MOTOR DE EXTRACCIÓN DE DATOS (AHORA ANTIBALAS)
+# 2. MOTOR DE EXTRACCIÓN DE DATOS (ANTIBALAS)
 # =============================================================================
 @st.cache_data(ttl=10)
 def obtener_rpe_maestro():
@@ -52,21 +52,13 @@ def obtener_rpe_maestro():
         if df_rpe.empty: return pd.DataFrame()
         
         cols = df_rpe.columns
-        # Respaldo posicional exacto según tu foto
-        col_f, col_n, col_t = cols[0], cols[1], cols[2]
-        col_min = cols[3] if len(cols) > 3 else None
-        col_c = cols[4] if len(cols) > 4 else None
-        col_m = cols[5] if len(cols) > 5 else None
-
-        # Intento de búsqueda inteligente por si cambian de orden
-        for c in cols:
-            cl = str(c).lower()
-            if 'fecha' in cl or 'marca' in cl: col_f = c
-            elif 'nombre' in cl or 'apellido' in cl: col_n = c
-            elif 'tipo' in cl or 'sesi' in cl: col_t = c
-            elif 'minuto' in cl or 'tiempo' in cl: col_min = c
-            elif 'cardio' in cl or 'pulmonar' in cl: col_c = c
-            elif 'muscular' in cl: col_m = c
+        # Búsqueda selectiva que atrapa el primero que encuentra (Evita el bug de la palabra "sesión")
+        col_f = next((c for c in cols if 'fecha' in str(c).lower() or 'marca' in str(c).lower()), cols[0])
+        col_n = next((c for c in cols if 'nombre' in str(c).lower() or 'apellido' in str(c).lower()), cols[1])
+        col_t = next((c for c in cols if 'tipo' in str(c).lower()), cols[2])
+        col_min = next((c for c in cols if 'minuto' in str(c).lower()), cols[3] if len(cols)>3 else None)
+        col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
+        col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
 
         df_rpe['Fecha'] = pd.to_datetime(df_rpe[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
         df_rpe['Nombre_Cruce'] = df_rpe[col_n].fillna('Anónimo').astype(str).str.strip().str.lower()
@@ -169,18 +161,12 @@ def obtener_calendario_partidos():
         if df_cal.empty: return pd.DataFrame()
         
         cols = df_cal.columns
-        # Respaldo posicional según tu foto
-        col_f, col_cf, col_eq, col_esc = cols[0], cols[1], cols[2], cols[3]
-        col_res = cols[4] if len(cols) > 4 else None
-        
-        # Búsqueda inteligente
-        for c in cols:
-            cl = str(c).lower()
-            if 'fecha' in cl: col_f = c
-            elif 'casa' in cl or 'fuera' in cl: col_cf = c
-            elif 'equipo' in cl or 'rival' in cl: col_eq = c
-            elif 'escudo' in cl: col_esc = c
-            elif 'resultado' in cl: col_res = c
+        # Búsqueda selectiva exacta
+        col_f = next((c for c in cols if 'fecha' in str(c).lower()), cols[0])
+        col_cf = next((c for c in cols if 'casa' in str(c).lower() or 'fuera' in str(c).lower()), cols[1])
+        col_eq = next((c for c in cols if 'equipo' in str(c).lower() or 'rival' in str(c).lower()), cols[2])
+        col_esc = next((c for c in cols if 'escudo' in str(c).lower()), cols[3])
+        col_res = next((c for c in cols if 'resultado' in str(c).lower()), cols[4] if len(cols)>4 else None)
             
         df_cal['Fecha'] = pd.to_datetime(df_cal[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
         df_cal['Local_Visitante'] = df_cal[col_cf].astype(str).str.strip().str.title()
@@ -222,12 +208,10 @@ if df_gps.empty:
     st.stop()
 
 if not df_rpe.empty:
-    # Cruce Fase 1: Asignar el tipo de día al GPS basado puramente en la fecha (evita errores de nombres)
     df_sesion_dia = df_rpe.groupby('Fecha')['Tipo_Dia_Oficial'].apply(lambda x: x.mode()[0] if not x.mode().empty else 'Entreno').reset_index()
     df_master = pd.merge(df_gps, df_sesion_dia, on='Fecha', how='left')
     df_master['Tipo_Dia_Oficial'] = df_master['Tipo_Dia_Oficial'].fillna('Entreno')
     
-    # Cruce Fase 2: RPE individual
     df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']]
     df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
     
