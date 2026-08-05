@@ -365,7 +365,6 @@ for m in metricas_todas:
 st.markdown("""
     <div style="margin-bottom: 5px;">
         <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Evolución táctica, referencias de partido y fatiga neuromuscular.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -550,13 +549,13 @@ alcanzan_90 = df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90].sort_values(by='
 
 c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
 with c_dur:
-    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Session duration</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Duración de la sesión</p>", unsafe_allow_html=True)
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
     c_h1, c_h2, c_h3 = st.columns([1.8, 2.2, 3]) 
     with c_h1: 
-        st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Training Schedule (28d)</p></div>", unsafe_allow_html=True)
+        st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Histórico sesiones (28d)</p></div>", unsafe_allow_html=True)
     with c_h2: 
         metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
     
@@ -635,8 +634,6 @@ with c_info:
 # =============================================================================
 # 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO)
 # =============================================================================
-st.markdown("### 📊 Session Mean vs Target Programado")
-
 medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_min = {m: df_sesion[f'Target_Min_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_max = {m: df_sesion[f'Target_Max_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
@@ -693,7 +690,7 @@ pintar_bullet('Player_Load', 'Player Load', r2_4)
 # 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
+st.markdown("### Desglose de la sesión por jugador")
 
 metricas_tabla = {'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.', 'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Load'}
 df_sesion_tabla = df_sesion.copy()
@@ -872,7 +869,7 @@ else:
 # 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS) CON INTERACCIÓN DIRECTA
 # =============================================================================
 st.markdown("---")
-st.markdown("### 🏟️ Análisis de Exigencia Competitiva (Partidos)")
+st.markdown("### Análisis de partidos")
 
 df_partidos_analisis = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_master['Valido_Media'] == True)]
 
@@ -905,7 +902,6 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         ].reset_index(drop=True)
         
         if not df_scatter_filt.empty:
-            st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o añadir/quitar del radar 👉</p>", unsafe_allow_html=True)
             
             x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
             y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
@@ -983,7 +979,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         if not df_scatter_filt.empty:
             c_tit1, c_tit2 = st.columns([3, 1.2])
             with c_tit1:
-                st.markdown("<p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px; margin-top:5px;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
+               
             with c_tit2:
                 if st.button("🧹 Limpiar", use_container_width=True):
                     st.session_state.partidos_radar = []
