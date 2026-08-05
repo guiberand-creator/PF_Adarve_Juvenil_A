@@ -405,23 +405,29 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     texto_val = f"{val:.1f}" if val < 100 else f"{val:.0f}"
     max_range = max(val, t_max) * 1.2 if max(val, t_max) > 0 else 10
     
-    color_bar = "#2ECC71" # Verde si está en rango
-    if val < t_min: color_bar = "#3498DB" # Azul
-    elif val > t_max: color_bar = "#E74C3C" # Rojo
+    color_bar = "#2ECC71"
+    if val < t_min: color_bar = "#3498DB"
+    elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=[max_range], y=["1"], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.6))
+    
+    # FIX: Todas las barras usan y=[0] y se fijan los ejes para que el grosor sea exactamente idéntico en todos los gráficos
+    fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
-        fig.add_trace(go.Bar(x=[val], y=["1"], orientation='h', marker=dict(color=color_bar), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.6))
+        fig.add_trace(go.Bar(x=[val], y=[0], orientation='h', marker=dict(color=color_bar), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.8))
     
-    # Dibujar la "Zona Verde" (Rango Mínimo y Máximo)
     if t_max > 0: 
-        fig.add_shape(type="rect", x0=t_min, y0=-0.3, x1=t_max, y1=0.3, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
-        fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.4, y1=0.4, line=dict(color="#F1C40F", width=2))
-        fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.4, y1=0.4, line=dict(color="#F1C40F", width=2))
+        fig.add_shape(type="rect", x0=t_min, y0=-0.4, x1=t_max, y1=0.4, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
+        fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
+        fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         
-    fig.update_layout(barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), yaxis=dict(showgrid=False, showticklabels=False))
+    fig.update_layout(
+        barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), 
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, 
+        xaxis=dict(range=[0, max_range], showgrid=False, showticklabels=False), 
+        yaxis=dict(range=[-0.5, 0.5], showgrid=False, showticklabels=False)
+    )
     
     with row_col:
         st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
@@ -508,27 +514,20 @@ if not df_sesion_tabla.empty:
             t_max = row[f'Target_Max_{m}']
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
             
-            # Lógica de la Columna Objetivo (Diferencia Absoluta)
+            # FIX: Columna OBJ limpia de fondos. Solo texto blanco indicando los metros de más o de menos.
             diff_text = ""
-            c_obj_bg = "transparent"
-            
             if val < t_min:
                 diff = t_min - val
                 diff_text = f"-{diff:.1f}" if es_dec else f"-{diff:.0f}"
-                c_obj_bg = "#3498DB" # Azul (le faltan unidades)
-            elif val > t_max:
+            elif val > t_max and t_max > 0:
                 diff = val - t_max
                 diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
-                c_obj_bg = "#E74C3C" # Rojo (se pasa unidades)
-            else:
-                diff_text = "" # En rango, se deja vacío el texto
-                c_obj_bg = "#2ECC71" # Verde (Celda de OK)
 
             z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
             c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
             
             html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_rango(val, t_min, t_max, escalas_max[m], es_dec)}</td>"
-            html += f"<td style='padding:5px; background-color:{c_obj_bg}; border-radius:3px; color:white; font-weight:bold; font-size:11px;'>{diff_text}</td>"
+            html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
             html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
         
         html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if rpe_val>=8 else 'transparent'};'>{rpe_val:.1f}</td></tr>"
