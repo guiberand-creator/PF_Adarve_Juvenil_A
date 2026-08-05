@@ -195,6 +195,10 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
     is_plus = '+1' in t or '+2' in t
+    is_minus = '-4' in t or '-3' in t or '-2' in t or '-1' in t
+    
+    # FIX: Si no es un día periodizado, no suma NADA al objetivo para no inflarlo.
+    if not (is_plus or is_minus): return (0, 0)
     
     if metrica == 'Dist_Total':
         if '-4' in t: return (45, 55)
@@ -225,7 +229,7 @@ def get_target_range(metrica, tipo_dia, jugo_60):
         if '-2' in t: return (20, 40)
         if '-1' in t: return (20, 30)
         if is_plus: return (20, 30) if jugo_60 else (55, 65)
-    return (50, 50) # Fallback
+    return (0, 0) 
 
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
 df_partidos = df_partidos[df_partidos['Valido_Media'] == True]
@@ -253,6 +257,7 @@ for m in metricas_todas:
 for m in metricas_todas:
     df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
     df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
+    # Target de la sesión es la media del rango programado
     df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
@@ -333,15 +338,15 @@ with st.expander(f"🚨 ALERTAS DEL MICROCICLO ({str_fechas}) - {total_avisos} A
     cols_alertas = st.columns(7)
     
     def generar_lista_html(titulo, lista, es_vmax=False):
-        html = f"<div style='font-size: 14px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
+        html = f"<div style='font-size: 16px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
         if not lista:
-            html += "<div style='font-size: 13px; color: #2ECC71;'>✅ Todo OK</div>"
+            html += "<div style='font-size: 15px; color: #2ECC71;'>✅ Todo OK</div>"
         else:
             color_texto = "#E74C3C" if es_vmax else "#F39C12"
             for item in lista:
                 val_str = f"{item[1]}v" if es_vmax else item[1]
-                # Aumentamos fuente a 14px para mejor legibilidad
-                html += f"<div style='font-size: 14px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
+                # FIX: Fuente a 16px para que se vea claro como el agua
+                html += f"<div style='font-size: 15px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
         return html
 
     with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
