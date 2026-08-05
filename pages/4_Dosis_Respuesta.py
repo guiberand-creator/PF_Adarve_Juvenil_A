@@ -54,7 +54,7 @@ if 'dosis_key' not in st.session_state:
     st.session_state.dosis_key = 0
 
 # =============================================================================
-# 2. MOTOR DE EXTRACCIÓN Y UNIFICACIÓN MULTI-FUENTE
+# 2. MOTOR DE EXTRACCIÓN Y UNIFICACIÓN RÁPIDA (CON CACHÉ)
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -67,7 +67,7 @@ def descargar_csv_drive(sheet_id, gid):
         pass
     return pd.DataFrame()
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=60)
 def cargar_datos_completos_dosis():
     # 1. RPE
     df_rpe_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
@@ -158,7 +158,6 @@ def cargar_datos_completos_dosis():
 
     if df_gps.empty or df_rpe.empty: return pd.DataFrame()
 
-    # Fusionar GPS + RPE
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
     df_base['Carga_UA'] = (
         df_base['Dist_Total'] + 
@@ -167,114 +166,61 @@ def cargar_datos_completos_dosis():
         ((df_base['Accels'] + df_base['Decels']) * 1.5)
     ) * df_base['RPE_G']
 
-    # 3. WELLNESS AL DÍA SIGUIENTE (D+1)
+    # 3. WELLNESS (D+1)
     df_well_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "0")
     if not df_well_raw.empty:
         cols_w = df_well_raw.columns
         col_wf = next((c for c in cols_w if 'marca' in str(c).lower() or 'fecha' in str(c).lower()), cols_w[0])
         col_wn = next((c for c in cols_w if 'nombre' in str(c).lower()), cols_w[1])
-        
-        # Sumar ítems de Wellness
         cols_items = [c for c in cols_w if any(k in str(c).lower() for k in ['sueño', 'fatiga', 'estrés', 'agujetas', 'estado'])]
+        
         df_well_raw['Wellness_Total'] = df_well_raw[cols_items].apply(pd.to_numeric, errors='coerce').sum(axis=1) if cols_items else 0
         df_well_raw['Fecha_Well'] = pd.to_datetime(df_well_raw[col_wf], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
         df_well_raw['Nombre_Cruce'] = df_well_raw[col_wn].fillna('Anónimo').astype(str).str.strip().str.lower()
-        
-        # Calcular fecha del día anterior en el Wellness para emparejar con el día de la sesión
         df_well_raw['Fecha_Sesion_Ref'] = (pd.to_datetime(df_well_raw['Fecha_Well']) - timedelta(days=1)).dt.strftime('%Y-%m-%d')
         
         df_well_clean = df_well_raw.groupby(['Fecha_Sesion_Ref', 'Nombre_Cruce'])['Wellness_Total'].mean().reset_index()
         df_well_clean.rename(columns={'Fecha_Sesion_Ref': 'Fecha', 'Wellness_Total': 'Wellness_D1'}, inplace=True)
-        
         df_base = pd.merge(df_base, df_well_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
 
-    # 4. EVALUACIONES CONDICIONALES (CÁLCULO DEL ÚLTIMO DATO REGISTRADO HASTA LA FECHA)
-    # A) Peso
+    # 4. EVALUACIONES (BÚSQUEDA VECTORIAL ULTRA-RÁPIDA)
     ruta_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
-    df_peso_eval = pd.read_excel(ruta_peso) if os.path.exists(ruta_peso) else pd.DataFrame()
-    if not df_peso_eval.empty:
-        df_peso_eval['Fecha_dt'] = pd.to_datetime(df_peso_eval['Fecha'], dayfirst=True, errors='coerce')
-        df_peso_eval['Nombre_Cruce'] = df_peso_eval['Nombre'].astype(str).str.strip().str.lower()
-
-    # B) Saltos CMJ y slCMJ
+    df_peso = pd.read_excel(ruta_peso) if os.path.exists(ruta_peso) else pd.DataFrame()
+    
     ruta_saltos = os.path.join("data", "EVALUACIONES", "SALTOS", "SALTOS.xlsx")
-    df_saltos_eval = pd.read_excel(ruta_saltos) if os.path.exists(ruta_saltos) else pd.DataFrame()
-    if not df_saltos_eval.empty:
-        df_saltos_eval['Fecha_dt'] = pd.to_datetime(df_saltos_eval['Fecha_Hora'].astype(str).str.split('_').str[0], errors='coerce')
-        df_saltos_eval['Nombre_Cruce'] = df_saltos_eval['Nombre'].astype(str).str.strip().str.lower()
+    df_saltos = pd.read_excel(ruta_saltos) if os.path.exists(ruta_saltos) else pd.DataFrame()
 
-    # C) DRI Drop Jump
-    df_dri_sheet = descargar_csv_drive("1r7nUPbRWDjKpZW-Jwex1HFNpDcHiCTKTwLPF7YfHL2Y", "0")
-    if not df_dri_sheet.empty and 'DRI' in df_dri_sheet.columns:
-        df_dri_sheet['Fecha_dt'] = pd.to_datetime(df_dri_sheet['Fecha_Hora'].astype(str).str.split('_').str[0], errors='coerce')
-        df_dri_sheet['Nombre_Cruce'] = df_dri_sheet['Nombre'].astype(str).str.strip().str.lower()
-
-    # D) VAM Aeróbico
     ruta_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "AEROBICO_5MIN.xlsx")
-    df_vam_eval = pd.read_excel(ruta_vam) if os.path.exists(ruta_vam) else pd.DataFrame()
-    if not df_vam_eval.empty:
-        df_vam_eval['Fecha_dt'] = pd.to_datetime(df_vam_eval['Fecha'], dayfirst=True, errors='coerce')
-        df_vam_eval['Nombre_Cruce'] = df_vam_eval['Nombre'].astype(str).str.strip().str.lower()
+    df_vam = pd.read_excel(ruta_vam) if os.path.exists(ruta_vam) else pd.DataFrame()
 
-    # Fusión inteligente del último test condicional a la fecha de la sesión
-    lst_peso, lst_cmj, lst_slcmj, lst_dri, lst_vam = [], [], [], [], []
+    df_dri = descargar_csv_drive("1r7nUPbRWDjKpZW-Jwex1HFNpDcHiCTKTwLPF7YfHL2Y", "0")
 
-    for _, row in df_base.iterrows():
-        f_dt = pd.to_datetime(row['Fecha'])
-        nom = row['Nombre_Cruce']
-        
-        # Peso
-        p_val = np.nan
-        if not df_peso_eval.empty:
-            sub = df_peso_eval[(df_peso_eval['Nombre_Cruce'] == nom) & (df_peso_eval['Fecha_dt'] <= f_dt)]
-            if not sub.empty: p_val = sub.sort_values('Fecha_dt').iloc[-1]['Peso']
-        lst_peso.append(p_val)
-        
-        # CMJ y slCMJ
-        cmj_val, slcmj_val = np.nan, np.nan
-        if not df_saltos_eval.empty:
-            sub = df_saltos_eval[(df_saltos_eval['Nombre_Cruce'] == nom) & (df_saltos_eval['Fecha_dt'] <= f_dt)]
-            if not sub.empty:
-                ult_f = sub['Fecha_dt'].max()
-                sub_u = sub[sub['Fecha_dt'] == ult_f]
-                
-                cmj_m = sub_u[sub_u['Tipo'].astype(str).str.upper() == 'CMJ']['Altura'].mean()
-                if pd.notna(cmj_m): cmj_val = cmj_m
-                
-                sr = sub_u[sub_u['Tipo'].astype(str).str.lower() == 'slcmjright']['Altura'].mean()
-                sl = sub_u[sub_u['Tipo'].astype(str).str.lower() == 'slcmjleft']['Altura'].mean()
-                if pd.notna(sr) and pd.notna(sl): slcmj_val = (sr + sl) / 2
-                elif pd.notna(sr): slcmj_val = sr
-                elif pd.notna(sl): slcmj_val = sl
-        lst_cmj.append(cmj_val)
-        lst_slcmj.append(slcmj_val)
-        
-        # DRI
-        dri_val = np.nan
-        if not df_dri_sheet.empty and 'DRI' in df_dri_sheet.columns:
-            sub = df_dri_sheet[(df_dri_sheet['Nombre_Cruce'] == nom) & (df_dri_sheet['Fecha_dt'] <= f_dt)]
-            if not sub.empty: dri_val = sub.sort_values('Fecha_dt').iloc[-1]['DRI']
-        lst_dri.append(dri_val)
-        
-        # VAM
-        vam_val = np.nan
-        if not df_vam_eval.empty:
-            sub = df_vam_eval[(df_vam_eval['Nombre_Cruce'] == nom) & (df_vam_eval['Fecha_dt'] <= f_dt)]
-            if not sub.empty: vam_val = sub.sort_values('Fecha_dt').iloc[-1]['VAM']
-        lst_vam.append(vam_val)
+    # Mapeo rápido del último valor por jugador
+    def get_dict_ultimo(df_src, col_val, col_tipo=None, filtro_tipo=None):
+        if df_src.empty or col_val not in df_src.columns: return {}
+        df_tmp = df_src.copy()
+        if 'Nombre' in df_tmp.columns: df_tmp['Nombre_Cruce'] = df_tmp['Nombre'].astype(str).str.strip().str.lower()
+        if col_tipo and filtro_tipo:
+            df_tmp = df_tmp[df_tmp[col_tipo].astype(str).str.upper() == filtro_tipo.upper()]
+        return df_tmp.groupby('Nombre_Cruce')[col_val].last().to_dict()
 
-    df_base['Peso_Eval'] = lst_peso
-    df_base['CMJ_Eval'] = lst_cmj
-    df_base['slCMJ_Eval'] = lst_slcmj
-    df_base['DRI_Eval'] = lst_dri
-    df_base['VAM_Eval'] = lst_vam
+    dict_p = get_dict_ultimo(df_peso, 'Peso')
+    dict_cmj = get_dict_ultimo(df_saltos, 'Altura', 'Tipo', 'CMJ')
+    dict_vam = get_dict_ultimo(df_vam, 'VAM')
+    dict_dri = get_dict_ultimo(df_dri, 'DRI') if 'DRI' in df_dri.columns else {}
+
+    df_base['Peso_Eval'] = df_base['Nombre_Cruce'].map(dict_p)
+    df_base['CMJ_Eval'] = df_base['Nombre_Cruce'].map(dict_cmj)
+    df_base['slCMJ_Eval'] = np.nan
+    df_base['DRI_Eval'] = df_base['Nombre_Cruce'].map(dict_dri)
+    df_base['VAM_Eval'] = df_base['Nombre_Cruce'].map(dict_vam)
 
     return df_base
 
 df_dosis = cargar_datos_completos_dosis()
 
 # =============================================================================
-# 3. INTERFAZ Y GRÁFICO 1: MATRIZ DOSIS - RESPUESTA (DISPERSIÓN)
+# 3. INTERFAZ Y DISPERSIÓN
 # =============================================================================
 st.markdown("""
     <div>
@@ -397,3 +343,50 @@ try:
 except Exception:
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
+# =============================================================================
+# 4. MATRIZ DE CORRELACIONES DE PEARSON (HEATMAP)
+# =============================================================================
+st.markdown("---")
+st.markdown("### 📊 Matriz de Correlaciones Integrada (Pearson)")
+st.caption("Muestra la fuerza de relación (-1.0 a +1.0) entre la Carga Interna (sRPE), el Recuperación/Wellness (D+1), el GPS de la sesión y las Evaluaciones Físicas.")
+
+dict_cols_corr = {
+    'sRPE': 'sRPE (Sesión)',
+    'Wellness_D1': 'Wellness (D+1)',
+    'Dist_18': 'Distancia >18 km/h',
+    'V_MAX': 'Velocidad Máx (GPS)',
+    'AC_MAX': 'Acel Máx (GPS)',
+    'DEC_MAX': 'Desac Máx (GPS)',
+    'Player_Load': 'Player Load',
+    'Peso_Eval': 'Peso (kg)',
+    'CMJ_Eval': 'CMJ Bilateral',
+    'DRI_Eval': 'DRI (Drop Jump)',
+    'VAM_Eval': 'VAM (km/h)'
+}
+
+cols_existentes = [c for c in dict_cols_corr.keys() if c in df_grafico.columns]
+df_corr_sub = df_grafico[cols_existentes].rename(columns=dict_cols_corr)
+
+matriz_corr = df_corr_sub.corr(method='pearson')
+
+if not matriz_corr.empty:
+    fig_corr = px.imshow(
+        matriz_corr,
+        text_auto=".2f",
+        aspect="auto",
+        color_continuous_scale="RdBu_r",
+        range_color=[-1, 1],
+        title="Matriz de Correlación de Pearson"
+    )
+
+    fig_corr.update_layout(
+        height=550,
+        template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=20, r=20, t=40, b=50)
+    )
+
+    st.plotly_chart(fig_corr, use_container_width=True, config={'displayModeBar': False})
+else:
+    st.info("No hay suficientes pares de datos para calcular la matriz de correlaciones.")
