@@ -190,6 +190,7 @@ df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 1.5) + df_master['Dist_25']) * df_master['RPE_G']
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
+# --- DICCIONARIO DE RANGOS DE PERIODIZACIÓN TÁCTICA (MIN, MAX) ---
 def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
@@ -251,12 +252,29 @@ else:
 for m in metricas_todas:
     if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
 
+# Asignación de Objetivos en base a la categoría táctica de la variable
 for m in metricas_todas:
-    df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
-    df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
-    
-    df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
-    df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
+    if m in ['Dist_28', 'Sprints']:
+        # Categoría: UMBRAL EXPLOSIVO (100% Partido Directo, sin rango)
+        df_master[f'Target_Min_Pct_{m}'] = 100
+        df_master[f'Target_Max_Pct_{m}'] = 100
+        df_master[f'Target_Min_{m}'] = target_refs_global[m]
+        df_master[f'Target_Max_{m}'] = target_refs_global[m]
+        df_master[f'Target_{m}'] = target_refs_global[m]
+    elif m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+        # Categoría: PICO NEUROMUSCULAR (No usa esta lógica volumétrica)
+        df_master[f'Target_Min_Pct_{m}'] = 0
+        df_master[f'Target_Max_Pct_{m}'] = 0
+        df_master[f'Target_Min_{m}'] = 0
+        df_master[f'Target_Max_{m}'] = 0
+        df_master[f'Target_{m}'] = 0
+    else:
+        # Categoría: VOLUMEN PERIODIZADO (Con rango Min-Max)
+        df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
+        df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
+        df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
+        df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
+        df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS
@@ -406,16 +424,20 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
-    
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
         fig.add_trace(go.Bar(x=[val], y=[0], orientation='h', marker=dict(color=color_bar), text=[texto_val], textposition='auto', insidetextanchor='end', textfont=dict(color="white", size=18, family="Arial Black"), hoverinfo="x", width=0.8))
     
-    if t_max > 0: 
-        fig.add_shape(type="rect", x0=t_min, y0=-0.4, x1=t_max, y1=0.4, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
-        fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
-        fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
+    if t_max > 0:
+        if t_min == t_max:
+            # Para variables Umbral Explosivo (Sprints, Dist >28), se dibuja una sola línea
+            fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=3))
+        else:
+            # Para variables de Volumen Periodizado
+            fig.add_shape(type="rect", x0=t_min, y0=-0.4, x1=t_max, y1=0.4, fillcolor="rgba(46, 204, 113, 0.3)", line=dict(width=0))
+            fig.add_shape(type="line", x0=t_min, x1=t_min, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
+            fig.add_shape(type="line", x0=t_max, x1=t_max, y0=-0.45, y1=0.45, line=dict(color="#F1C40F", width=2))
         
     fig.update_layout(
         barmode='overlay', height=65, margin=dict(t=0, b=0, l=0, r=0), 
@@ -440,7 +462,7 @@ pintar_bullet('Decels', 'Decelerations', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
-# 6. TABLA INDIVIDUAL (OBJETIVOS PERSONALIZADOS POR RANGOS ABSOLUTOS)
+# 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
 st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
@@ -453,7 +475,20 @@ df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower(
 df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
 
 if not df_sesion_tabla.empty:
-    escalas_max = {m: max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_Max_{m}'].max()) * 1.2 if max(df_sesion_tabla[m].max(), df_sesion_tabla[f'Target_Max_{m}'].max()) > 0 else 10 for m in metricas_tabla}
+    
+    # Aseguramos que la escala visual máxima de cada columna se adapte perfectamente
+    escalas_max = {}
+    for m in metricas_tabla:
+        max_sesion = df_sesion_tabla[m].max() if not df_sesion_tabla.empty else 0
+        if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+            ref_max = df_master[m].max() if not df_master.empty else 0
+            escalas_max[m] = max(max_sesion, ref_max) * 1.2
+        elif m in ['Dist_28', 'Sprints']:
+            escalas_max[m] = max(max_sesion, target_refs_global.get(m, 0)) * 1.2
+        else:
+            t_max_val = df_sesion_tabla[f'Target_Max_{m}'].max() if not df_sesion_tabla.empty else 0
+            escalas_max[m] = max(max_sesion, t_max_val) * 1.2
+        if escalas_max[m] == 0: escalas_max[m] = 10
 
     def dibujar_barra_rango(valor, t_min, t_max, max_val, es_decimal):
         if max_val == 0: max_val = 1
@@ -477,15 +512,27 @@ if not df_sesion_tabla.empty:
             <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
         </div>
         """
+        
+    def dibujar_barra_umbral(valor, target, max_val, es_decimal):
+        if max_val == 0: max_val = 1
+        pct_fill = min((valor/max_val)*100, 100)
+        pct_target = min((target/max_val)*100, 100)
+        t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
+        c_barra = "#E74C3C" if valor > target and target > 0 else "#3498DB"
+        
+        return f"""
+        <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
+            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
+            <div style="position:absolute; left:{pct_target}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
+            <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
+        </div>
+        """
 
     def dibujar_barra_pico(valor_real, valor_abs, target_90, max_hist, es_decimal):
         max_escala = max(max_hist, valor_abs) * 1.1 if max(max_hist, valor_abs) > 0 else 10
         pct_fill = min((valor_abs / max_escala) * 100, 100)
         pct_target = min((target_90 / max_escala) * 100, 100)
-        
         t_val = f"{valor_real:.1f}" if es_decimal else f"{valor_real:.0f}"
-        
-        # FIX: Rojo si supera el 90%, verde si no.
         c_barra = "#E74C3C" if valor_abs >= target_90 and target_90 > 0 else "#2ECC71"
         
         return f"""
@@ -502,22 +549,16 @@ if not df_sesion_tabla.empty:
         <thead><tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
         <th style="padding: 10px;">POSICIÓN</th><th style="padding: 10px; text-align:left;">JUGADOR</th>
     """
-    
-    # FIX: Cabeceras dinámicas. 2 columnas para Picos, 3 para Volumen.
     for m_key, nombre_m in metricas_tabla.items(): 
-        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
-            html += f"<th colspan='2' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
-        else:
-            html += f"<th colspan='3' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
+        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']: html += f"<th colspan='2' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
+        else: html += f"<th colspan='3' style='padding:10px; border-left:1px solid #444;'>{nombre_m}</th>"
             
     html += "<th style='padding: 10px; border-left: 1px solid #444;'>RPE</th></tr>"
     html += "<tr style='border-bottom: 1px solid #555; font-size: 10px; color: #A0AEC0;'><th></th><th></th>"
     
     for m_key in metricas_tabla: 
-        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
-            html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>% Max</th>"
-        else:
-            html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>Obj</th><th>Z-Score</th>"
+        if m_key in ['Acc_Max', 'Dec_Max', 'Top_Speed']: html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>% Max</th>"
+        else: html += "<th style='padding:5px; border-left:1px solid #444;'>Sesión(Ref)</th><th>Obj</th><th>Z-Score</th>"
             
     html += "<th></th></tr></thead><tbody>"
 
@@ -526,7 +567,6 @@ if not df_sesion_tabla.empty:
     
     for _, row in df_sesion_tabla.iterrows():
         jugador, pos, rpe_val = row['Nombre'], row['Posicion'], row['RPE_G']
-        
         df_h = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] <= fecha_sel)].sort_values('Fecha').tail(28)
         df_28_player = df_master[(df_master['Nombre'] == jugador) & (df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]
         
@@ -540,7 +580,7 @@ if not df_sesion_tabla.empty:
             val = row[m]
             es_dec = m in ['Dist_18', 'Dist_25', 'Dist_28', 'Acc_Max', 'Dec_Max', 'Top_Speed']
             
-            # 1. Lógica Variables PICO (Neuromusculares)
+            # --- 1. Lógica Variables PICO (Neuromusculares) ---
             if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
                 if m == 'Dec_Max':
                     max_h = abs(df_28_player[m].min()) if not df_28_player.empty else 0
@@ -553,12 +593,28 @@ if not df_sesion_tabla.empty:
                 pct_max = (v_abs / max_h * 100) if max_h > 0 else 0
                 
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_pico(val, v_abs, t_90, max_h, es_dec)}</td>"
-                
-                # FIX: Mostrar el porcentaje exacto y colorear el número
                 color_pct = "#E74C3C" if pct_max >= 90 else "#2ECC71"
                 html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
+            
+            # --- 2. Lógica Variables UMBRAL EXPLOSIVO (Sprints, Dist >28) ---
+            elif m in ['Dist_28', 'Sprints']:
+                t_ref = target_refs_global[m]
+                diff_text = ""
+                if val < t_ref:
+                    diff = t_ref - val
+                    diff_text = f"-{diff:.1f}" if es_dec else f"-{diff:.0f}"
+                elif val > t_ref and t_ref > 0:
+                    diff = val - t_ref
+                    diff_text = f"+{diff:.1f}" if es_dec else f"+{diff:.0f}"
+                    
+                html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_umbral(val, t_ref, escalas_max[m], es_dec)}</td>"
+                html += f"<td style='padding:5px; background-color:transparent; color:#E2E8F0; font-weight:bold; font-size:11px;'>{diff_text}</td>"
                 
-            # 2. Lógica Variables VOLUMEN (Normales)
+                z = (val - df_h[m].mean()) / df_h[m].std() if len(df_h) > 2 and df_h[m].std() > 0 else 0
+                c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
+                html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
+
+            # --- 3. Lógica Variables VOLUMEN (Normales con Rango) ---
             else:
                 t_min = row[f'Target_Min_{m}']
                 t_max = row[f'Target_Max_{m}']
