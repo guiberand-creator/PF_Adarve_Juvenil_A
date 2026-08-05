@@ -274,13 +274,6 @@ for m in metricas_todas:
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS
 # =============================================================================
-st.markdown("""
-    <div style="margin-bottom: 5px;">
-        <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Evolución táctica, referencias de partido y fatiga neuromuscular.</p>
-    </div>
-""", unsafe_allow_html=True)
-
 col_f1, col_f2 = st.columns(2)
 with col_f1: 
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
