@@ -269,8 +269,7 @@ df_master['Valido_Media'] = validez
 df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 
 # =============================================================================
-# NUEVO CÁLCULO DE CARGA (UA) PONDERADO
-# Carga UA = [ Dist_Total + (Dist_18 * 2) + (Dist_25 * 4) + ((Acel + Desac) * 1.5) ] * RPE_G
+# CÁLCULO DE CARGA (UA) PONDERADO
 # =============================================================================
 df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 2) + (df_master['Dist_25'] * 4) + ((df_master['Accels'] + df_master['Decels']) * 1.5)) * df_master['RPE_G']
 
@@ -571,9 +570,15 @@ with c_hist:
         else:
             df_agg = df_hist_eq.groupby('Fecha').agg({m_graf: 'mean', f'Target_{m_graf}': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
 
+        # INCORPORAR LOS ESCUDOS A LA GRÁFICA DE BARRAS
+        if not df_calendario.empty:
+            df_agg = pd.merge(df_agg, df_calendario[['Fecha', 'Escudo']], on='Fecha', how='left')
+        else:
+            df_agg['Escudo'] = None
+
         fig_hist = go.Figure()
         colores_barras = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_agg['Tipo_Dia_Oficial']]
-        textos_barras = ['P' if 'partido' in str(t).lower() else '' for t in df_agg['Tipo_Dia_Oficial']]
+        textos_barras = ['' for t in df_agg['Tipo_Dia_Oficial']] # Sin la letra 'P'
 
         fig_hist.add_trace(go.Bar(
             x=df_agg['Fecha'], y=df_agg[m_graf],
@@ -593,7 +598,29 @@ with c_hist:
                 hoverinfo='skip'
             ))
 
-        fig_hist.update_layout(template="plotly_dark", height=150, margin=dict(l=0, r=0, t=20, b=0), xaxis=dict(visible=False), yaxis=dict(visible=False), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
+        max_y_hist = df_agg[m_graf].max() if not df_agg.empty else 1
+        if max_y_hist == 0: max_y_hist = 1
+        
+        hist_images = []
+        for _, row in df_agg.iterrows():
+            if 'partido' in str(row['Tipo_Dia_Oficial']).lower() and pd.notna(row.get('Escudo')) and str(row.get('Escudo')).startswith('http'):
+                hist_images.append(dict(
+                    source=row['Escudo'],
+                    x=row['Fecha'],
+                    y=row[m_graf] / 2, # Posición en el medio de la barra
+                    xref="x", yref="y",
+                    sizex=0.8, # Funciona perfecto al forzar el xaxis a 'category'
+                    sizey=max_y_hist * 0.35, # Escudo grande para que se vea claro
+                    xanchor="center", yanchor="middle"
+                ))
+
+        fig_hist.update_layout(
+            images=hist_images,
+            template="plotly_dark", height=150, margin=dict(l=0, r=0, t=20, b=0), 
+            xaxis=dict(type='category', visible=False), 
+            yaxis=dict(visible=False), 
+            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False
+        )
         st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
 
 with c_info:
@@ -983,12 +1010,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         fill='toself', name=row['Rival'], marker=dict(color=color_r), fillcolor=color_r_fill, opacity=0.8
                     ))
                 
-                # Altura ajustada a 500 para igualar el límite inferior y leyenda vertical a la izquierda
                 fig_radar.update_layout(
-                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=12, color="white"))),
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False), angularaxis=dict(tickfont=dict(size=11, color="white"))),
                     showlegend=True, 
-                    legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="right", x=-0.05),
-                    template="plotly_dark", height=500, margin=dict(l=120, r=40, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+                    template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
             else:
