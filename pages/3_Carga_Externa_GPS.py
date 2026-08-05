@@ -272,25 +272,30 @@ for m in metricas_todas:
         df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
-# 4. INTERFAZ: CABECERA Y FILTROS
+# 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
 # =============================================================================
 st.markdown("""
     <div style="margin-bottom: 5px;">
         <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
+        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Evolución táctica, referencias de partido y fatiga neuromuscular.</p>
     </div>
 """, unsafe_allow_html=True)
 
-col_f1, col_f2 = st.columns(2)
+col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1: 
     fecha_sel = st.selectbox("📅 Select Date:", fechas_disp)
 with col_f2:
     posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
     pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
+with col_f3:
+    if pos_sel == "Equipo Completo":
+        jugadores_validos = sorted([str(j) for j in df_master['Nombre'].unique() if str(j).lower() != 'nan'])
+    else:
+        jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
+    jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos)
 
-if pos_sel == "Equipo Completo": df_sesion = df_master[df_master['Fecha'] == fecha_sel]
-else: df_sesion = df_master[(df_master['Fecha'] == fecha_sel) & (df_master['Posicion'] == pos_sel)]
-
-# --- CÁLCULO DEL MICROCICLO ---
+# APLICAR FILTROS GLOBALES
+df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
@@ -302,11 +307,22 @@ else:
     fecha_inicio_sem = fecha_datetime - timedelta(days=6)
 
 df_sem = df_master[(df_fechas >= fecha_inicio_sem) & (df_fechas <= fecha_datetime)]
-
 fecha_inicio_vmax = fecha_datetime - timedelta(days=28)
 df_28d = df_master[(df_fechas >= fecha_inicio_vmax) & (df_fechas <= fecha_datetime)]
-vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 
+# Aplicamos los filtros de Posición y Jugador a los DataFrames
+if pos_sel != "Equipo Completo":
+    df_sesion = df_sesion[df_sesion['Posicion'] == pos_sel]
+    df_sem = df_sem[df_sem['Posicion'] == pos_sel]
+    df_28d = df_28d[df_28d['Posicion'] == pos_sel]
+
+if jug_sel != "Todos":
+    df_sesion = df_sesion[df_sesion['Nombre'] == jug_sel]
+    df_sem = df_sem[df_sem['Nombre'] == jug_sel]
+    df_28d = df_28d[df_28d['Nombre'] == jug_sel]
+
+# --- SISTEMA DE ALERTAS INDEPENDIENTES ---
+vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
 df_sem['Hit_90'] = df_sem['Pct_Vmax'] >= 90
@@ -365,14 +381,27 @@ st.markdown("---")
 tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper()
 duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()) if not df_sesion.empty else 0
 
-# --- HISTÓRICO Y VMAX DEL DÍA ---
-df_hist_eq = df_28d[df_28d['Valido_Media']==True].groupby('Fecha').agg({'Carga_UA': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
-fig_hist = go.Figure(go.Bar(
-    x=df_hist_eq['Fecha'], y=df_hist_eq['Carga_UA'], 
-    marker_color=['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_hist_eq['Tipo_Dia_Oficial']], 
-    text=['P' if 'partido' in str(t).lower() else 'Tr' for t in df_hist_eq['Tipo_Dia_Oficial']], textposition='outside', textfont=dict(color="white", size=12)
-))
-fig_hist.update_layout(template="plotly_dark", height=150, margin=dict(l=0, r=0, t=20, b=0), xaxis=dict(visible=False), yaxis=dict(visible=False), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+# --- HISTÓRICO 28 DÍAS DINÁMICO ---
+opciones_grafico = {
+    'Carga General (UA)': 'Carga_UA',
+    'Dist. Total': 'Dist_Total',
+    'Dist. >18': 'Dist_18',
+    'Dist. >25': 'Dist_25',
+    'Dist. >28': 'Dist_28',
+    'Sprints': 'Sprints',
+    'Aceleraciones': 'Accels',
+    'Desaceleraciones': 'Decels',
+    'Ac. Máx': 'Acc_Max',
+    'Dec. Máx': 'Dec_Max',
+    'V. Máx': 'Top_Speed',
+    'Player Load': 'Player_Load'
+}
+
+# Si filtramos por grupo, enseñamos todo para ver tendencias, si no recuperamos solo el válido para medias
+if pos_sel == "Equipo Completo" and jug_sel == "Todos":
+    df_hist_eq = df_28d[df_28d['Valido_Media']==True].copy()
+else:
+    df_hist_eq = df_28d.copy()
 
 df_vmax_hoy = df_sesion.merge(vmax_hist, on='Nombre', how='left')
 df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_vmax_hoy['Top_Speed']/df_vmax_hoy['Vmax_4_semanas'])*100, 0)
@@ -385,12 +414,50 @@ with c_dur:
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
-    st.markdown(f"<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Last 28 days training schedule</p>", unsafe_allow_html=True)
-    st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+    c_h1, c_h2 = st.columns([1.5, 1])
+    with c_h1: st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Training Schedule (28d)</p>", unsafe_allow_html=True)
+    with c_h2: metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
+    
+    m_graf = opciones_grafico[metrica_grafico]
+    
+    if not df_hist_eq.empty:
+        if m_graf == 'Carga_UA':
+            df_agg = df_hist_eq.groupby('Fecha').agg({'Carga_UA': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
+        elif m_graf in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+            df_agg = df_hist_eq.groupby('Fecha').agg({m_graf: 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
+        else:
+            df_agg = df_hist_eq.groupby('Fecha').agg({m_graf: 'mean', f'Target_{m_graf}': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
+
+        fig_hist = go.Figure()
+        colores_barras = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_agg['Tipo_Dia_Oficial']]
+        textos_barras = ['P' if 'partido' in str(t).lower() else '' for t in df_agg['Tipo_Dia_Oficial']]
+
+        fig_hist.add_trace(go.Bar(
+            x=df_agg['Fecha'], y=df_agg[m_graf],
+            marker_color=colores_barras, text=textos_barras, textposition='outside', textfont=dict(color="white", size=10)
+        ))
+
+        # Añadir Líneas Target de Referencia
+        if m_graf != 'Carga_UA':
+            if m_graf in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+                if m_graf == 'Dec_Max': target_y = [df_agg[m_graf].min() * 0.90] * len(df_agg)
+                else: target_y = [df_agg[m_graf].max() * 0.90] * len(df_agg)
+            else:
+                target_y = df_agg[f'Target_{m_graf}']
+
+            fig_hist.add_trace(go.Scatter(
+                x=df_agg['Fecha'], y=target_y,
+                mode='markers', marker=dict(color='#F1C40F', symbol='line-ew', size=25, line=dict(width=3, color='#F1C40F')),
+                hoverinfo='skip'
+            ))
+
+        fig_hist.update_layout(template="plotly_dark", height=150, margin=dict(l=0, r=0, t=20, b=0), xaxis=dict(visible=False), yaxis=dict(visible=False), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
+        st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+
 with c_info:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Velocidad Máxima HOY (>90%)</p>", unsafe_allow_html=True)
     c_vmax = "#2ECC71" if media_vmax_sesion >= 90 else "#F1C40F" if media_vmax_sesion >= 85 else "#E74C3C"
-    st.markdown(f"<h2 style='color:{c_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media equipo</span></h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='color:{c_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media</span></h2>", unsafe_allow_html=True)
     with st.expander("👁️ Jugadores al 90% hoy"):
         if not alcanzan_90.empty:
             for _, r in alcanzan_90.iterrows(): st.markdown(f"<span style='color:#2ECC71; font-size:14px;'>• {r['Nombre']} ({r['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
@@ -399,6 +466,8 @@ with c_info:
 # =============================================================================
 # 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO)
 # =============================================================================
+st.markdown("### 📊 Session Mean vs Target Programado")
+
 medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_min = {m: df_sesion[f'Target_Min_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
 target_programado_max = {m: df_sesion[f'Target_Max_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
@@ -416,7 +485,6 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     elif val > t_max: color_bar = "#E74C3C"
     
     fig = go.Figure()
-    
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
     
     if val > 0: 
@@ -456,10 +524,10 @@ pintar_bullet('Player_Load', 'Player Load', r2_4)
 # 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
-st.markdown("### Desglose por jugadores")
+st.markdown("### 🧑‍🤝‍🧑 Análisis Individual vs Objetivo Periodizado")
 
 metricas_tabla = {'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.', 'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Load'}
-df_sesion_tabla = df_master[df_master['Fecha'] == fecha_sel].copy()
+df_sesion_tabla = df_sesion.copy()
 
 orden_tactico = {'defensa central': 1, 'defensa lateral': 2, 'mediocentro': 3, 'mediapunta': 4, 'extremo': 5, 'delantero': 6}
 df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower().str.strip().map(orden_tactico).fillna(99)
