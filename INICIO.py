@@ -199,7 +199,10 @@ def analizar_datos_completos():
                 v_carga = pd.to_numeric(df_w_validos[col_carga[0]], errors='coerce').fillna(0)
                 
                 df_w_validos['Well_Player_Mean'] = (v_sueno + v_dolor + v_estres + v_carga) / 4
-                well_medio_hoy = df_w_validos['Well_Player_Mean'].mean() if not df_w_validos.empty else 0.0
+                
+                # CORRECCIÓN DE MEDIA WELLNESS: Solo usar mayores a 0
+                df_w_validos_limpio = df_w_validos[df_w_validos['Well_Player_Mean'] > 0]
+                well_medio_hoy = df_w_validos_limpio['Well_Player_Mean'].mean() if not df_w_validos_limpio.empty else 0.0
                 
                 # Guardar el Wellness exacto por jugador para el campograma
                 for _, r_w in df_w_validos.iterrows():
@@ -246,7 +249,10 @@ def analizar_datos_completos():
             if not df_filtrado.empty:
                 masca_partido = df_filtrado.apply(es_valido_partido, axis=1)
                 df_validos_media = df_filtrado[masca_partido]
-                rpe_medio_hoy = df_validos_media['RPE_General'].mean() if not df_validos_media.empty else 0.0
+                
+                # CORRECCIÓN DE MEDIA RPE: Filtramos para ignorar los que dan 0
+                df_validos_limpio = df_validos_media[df_validos_media['RPE_General'] > 0]
+                rpe_medio_hoy = df_validos_limpio['RPE_General'].mean() if not df_validos_limpio.empty else 0.0
             else:
                 rpe_medio_hoy = 0.0
             
