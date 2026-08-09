@@ -187,28 +187,25 @@ def analizar_datos_completos():
             else:
                 df_w_validos = df_w_hoy.copy()
             
-            col_sueno = next((c for c in df_w_validos.columns if c.startswith('SUE')), None)
-            col_dolor = next((c for c in df_w_validos.columns if c.startswith('DOLOR')), None)
-            col_estres = next((c for c in df_w_validos.columns if c.startswith('ESTRES')), None)
-            col_carga = next((c for c in df_w_validos.columns if c.startswith('CARGA')), None)
+            col_sueno = [c for c in df_w_validos.columns if c.startswith('SUE')]
+            col_dolor = [c for c in df_w_validos.columns if c.startswith('DOLOR')]
+            col_estres = [c for c in df_w_validos.columns if c.startswith('ESTRES')]
+            col_carga = [c for c in df_w_validos.columns if c.startswith('CARGA')]
             
             if col_sueno and col_dolor and col_estres and col_carga:
-                # Convertimos ignorando letras, los errores se vuelven NaN para no fastidiar la media
-                v_sueno = pd.to_numeric(df_w_validos[col_sueno], errors='coerce')
-                v_dolor = pd.to_numeric(df_w_validos[col_dolor], errors='coerce')
-                v_estres = pd.to_numeric(df_w_validos[col_estres], errors='coerce')
-                v_carga = pd.to_numeric(df_w_validos[col_carga], errors='coerce')
+                v_sueno = pd.to_numeric(df_w_validos[col_sueno[0]], errors='coerce').fillna(0)
+                v_dolor = pd.to_numeric(df_w_validos[col_dolor[0]], errors='coerce').fillna(0)
+                v_estres = pd.to_numeric(df_w_validos[col_estres[0]], errors='coerce').fillna(0)
+                v_carga = pd.to_numeric(df_w_validos[col_carga[0]], errors='coerce').fillna(0)
                 
                 df_w_validos['Well_Player_Mean'] = (v_sueno + v_dolor + v_estres + v_carga) / 4
+                well_medio_hoy = df_w_validos['Well_Player_Mean'].mean() if not df_w_validos.empty else 0.0
                 
-                # Filtro final: contar solo los que sean mayores a 0 para no hundir la media
-                df_w_validos_limpio = df_w_validos[df_w_validos['Well_Player_Mean'] > 0]
-                well_medio_hoy = df_w_validos_limpio['Well_Player_Mean'].mean() if not df_w_validos_limpio.empty else 0.0
-                
-                for _, r_w in df_w_validos_limpio.iterrows():
+                # Guardar el Wellness exacto por jugador para el campograma
+                for _, r_w in df_w_validos.iterrows():
                     dict_wellness_jugadores[r_w['Nombre_Clean']] = r_w['Well_Player_Mean']
 
-                df_criticos = df_w_validos_limpio[df_w_validos_limpio['Well_Player_Mean'] < 3.0]
+                df_criticos = df_w_validos[df_w_validos['Well_Player_Mean'] < 3.0]
                 well_criticos = sorted(list(df_criticos['Nombre_Clean'].unique()))
             
             respondieron_w = df_w_hoy['Nombre_Clean'].unique()
@@ -220,36 +217,36 @@ def analizar_datos_completos():
         if pd.notnull(ultima_fecha_rpe):
             df_r_hoy = df_rpe[df_rpe['Fecha_Dia'] == ultima_fecha_rpe].copy()
             
-            # Buscamos columnas de manera segura
-            col_cardio = next((c for c in df_r_hoy.columns if 'CARDIO' in c or 'PULMONAR' in c), None)
-            col_muscular = next((c for c in df_r_hoy.columns if 'MUSCULAR' in c), None)
-            col_tipo_sesion = next((c for c in df_r_hoy.columns if 'TIPO DE SESI' in c or 'TIPO_SESI' in c), None)
+            col_cardio = [c for c in df_r_hoy.columns if 'CARDIO' in c or 'PULMONAR' in c]
+            col_muscular = [c for c in df_r_hoy.columns if 'MUSCULAR' in c]
+            col_tipo_sesion = [c for c in df_r_hoy.columns if 'TIPO DE SESI' in c or 'TIPO_SESI' in c]
+            col_minutos = [c for c in df_r_hoy.columns if 'MINUTOS' in c]
             
-            # Extraemos valores como números. Si hay celdas vacías serán NaN (no estropean la media)
-            if col_cardio: df_r_hoy['RPE_Cardio'] = pd.to_numeric(df_r_hoy[col_cardio], errors='coerce')
-            else: df_r_hoy['RPE_Cardio'] = np.nan
+            df_r_hoy['RPE_Cardio'] = pd.to_numeric(df_r_hoy[col_cardio[0]], errors='coerce').fillna(0) if col_cardio else 0
+            df_r_hoy['RPE_Muscular'] = pd.to_numeric(df_r_hoy[col_muscular[0]], errors='coerce').fillna(0) if col_muscular else 0
+            df_r_hoy['RPE_General'] = (df_r_hoy['RPE_Cardio'] + df_r_hoy['RPE_Muscular']) / 2
             
-            if col_muscular: df_r_hoy['RPE_Muscular'] = pd.to_numeric(df_r_hoy[col_muscular], errors='coerce')
-            else: df_r_hoy['RPE_Muscular'] = np.nan
+            df_r_hoy['Sesion_Clean'] = df_r_hoy[col_tipo_sesion[0]].fillna('').astype(str).str.strip().str.lower() if col_tipo_sesion else ''
+            df_r_hoy['Minutos_Num'] = pd.to_numeric(df_r_hoy[col_minutos[0]], errors='coerce').fillna(0) if col_minutos else 0
             
-            # Media por jugador (Cardio + Muscular). Ignora NaNs automáticamente
-            df_r_hoy['RPE_General'] = df_r_hoy[['RPE_Cardio', 'RPE_Muscular']].mean(axis=1)
+            df_filtrado = df_r_hoy[df_r_hoy['Sesion_Clean'] != 'entreno a parte/lesión']
             
-            if col_tipo_sesion:
-                df_r_hoy['Sesion_Clean'] = df_r_hoy[col_tipo_sesion].fillna('Entreno').astype(str).str.strip().str.title()
-            else:
-                df_r_hoy['Sesion_Clean'] = 'Entreno'
-            
-            # Filtramos lesionados, pero dejamos partidos, entrenos, etc. TODOS cuentan.
-            df_filtrado = df_r_hoy[df_r_hoy['Sesion_Clean'].str.lower() != 'entreno a parte/lesión'].copy()
-            
-            if not df_filtrado.empty:
-                etiqueta_moda = df_filtrado['Sesion_Clean'].mode()
-                sesion_tipo_hoy = str(etiqueta_moda.iloc[0]).strip() if not etiqueta_moda.empty else "Sesión"
+            if col_tipo_sesion and not df_filtrado.empty:
+                etiqueta_moda = df_filtrado[col_tipo_sesion[0]].dropna().mode()
+                if not etiqueta_moda.empty:
+                    sesion_tipo_hoy = str(etiqueta_moda.iloc[0]).strip()
+            elif col_tipo_sesion and not df_r_hoy.empty:
+                sesion_tipo_hoy = str(df_r_hoy[col_tipo_sesion[0]].dropna().iloc[0]).strip()
+
+            def es_valido_partido(row):
+                if 'partido' in row['Sesion_Clean'] and row['Minutos_Num'] < 70:
+                    return False
+                return True
                 
-                # ¡SIN FILTRO DE MINUTOS! Contamos el RPE de todos los que lo hayan marcado > 0
-                df_validos_limpio = df_filtrado[df_filtrado['RPE_General'] > 0]
-                rpe_medio_hoy = df_validos_limpio['RPE_General'].mean() if not df_validos_limpio.empty else 0.0
+            if not df_filtrado.empty:
+                masca_partido = df_filtrado.apply(es_valido_partido, axis=1)
+                df_validos_media = df_filtrado[masca_partido]
+                rpe_medio_hoy = df_validos_media['RPE_General'].mean() if not df_validos_media.empty else 0.0
             else:
                 rpe_medio_hoy = 0.0
             
