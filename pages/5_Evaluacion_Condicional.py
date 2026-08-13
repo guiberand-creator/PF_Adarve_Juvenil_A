@@ -1803,7 +1803,7 @@ elif pest_sel == "🏆 Ranking Global":
             st.markdown("<br><hr>", unsafe_allow_html=True)
 
             st.markdown(f"### Clasificación Completa ({f_sel_str})")
-            st.caption("Nota: Menos Puntos Totales = Mejor Puesto Global. El número en cada columna representa el lugar obtenido en esa prueba específica (1º = Mejor de la plantilla).")
+            st.caption("Nota: Menos Puntos Totales = Mejor Puesto Global. Las columnas muestran los resultados reales obtenidos en cada test.")
 
             df_tabla = df_rank_base.copy()
             def icon_pos(pos):
@@ -1814,18 +1814,28 @@ elif pest_sel == "🏆 Ranking Global":
 
             df_tabla['POSICION_GLOBAL'] = df_tabla['POSICION_GLOBAL'].apply(icon_pos)
 
+            # Redondear valores numéricos para visualización limpia
+            if 'Movilidad_Score' in df_tabla.columns: df_tabla['Movilidad_Score'] = df_tabla['Movilidad_Score'].round(1)
+            if 'VAM' in df_tabla.columns: df_tabla['VAM'] = df_tabla['VAM'].round(2)
+            if 'Fmax_Rel' in df_tabla.columns: df_tabla['Fmax_Rel'] = df_tabla['Fmax_Rel'].round(2)
+            if 'CMJ_Altura' in df_tabla.columns: df_tabla['CMJ_Altura'] = df_tabla['CMJ_Altura'].round(1)
+            if 'DRI' in df_tabla.columns: df_tabla['DRI'] = df_tabla['DRI'].round(2)
+            if 'Tren_Superior_Reps' in df_tabla.columns: df_tabla['Tren_Superior_Reps'] = df_tabla['Tren_Superior_Reps'].fillna(0).round(0).astype(int)
+            if 'V_MAX' in df_tabla.columns: df_tabla['V_MAX'] = df_tabla['V_MAX'].round(1)
+            if 'AC_MAX' in df_tabla.columns: df_tabla['AC_MAX'] = df_tabla['AC_MAX'].round(2)
+
             cols_mostrar = {
                 'POSICION_GLOBAL': 'Posición',
                 'Nombre': 'Jugador',
                 'PUNTOS_TOTALES': '🏆 Puntos Totales',
-                'P_Movilidad': '🩺 Movilidad',
-                'P_VAM Aeróbico': '🫁 VAM',
-                'P_Dinamometría': '⚙️ Dinamometría',
-                'P_Salto CMJ': '🚀 CMJ',
-                'P_DRI Drop Jump': '⚡ DRI',
-                'P_Tren Superior': '🏋️ Tren Sup.',
-                'P_Velocidad VMAX': '⚡ V_MAX',
-                'P_Aceleración ACMAX': '⚡ AC_MAX'
+                'Movilidad_Score': '🩺 Movilidad',
+                'VAM': '🫁 VAM',
+                'Fmax_Rel': '⚙️ Dinamometría',
+                'CMJ_Altura': '🚀 CMJ',
+                'DRI': '⚡ DRI',
+                'Tren_Superior_Reps': '🏋️ Tren Sup.',
+                'V_MAX': '⚡ V_MAX',
+                'AC_MAX': '⚡ AC_MAX'
             }
 
             cols_existentes = [c for c in cols_mostrar.keys() if c in df_tabla.columns]
