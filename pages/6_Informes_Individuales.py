@@ -56,9 +56,9 @@ if os.path.exists(_ruta_logo):
 # CSS HUD ESTILO PRO SCOUTING
 st.markdown("""
     <style>
-    /* FOTO DE CUERPO ENTERO SIN MARCO */
+    /* FOTO DE CUERPO ENTERO */
     .photo-full-body {
-        max-height: 390px;
+        max-height: 380px;
         width: auto;
         object-fit: contain;
         display: block;
@@ -76,42 +76,30 @@ st.markdown("""
         border: 1px dashed rgba(255, 255, 255, 0.15);
     }
     
-    /* CABECERA E INFORMACIÓN DEL JUGADOR */
-    .header-player-name {
-        font-size: 30px !important;
-        font-weight: 900 !important;
-        color: #FFFFFF !important;
-        letter-spacing: 1px !important;
-        text-transform: uppercase !important;
-        margin: 0 0 2px 0 !important;
-    }
-    .header-player-sub {
-        font-size: 12px !important;
-        font-weight: 700 !important;
-        color: #00E5FF !important;
-        letter-spacing: 1.5px !important;
-        text-transform: uppercase !important;
-        margin-bottom: 12px !important;
-    }
-    
-    /* MOSAICO DE TARJETAS KPI */
-    .kpi-tile {
-        background: rgba(30, 41, 59, 0.65);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        padding: 10px 8px;
+    /* TARJETAS CUADRADAS KPI EN FILA */
+    .kpi-tile-header {
+        background: rgba(30, 41, 59, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 22px 12px;
         text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    .kpi-label {
-        font-size: 10px !important;
+    .kpi-label-header {
+        font-size: 11px !important;
         font-weight: 700 !important;
         color: #94A3B8 !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.8px !important;
-        margin-bottom: 3px;
+        letter-spacing: 1px !important;
+        margin-bottom: 6px;
     }
-    .kpi-value {
-        font-size: 20px !important;
+    .kpi-value-header {
+        font-size: 24px !important;
         font-weight: 900 !important;
         color: #FFFFFF !important;
     }
@@ -125,9 +113,18 @@ st.markdown("""
         font-weight: 800 !important;
         letter-spacing: 1.2px !important;
         color: #00E5FF !important;
-        margin-top: 4px !important;
-        margin-bottom: 8px !important;
+        margin-top: 2px !important;
+        margin-bottom: 6px !important;
         text-transform: uppercase !important;
+    }
+    
+    .hud-card {
+        background: rgba(15, 23, 42, 0.75) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 16px !important;
+        padding: 18px !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -310,27 +307,23 @@ url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 5. DISPOSICIÓN SUPERIOR EN 4 COLUMNAS (DISEÑO SOLICITADO)
+# 5. ENCABEZADO: FOTO -> ESCUDO+CAMPOGRAMA -> FICHA KPI EN UNA FILA
 # =============================================================================
 
-col1_foto, col2_escudo_campo, col3_radar, col4_info = st.columns([1.0, 1.0, 1.4, 1.8], gap="small")
+col_foto, col_vis, col_kpis = st.columns([1.0, 1.2, 2.8], gap="medium")
 
-# --- COLUMNA 1: FOTO DE CUERPO ENTERO (EXTREMO IZQUIERDO) ---
-with col1_foto:
+# 1. Foto (Extremo Izquierdo)
+with col_foto:
     if url_foto_jugador and pd.notna(url_foto_jugador):
         st.markdown(f'<img src="{url_foto_jugador}" class="photo-full-body">', unsafe_allow_html=True)
     else:
         st.markdown('<div class="photo-placeholder-full"><span style="font-size:65px; color:#64748B;">👤</span></div>', unsafe_allow_html=True)
 
-# --- COLUMNA 2: ESCUDO + TEXTO + CAMPOGRAMA ---
-with col2_escudo_campo:
-    # 1. Escudo
-    st.markdown(f'<div style="text-align:center; margin-bottom:4px;"><img src="{url_escudo_oficial}" style="width:62px; height:auto;"></div>', unsafe_allow_html=True)
-    
-    # 2. Texto
+# 2. Escudo + Tag + Campograma (Rellenando la altura vertical)
+with col_vis:
+    st.markdown(f'<div style="text-align:center; margin-bottom:2px;"><img src="{url_escudo_oficial}" style="width:58px; height:auto;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="tag-division">JUVENIL DIVISIÓN DE HONOR</div>', unsafe_allow_html=True)
     
-    # 3. Campograma Vertical
     pos_low = posicion_str.lower()
     if 'porter' in pos_low: x_target, y_target = 34, 95
     elif 'central' in pos_low: x_target, y_target = 34, 80
@@ -358,8 +351,8 @@ with col2_escudo_campo:
         dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
     ]
 
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=40, color='rgba(0, 229, 255, 0.25)'), showlegend=False))
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=24, color='rgba(0, 229, 255, 0.55)'), showlegend=False))
+    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(0, 229, 255, 0.25)'), showlegend=False))
+    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(0, 229, 255, 0.55)'), showlegend=False))
     fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(0, 229, 255, 0.95)'), showlegend=False))
 
     fig_pitch.update_layout(
@@ -367,13 +360,58 @@ with col2_escudo_campo:
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
         yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
-        height=220, margin=dict(l=2, r=2, t=2, b=2)
+        height=320, margin=dict(l=2, r=2, t=2, b=2)
     )
     st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
 
-# --- COLUMNA 3: RADAR CHART ---
-with col3_radar:
-    st.markdown('<div style="text-align:center; font-size:11px; font-weight:800; color:#94A3B8; letter-spacing:1px; margin-bottom:4px;">PERFIL TÁCTICO CONDICIONAL</div>', unsafe_allow_html=True)
+# 3. Ficha KPI del Jugador en UNA SOLA FILA HORIZONTAL
+with col_kpis:
+    st.markdown('<div style="height:25px;"></div>', unsafe_allow_html=True)
+    k_col1, k_col2, k_col3, k_col4 = st.columns(4, gap="small")
+    
+    with k_col1:
+        st.markdown(f"""
+            <div class="kpi-tile-header">
+                <div class="kpi-label-header">📅 FECHA DE NACIMIENTO</div>
+                <div class="kpi-value-header">{fecha_nac_str}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with k_col2:
+        st.markdown(f"""
+            <div class="kpi-tile-header">
+                <div class="kpi-label-header">🦶 PIERNA HÁBIL</div>
+                <div class="kpi-value-header kpi-value-cyan">{pierna_str.upper()}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with k_col3:
+        st.markdown(f"""
+            <div class="kpi-tile-header">
+                <div class="kpi-label-header">⏱️ MINUTOS EN LIGA</div>
+                <div class="kpi-value-header kpi-value-gold">{minutos_oficiales}′</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with k_col4:
+        st.markdown(f"""
+            <div class="kpi-tile-header">
+                <div class="kpi-label-header">🏆 RANKING CONDICIONAL</div>
+                <div class="kpi-value-header kpi-value-green">#4</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# =============================================================================
+# 6. SECCIÓN INFERIOR: RADAR + CONTROLES + TABLAS
+# =============================================================================
+
+c_radar, c_controls = st.columns([1.5, 1.0], gap="large")
+
+with c_radar:
+    st.markdown('<div class="hud-card">', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; font-size:13px; font-weight:800; color:#94A3B8; letter-spacing:1px; margin-bottom:8px;">PERFIL TÁCTICO CONDICIONAL</div>', unsafe_allow_html=True)
     
     categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
     values_jugador = [78, 85, 62, 92, 70, 75]
@@ -395,7 +433,7 @@ with col3_radar:
 
     fig_radar.add_trace(go.Scatterpolar(
         r=values_jug_closed, theta=categories_closed,
-        fill='toself', name=jugador_sel.replace('_', ' '),
+        fill='toself', name=nombre_mostrar,
         fillcolor='rgba(0, 229, 255, 0.35)',
         line=dict(color='#00E5FF', width=3, shape='spline'),
         marker=dict(size=6, color='#FFFFFF', line=dict(color='#00E5FF', width=2))
@@ -408,87 +446,21 @@ with col3_radar:
             angularaxis=dict(gridcolor='rgba(255,255,255,0.12)', tickfont=dict(size=11, color='#FFFFFF', family="Arial Black"))
         ),
         template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-        height=350, margin=dict(l=25, r=25, t=15, b=15),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+        height=380, margin=dict(l=25, r=25, t=20, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
     )
     st.plotly_chart(fig_radar, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- COLUMNA 4: NOMBRE + FICHA + MOSAICO KPI ---
-with col4_info:
-    # Nombre
-    st.markdown(f'<div class="header-player-name">{nombre_mostrar}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="header-player-sub">ADARVE DH | {posicion_str.upper()}</div>', unsafe_allow_html=True)
-    
-    # Ficha rapida
-    st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; background:rgba(255,255,255,0.03); padding:6px 12px; border-radius:8px;">
-            <span style="font-size:12px; color:#94A3B8;"><b>NACIMIENTO:</b> {fecha_nac_str}</span>
-            <span style="font-size:12px; color:#94A3B8;"><b>PIERNA:</b> {pierna_str.upper()}</span>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Mosaico KPI (2 filas x 3 columnas)
-    k1, k2, k3 = st.columns(3)
-    with k1:
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">MINUTOS LIGA</div>
-                <div class="kpi-value kpi-value-gold">{minutos_oficiales}′</div>
-            </div>
-        """, unsafe_allow_html=True)
-    with k2:
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">RPE MEDIO</div>
-                <div class="kpi-value kpi-value-cyan">{rpe_medio:.1f}</div>
-            </div>
-        """, unsafe_allow_html=True)
-    with k3:
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">PUESTO RANKING</div>
-                <div class="kpi-value kpi-value-green">#4</div>
-            </div>
-        """, unsafe_allow_html=True)
+with c_controls:
+    st.markdown('<div class="hud-card" style="height:100%;">', unsafe_allow_html=True)
+    st.markdown('⚙️ **CONFIGURACIÓN DE ANÁLISIS**')
+    st.markdown("<br>", unsafe_allow_html=True)
+    modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"])
+    st.markdown("<br>", unsafe_allow_html=True)
+    filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-    k4, k5, k6 = st.columns(3)
-    with k4:
-        vmax_pico = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm]['V_MAX'].max() if not df_gps_all.empty else 32.4
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">V_MAX PICO</div>
-                <div class="kpi-value">{vmax_pico:.1f} <span style="font-size:11px;">km/h</span></div>
-            </div>
-        """, unsafe_allow_html=True)
-    with k5:
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">SALTO CMJ</div>
-                <div class="kpi-value">38.5 <span style="font-size:11px;">cm</span></div>
-            </div>
-        """, unsafe_allow_html=True)
-    with k6:
-        st.markdown(f"""
-            <div class="kpi-tile">
-                <div class="kpi-label">INDICE DRI</div>
-                <div class="kpi-value">2.15</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
-    
-    # Controles ajustados
-    c_m1, c_m2 = st.columns([1.1, 1.1])
-    with c_m1:
-        modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
-    with c_m2:
-        filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
-
-# =============================================================================
-# 6. TABLAS DE DATOS Y DISPERSIÓN
-# =============================================================================
 st.markdown("---")
 
 if modo_analisis == "Pruebas Físicas":
