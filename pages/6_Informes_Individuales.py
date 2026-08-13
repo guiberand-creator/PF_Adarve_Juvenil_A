@@ -519,4 +519,4 @@ else:
         )
         fig_sc.update_traces(marker=dict(color='#00A8E8', line=dict(width=1, color='White')))
         fig_sc.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)', height=400)
-        st.plotly_chart(fig_sc, use_container_width=True))
+        st.plotly_chart(fig_sc, use_container_width=True)
