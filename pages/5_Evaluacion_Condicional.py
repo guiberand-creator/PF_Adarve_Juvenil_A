@@ -204,7 +204,10 @@ def cargar_datos_evaluaciones():
         }
         df_dina.rename(columns=renomb_d, inplace=True)
         df_dina['Nombre'] = df_dina['Nombre'].astype(str).str.strip()
-        df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.strip()
+        
+        # FIX: Limpiar caracteres extraños "\u00BA" o el símbolo "°" del nombre del ejercicio
+        df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.replace(r'\\u00BA', '', regex=True).str.replace('°', '', regex=False).str.strip()
+        
         df_dina['Fecha_dt'] = pd.to_datetime(df_dina['Fecha'], dayfirst=True, errors='coerce')
         df_dina['Fecha'] = df_dina['Fecha_dt'].dt.strftime('%d/%m/%Y')
 
