@@ -26,6 +26,11 @@ if 'logeado' not in st.session_state or not st.session_state['logeado']:
     st.error("⚠️ Acceso no autorizado. Por favor, inicia sesión en la página principal.")
     st.stop()
 
+# FUNCIÓN NORMALIZADORA DE NOMBRES (Elimina guiones bajos, espacios extra y pasa a minúsculas)
+def norm_nom(texto):
+    if pd.isna(texto): return ""
+    return " ".join(str(texto).replace('_', ' ').strip().lower().split())
+
 # SELLO FIJO EN SIDEBAR
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
 _ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
@@ -51,49 +56,54 @@ if os.path.exists(_ruta_logo):
 st.markdown("""
     <style>
     .player-title {
-        font-size: 32px !important;
+        font-size: 34px !important;
         font-weight: 800 !important;
         color: #FFFFFF !important;
-        letter-spacing: 1px !important;
+        letter-spacing: 1.5px !important;
         text-transform: uppercase !important;
-        margin-bottom: 15px !important;
+        margin-bottom: 20px !important;
+        border-bottom: 2px solid rgba(0, 168, 232, 0.4);
+        padding-bottom: 8px;
     }
     .info-label {
-        font-size: 12px !important;
+        font-size: 11px !important;
         color: #8E9BAE !important;
         text-transform: uppercase !important;
         letter-spacing: 1px !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
         margin-bottom: 2px !important;
     }
     .info-value-big {
-        font-size: 22px !important;
+        font-size: 20px !important;
         font-weight: 700 !important;
         color: #FFFFFF !important;
-        margin-bottom: 16px !important;
+        margin-bottom: 18px !important;
     }
     .info-value-highlight {
         font-size: 26px !important;
         font-weight: 800 !important;
         color: #FFC107 !important;
-        margin-bottom: 16px !important;
+        margin-bottom: 18px !important;
     }
     .photo-frame {
-        width: 150px;
-        height: 150px;
-        border-radius: 12px;
+        width: 185px;
+        height: 185px;
+        border-radius: 14px;
         object-fit: cover;
         border: 2px solid #00A8E8;
+        display: block;
+        margin: 0 auto;
     }
     .photo-placeholder {
-        width: 150px;
-        height: 150px;
-        border-radius: 12px;
+        width: 185px;
+        height: 185px;
+        border-radius: 14px;
         background-color: #1E293B;
         display: flex;
         align-items: center;
         justify-content: center;
         border: 1px solid #334155;
+        margin: 0 auto;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -121,7 +131,7 @@ def cargar_todo_informes():
         
         df_pos = df_pos.rename(columns={c_n: 'Nombre', c_p: 'Posicion'})
         if c_foto: df_pos = df_pos.rename(columns={c_foto: 'Foto_URL'})
-        df_pos['Nombre_Norm'] = df_pos['Nombre'].astype(str).str.replace('_', ' ').str.strip().str.lower()
+        df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
     # B) Cuestionario Inicial (Google Sheet)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
@@ -137,7 +147,7 @@ def cargar_todo_informes():
         if c_pos: ren[c_pos] = 'Posicion_Habitual'
         if c_pierna: ren[c_pierna] = 'Pierna_Dominante'
         df_cuest = df_cuest.rename(columns=ren)
-        df_cuest['Nombre_Norm'] = df_cuest['Nombre'].astype(str).str.replace('_', ' ').str.strip().str.lower()
+        df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
 
     # C) RPE (Minutos Jugados Oficiales desde 06/09/2026)
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
@@ -150,7 +160,7 @@ def cargar_todo_informes():
         
         df_rpe['Fecha_dt'] = pd.to_datetime(df_rpe[c_f], dayfirst=True, errors='coerce')
         df_rpe['Nombre'] = df_rpe[c_n].astype(str).str.strip()
-        df_rpe['Nombre_Norm'] = df_rpe['Nombre'].str.replace('_', ' ').str.strip().str.lower()
+        df_rpe['Nombre_Norm'] = df_rpe['Nombre'].apply(norm_nom)
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
@@ -177,7 +187,7 @@ def cargar_todo_informes():
                 dl['Fecha_dt'] = pd.to_datetime(dt[cf], dayfirst=True, errors='coerce')
                 dl['Fecha'] = dl['Fecha_dt'].dt.strftime('%d/%m/%Y')
                 dl['Nombre'] = dt[cn].astype(str).str.strip()
-                dl['Nombre_Norm'] = dl['Nombre'].str.replace('_', ' ').str.strip().str.lower()
+                dl['Nombre_Norm'] = dl['Nombre'].apply(norm_nom)
                 dl['Dist_Total'] = dt[b_c(['distancia total', 'distance'])].apply(fn) if b_c(['distancia total', 'distance']) else 0.0
                 dl['Dist_18'] = dt[b_c(['> 18', '>18'])].apply(fn) if b_c(['> 18', '>18']) else 0.0
                 dl['Dist_25'] = dt[b_c(['> 25', '>25'])].apply(fn) if b_c(['> 25', '>25']) else 0.0
@@ -203,8 +213,6 @@ df_pos, df_cuest, df_rpe, df_gps_all = cargar_todo_informes()
 # =============================================================================
 # 3. SELECCIÓN DE JUGADOR (PARA STAFF)
 # =============================================================================
-st.title("INFORMES INDIVIDUALES DE PLANTILLA")
-
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
     lista_jugadores = sorted(df_cuest['Nombre'].dropna().unique())
@@ -213,7 +221,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-c_sel, _ = st.columns([1.5, 2.5])
+c_sel, _ = st.columns([1.8, 2.2])
 with c_sel:
     jugador_sel = st.selectbox("⚽ Selecciona Jugador:", lista_jugadores)
 
@@ -222,14 +230,14 @@ st.markdown("---")
 # =============================================================================
 # 4. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS DEL JUGADOR
 # =============================================================================
-jug_norm = str(jugador_sel).replace('_', ' ').strip().lower()
+jug_norm = norm_nom(jugador_sel)
 
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
 match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empty else pd.DataFrame()
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Fecha de nacimiento
+# Fecha de nacimiento (Mapeo robusto)
 fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val_fn = match_cuest.iloc[0]['Fecha_Nacimiento']
@@ -269,78 +277,81 @@ if os.path.exists(_ruta_escudo_adarve):
         b64_escudo = base64.b64encode(_f.read()).decode()
 
 # =============================================================================
-# 5. RENDERIZADO DEL PERFIL (DISEÑO SOLICITADO)
+# 5. RENDERIZADO DEL PERFIL (DISEÑO SOLICITADO Y CENTRADO)
 # =============================================================================
 
-# NOMBRE EN GRANDE
+# NOMBRE EN CABECERA GRANDE
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 st.markdown(f'<div class="player-title">{nombre_mostrar}</div>', unsafe_allow_html=True)
 
 col_ficha_izq, col_ficha_der = st.columns([1.8, 2.2])
 
 with col_ficha_izq:
-    # Subcolumnas: Foto/Escudo/Campo a la izquierda, Info letras grandes a la derecha
-    col_foto_pitch, col_text_info = st.columns([1.0, 1.2])
+    col_foto_pitch, col_text_info = st.columns([1.1, 1.1])
     
     with col_foto_pitch:
-        # 1. Foto
+        # 1. Foto Centrada
         if url_foto_jugador and pd.notna(url_foto_jugador):
-            st.markdown(f'<div><img src="{url_foto_jugador}" class="photo-frame"></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align:center;"><img src="{url_foto_jugador}" class="photo-frame"></div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div><div class="photo-placeholder"><span style="font-size:55px;">👤</span></div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="text-align:center;"><div class="photo-placeholder"><span style="font-size:65px;">👤</span></div></div>', unsafe_allow_html=True)
         
-        # 2. Escudo
+        # 2. Escudo Centrado y Más Grande
         if b64_escudo:
-            st.markdown(f'<div style="margin-top:10px; margin-bottom:10px;"><img src="data:image/png;base64,{b64_escudo}" style="width:48px; height:auto;"></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align:center; margin-top:14px; margin-bottom:14px;"><img src="data:image/png;base64,{b64_escudo}" style="width:75px; height:auto;"></div>', unsafe_allow_html=True)
         else:
             st.markdown("<br>", unsafe_allow_html=True)
             
-        # 3. Campograma Vertical (Estrecho y Largo)
+        # 3. Campograma Vertical Proporcional (105m x 68m)
         pos_low = posicion_str.lower()
         
-        if 'porter' in pos_low: x_target, y_target = 50, 90
-        elif 'central' in pos_low: x_target, y_target = 50, 75
+        if 'porter' in pos_low: x_target, y_target = 34, 95
+        elif 'central' in pos_low: x_target, y_target = 34, 80
         elif 'lateral' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 82, 70
-            else: x_target, y_target = 18, 70
-        elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 50, 55
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 75
+            else: x_target, y_target = 10, 75
+        elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 34, 55
         elif 'interior' in pos_low or 'mediapunta' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 68, 42
-            else: x_target, y_target = 32, 42
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 46, 40
+            else: x_target, y_target = 22, 40
         elif 'extremo' in pos_low or 'carrilero' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 82, 28
-            else: x_target, y_target = 18, 28
-        elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 50, 15
-        else: x_target, y_target = 50, 50
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 25
+            else: x_target, y_target = 10, 25
+        elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 34, 15
+        else: x_target, y_target = 34, 52.5
 
         fig_pitch = go.Figure()
+        
+        # Dimensiones reales de un campo de fútbol en metros (105m de alto x 68m de ancho)
         lineas_campo = [
-            dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.35)", width=2)),
-            dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.35)", width=2)),
-            dict(type="circle", x0=32, y0=38, x1=68, y1=62, line=dict(color="rgba(255,255,255,0.35)", width=2)),
-            dict(type="rect", x0=20, y0=2, x1=80, y1=20, line=dict(color="rgba(255,255,255,0.35)", width=1.5)),
-            dict(type="rect", x0=20, y0=80, x1=80, y1=98, line=dict(color="rgba(255,255,255,0.35)", width=1.5)),
-            dict(type="rect", x0=36, y0=2, x1=64, y1=8, line=dict(color="rgba(255,255,255,0.25)", width=1)),
-            dict(type="rect", x0=36, y0=92, x1=64, y1=98, line=dict(color="rgba(255,255,255,0.25)", width=1))
+            dict(type="rect", x0=0, y0=0, x1=68, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="rect", x0=13.84, y0=0, x1=54.16, y1=16.5, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+            dict(type="rect", x0=13.84, y0=88.5, x1=54.16, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+            dict(type="rect", x0=24.84, y0=0, x1=43.16, y1=5.5, line=dict(color="rgba(255,255,255,0.3)", width=1)),
+            dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
         ]
 
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=48, color='rgba(231, 76, 60, 0.25)'), showlegend=False))
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=30, color='rgba(231, 76, 60, 0.55)'), showlegend=False))
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=15, color='rgba(231, 76, 60, 0.95)'), showlegend=False))
+        # Mancha de calor proporcional
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(231, 76, 60, 0.25)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(231, 76, 60, 0.55)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(231, 76, 60, 0.95)'), showlegend=False))
 
+        # Scaleanchor garantiza que la relación de aspecto 105:68 sea PERFECTA e indeformable
         fig_pitch.update_layout(
             shapes=lineas_campo, template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.7)',
-            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            yaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            height=300, width=150, margin=dict(l=2, r=2, t=2, b=2)
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.75)',
+            xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+            yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
+            height=280, margin=dict(l=2, r=2, t=2, b=2)
         )
         st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
 
     with col_text_info:
-        # Informaciones destacadas en grande pegadas al lado
+        # Texto en grande pegado al lado del bloque
         st.markdown(f"""
-            <div style="padding-left: 5px; display: flex; flex-direction: column; justify-content: center; height: 100%;">
+            <div style="padding-left: 10px; display: flex; flex-direction: column; justify-content: center; height: 100%;">
                 <div>
                     <div class="info-label">📅 Fecha de Nacimiento</div>
                     <div class="info-value-big">{fecha_nac_str}</div>
@@ -367,20 +378,50 @@ with col_ficha_der:
     with c_m3:
         filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
 
-    # RADAR CHART SEGÚN MODO
+    # =========================================================================
+    # GRÁFICO DE RADAR ULTRA ELEGANTE (PRO SCOUTING STYLE)
+    # =========================================================================
     if modo_analisis == "Pruebas Físicas":
-        st.caption("🎯 Percentiles en Evaluaciones Condicionales")
-        categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
-        values_perc = [75, 82, 60, 90, 68, 70]
+        st.caption("🎯 Anisotropía de Rendimiento: Percentiles en Evaluaciones Condicionales")
         
+        categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
+        values_jugador = [78, 85, 62, 92, 70, 75]
+        values_media_pos = [65, 70, 60, 72, 65, 68]
+        
+        # Para cerrar el radar
+        categories_closed = categories + [categories[0]]
+        values_jug_closed = values_jugador + [values_jugador[0]]
+        values_med_closed = values_media_pos + [values_media_pos[0]]
+
         fig_radar = go.Figure()
+        
+        # Trazado 1: Media Demarcación (Sutil / Dorado)
         fig_radar.add_trace(go.Scatterpolar(
-            r=values_perc, theta=categories, fill='toself', name=jugador_sel,
-            fillcolor='rgba(0, 168, 232, 0.4)', line=dict(color='#00A8E8', width=2)
+            r=values_med_closed, theta=categories_closed,
+            fill='toself', name='Media Demarcación',
+            fillcolor='rgba(241, 196, 15, 0.12)',
+            line=dict(color='#F1C40F', width=1.5, dash='dash'),
+            marker=dict(size=4, color='#F1C40F')
         ))
+
+        # Trazado 2: Jugador Seleccionado (Cian Intenso / Resaltado)
+        fig_radar.add_trace(go.Scatterpolar(
+            r=values_jug_closed, theta=categories_closed,
+            fill='toself', name=jugador_sel.replace('_', ' '),
+            fillcolor='rgba(0, 229, 255, 0.35)',
+            line=dict(color='#00E5FF', width=3, shape='spline'),
+            marker=dict(size=7, color='#FFFFFF', line=dict(color='#00E5FF', width=2))
+        ))
+
         fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=380, margin=dict(l=30, r=30, t=30, b=30)
+            polar=dict(
+                bgcolor='rgba(15, 23, 42, 0.6)',
+                radialaxis=dict(visible=True, range=[0, 100], gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=10, color='#8E9BAE')),
+                angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
+            ),
+            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+            height=370, margin=dict(l=40, r=40, t=25, b=25),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
         )
         st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -412,10 +453,29 @@ with col_ficha_der:
             media_4 = [50, 40, 30, 45, 60, 55]
             max_4 = [65, 55, 45, 60, 75, 70]
 
+        cat_gps_closed = categories_gps + [categories_gps[0]]
+        media_4_closed = media_4 + [media_4[0]]
+        max_4_closed = max_4 + [max_4[0]]
+
         fig_radar_gps = go.Figure()
-        fig_radar_gps.add_trace(go.Scatterpolar(r=media_4, theta=categories_gps, fill='toself', name='Media 4 Partidos', fillcolor='rgba(241, 196, 15, 0.3)', line=dict(color='#F1C40F')))
-        fig_radar_gps.add_trace(go.Scatterpolar(r=max_4, theta=categories_gps, fill='toself', name='Pico 4 Partidos', fillcolor='rgba(46, 204, 113, 0.2)', line=dict(color='#2ECC71', dash='dash')))
-        fig_radar_gps.update_layout(polar=dict(radialaxis=dict(visible=False)), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=380, margin=dict(l=30, r=30, t=30, b=30))
+        fig_radar_gps.add_trace(go.Scatterpolar(
+            r=media_4_closed, theta=cat_gps_closed, fill='toself', name='Media 4 Partidos',
+            fillcolor='rgba(241, 196, 15, 0.25)', line=dict(color='#F1C40F', width=2, shape='spline')
+        ))
+        fig_radar_gps.add_trace(go.Scatterpolar(
+            r=max_4_closed, theta=cat_gps_closed, fill='toself', name='Pico Histórico',
+            fillcolor='rgba(46, 204, 113, 0.2)', line=dict(color='#2ECC71', width=2, dash='dash', shape='spline')
+        ))
+        fig_radar_gps.update_layout(
+            polar=dict(
+                bgcolor='rgba(15, 23, 42, 0.6)',
+                radialaxis=dict(visible=False),
+                angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
+            ),
+            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+            height=370, margin=dict(l=40, r=40, t=25, b=25),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+        )
         st.plotly_chart(fig_radar_gps, use_container_width=True)
 
 # =============================================================================
@@ -459,4 +519,4 @@ else:
         )
         fig_sc.update_traces(marker=dict(color='#00A8E8', line=dict(width=1, color='White')))
         fig_sc.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)', height=400)
-        st.plotly_chart(fig_sc, use_container_width=True)
+        st.plotly_chart(fig_sc, use_container_width=True))
