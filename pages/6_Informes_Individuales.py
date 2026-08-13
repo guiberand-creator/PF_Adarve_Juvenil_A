@@ -50,18 +50,50 @@ if os.path.exists(_ruta_logo):
 
 st.markdown("""
     <style>
-    .player-card {
-        background-color: rgba(15, 23, 42, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
+    .player-title {
+        font-size: 32px !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        letter-spacing: 1px !important;
+        text-transform: uppercase !important;
+        margin-bottom: 15px !important;
     }
-    .metric-box {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        padding: 12px;
-        text-align: center;
-        border-left: 4px solid #00A8E8;
+    .info-label {
+        font-size: 12px !important;
+        color: #8E9BAE !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+        font-weight: 600 !important;
+        margin-bottom: 2px !important;
+    }
+    .info-value-big {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        color: #FFFFFF !important;
+        margin-bottom: 16px !important;
+    }
+    .info-value-highlight {
+        font-size: 26px !important;
+        font-weight: 800 !important;
+        color: #FFC107 !important;
+        margin-bottom: 16px !important;
+    }
+    .photo-frame {
+        width: 150px;
+        height: 150px;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 2px solid #00A8E8;
+    }
+    .photo-placeholder {
+        width: 150px;
+        height: 150px;
+        border-radius: 12px;
+        background-color: #1E293B;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #334155;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -79,31 +111,33 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
-    # A) Posiciones
+    # A) Posiciones (Local)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
         c_n = next((c for c in df_pos.columns if 'jugador' in str(c).lower() or 'nombre' in str(c).lower()), df_pos.columns[0])
         c_p = next((c for c in df_pos.columns if 'posic' in str(c).lower()), df_pos.columns[1])
-        c_l = next((c for c in df_pos.columns if 'lateral' in str(c).lower()), None)
         c_foto = next((c for c in df_pos.columns if 'foto' in str(c).lower() or 'url' in str(c).lower()), None)
         
         df_pos = df_pos.rename(columns={c_n: 'Nombre', c_p: 'Posicion'})
-        if c_l: df_pos = df_pos.rename(columns={c_l: 'Lateralidad'})
         if c_foto: df_pos = df_pos.rename(columns={c_foto: 'Foto_URL'})
+        df_pos['Nombre_Norm'] = df_pos['Nombre'].astype(str).str.replace('_', ' ').str.strip().str.lower()
 
-    # B) Cuestionario Inicial (Cumpleaños / Pierna Dominante)
+    # B) Cuestionario Inicial (Google Sheet)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = df_cuest.columns.str.strip()
         c_n = next((c for c in df_cuest.columns if 'nombre' in str(c).lower()), df_cuest.columns[0])
         c_fn = next((c for c in df_cuest.columns if 'nacimiento' in str(c).lower()), None)
-        c_pierna = next((c for c in df_cuest.columns if 'pierna' in str(c).lower() or 'dominante' in str(c).lower()), None)
+        c_pos = next((c for c in df_cuest.columns if 'posición' in str(c).lower() or 'posicion' in str(c).lower()), None)
+        c_pierna = next((c for c in df_cuest.columns if 'pierna' in str(c).lower()), None)
         
         ren = {c_n: 'Nombre'}
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
+        if c_pos: ren[c_pos] = 'Posicion_Habitual'
         if c_pierna: ren[c_pierna] = 'Pierna_Dominante'
         df_cuest = df_cuest.rename(columns=ren)
+        df_cuest['Nombre_Norm'] = df_cuest['Nombre'].astype(str).str.replace('_', ' ').str.strip().str.lower()
 
     # C) RPE (Minutos Jugados Oficiales desde 06/09/2026)
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
@@ -116,16 +150,11 @@ def cargar_todo_informes():
         
         df_rpe['Fecha_dt'] = pd.to_datetime(df_rpe[c_f], dayfirst=True, errors='coerce')
         df_rpe['Nombre'] = df_rpe[c_n].astype(str).str.strip()
+        df_rpe['Nombre_Norm'] = df_rpe['Nombre'].str.replace('_', ' ').str.strip().str.lower()
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
-    # D) Partidos & Escudos
-    df_partidos = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
-    if not df_partidos.empty:
-        df_partidos.columns = df_partidos.columns.str.strip()
-        df_partidos['Fecha_dt'] = pd.to_datetime(df_partidos['Fecha'], dayfirst=True, errors='coerce')
-
-    # E) GPS
+    # D) GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -148,6 +177,7 @@ def cargar_todo_informes():
                 dl['Fecha_dt'] = pd.to_datetime(dt[cf], dayfirst=True, errors='coerce')
                 dl['Fecha'] = dl['Fecha_dt'].dt.strftime('%d/%m/%Y')
                 dl['Nombre'] = dt[cn].astype(str).str.strip()
+                dl['Nombre_Norm'] = dl['Nombre'].str.replace('_', ' ').str.strip().str.lower()
                 dl['Dist_Total'] = dt[b_c(['distancia total', 'distance'])].apply(fn) if b_c(['distancia total', 'distance']) else 0.0
                 dl['Dist_18'] = dt[b_c(['> 18', '>18'])].apply(fn) if b_c(['> 18', '>18']) else 0.0
                 dl['Dist_25'] = dt[b_c(['> 25', '>25'])].apply(fn) if b_c(['> 25', '>25']) else 0.0
@@ -166,18 +196,18 @@ def cargar_todo_informes():
                 df_gps_all['Dist_18'] *= 1000
                 df_gps_all['Dist_25'] *= 1000
 
-    return df_pos, df_cuest, df_rpe, df_partidos, df_gps_all
+    return df_pos, df_cuest, df_rpe, df_gps_all
 
-df_pos, df_cuest, df_rpe, df_partidos, df_gps_all = cargar_todo_informes()
+df_pos, df_cuest, df_rpe, df_gps_all = cargar_todo_informes()
 
 # =============================================================================
 # 3. SELECCIÓN DE JUGADOR (PARA STAFF)
 # =============================================================================
-st.title("👤 INFORME INDIVIDUAL DEL JUGADOR")
+st.title("INFORMES INDIVIDUALES DE PLANTILLA")
 
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
-if not lista_jugadores and not df_gps_all.empty:
-    lista_jugadores = sorted(df_gps_all['Nombre'].dropna().unique())
+if not lista_jugadores and not df_cuest.empty:
+    lista_jugadores = sorted(df_cuest['Nombre'].dropna().unique())
 
 if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
@@ -185,113 +215,153 @@ if not lista_jugadores:
 
 c_sel, _ = st.columns([1.5, 2.5])
 with c_sel:
-    jugador_sel = st.selectbox("⚽ Selecciona Jugador para inspeccionar:", lista_jugadores)
+    jugador_sel = st.selectbox("⚽ Selecciona Jugador:", lista_jugadores)
 
 st.markdown("---")
 
 # =============================================================================
-# 4. DATOS BASE DEL JUGADOR & HEADER
+# 4. EXTRACCIÓN Y NORMALIZACIÓN DE DATOS DEL JUGADOR
 # =============================================================================
-info_pos = df_pos[df_pos['Nombre'] == jugador_sel].iloc[0] if not df_pos.empty and jugador_sel in df_pos['Nombre'].values else {}
-info_cuest = df_cuest[df_cuest['Nombre'] == jugador_sel].iloc[0] if not df_cuest.empty and jugador_sel in df_cuest['Nombre'].values else {}
+jug_norm = str(jugador_sel).replace('_', ' ').strip().lower()
 
-posicion_str = str(info_pos.get('Posicion', 'Sin Definir')).strip()
-lateralidad_str = str(info_pos.get('Lateralidad', 'Centro')).strip()
-fecha_nac_str = str(info_cuest.get('Fecha_Nacimiento', 'Por definir')).strip()
-pierna_str = str(info_cuest.get('Pierna_Dominante', 'Derecha')).strip()
-url_foto_jugador = info_pos.get('Foto_URL', None) if isinstance(info_pos, pd.Series) else None
+match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
+match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empty else pd.DataFrame()
 
-# Minutos Jugados Oficiales desde el inicio de liga (06/09/2026)
+url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
+
+# Fecha de nacimiento
+fecha_nac_str = "Por definir"
+if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
+    val_fn = match_cuest.iloc[0]['Fecha_Nacimiento']
+    if pd.notna(val_fn) and str(val_fn).strip() != "":
+        fecha_nac_str = str(val_fn).strip()
+
+# Posición
+posicion_str = "Por definir"
+if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
+    val_p = match_cuest.iloc[0]['Posicion_Habitual']
+    if pd.notna(val_p) and str(val_p).strip() != "":
+        posicion_str = str(val_p).strip()
+elif not match_pos.empty:
+    posicion_str = str(match_pos.iloc[0].get('Posicion', 'Por definir')).strip()
+
+# Pierna Dominante
+pierna_str = "Por definir"
+if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
+    val_pierna = match_cuest.iloc[0]['Pierna_Dominante']
+    if pd.notna(val_pierna) and str(val_pierna).strip() != "":
+        pierna_str = str(val_pierna).strip()
+
+# Minutos Jugados Oficiales desde inicio de liga (06/09/2026)
 minutos_oficiales = 0
 if not df_rpe.empty:
     fecha_inicio_liga = pd.to_datetime("2026-09-06")
-    df_m = df_rpe[(df_rpe['Nombre'] == jugador_sel) & 
-                   (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & 
-                   (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
+    df_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & 
+                  (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & 
+                  (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_oficiales = int(df_m['Minutos'].sum())
 
-# ESCUDO Y LOGO DEL ADARVE
+# Escudo del Adarve
 _ruta_escudo_adarve = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen1.png"))
 b64_escudo = ""
 if os.path.exists(_ruta_escudo_adarve):
     with open(_ruta_escudo_adarve, "rb") as _f:
         b64_escudo = base64.b64encode(_f.read()).decode()
 
-col_tarjeta_izq, col_tarjeta_der = st.columns([1.2, 2.8])
+# =============================================================================
+# 5. RENDERIZADO DEL PERFIL (DISEÑO SOLICITADO)
+# =============================================================================
 
-# --- COLUMNA IZQUIERDA: PERFIL, ESCUDO Y MAPA DE CALOR ---
-with col_tarjeta_izq:
-    st.markdown('<div class="player-card">', unsafe_allow_html=True)
-    
-    # Foto de Jugador / Placeholder
-    if url_foto_jugador and pd.notna(url_foto_jugador):
-        st.markdown(f'<div style="text-align:center;"><img src="{url_foto_jugador}" style="width:140px; height:140px; border-radius:12px; object-fit:cover; border:2px solid #00A8E8;"></div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="text-align:center;"><div style="width:130px; height:130px; border-radius:12px; background-color:#1E293B; display:inline-flex; align-items:center; justify-content:center; border:1px solid #334155;"><span style="font-size:50px;">👤</span></div></div>', unsafe_allow_html=True)
-    
-    st.markdown(f"<h3 style='text-align:center; margin:10px 0 2px 0;'>{jugador_sel.upper()}</h3>", unsafe_allow_html=True)
-    
-    # Escudo del Club
-    if b64_escudo:
-        st.markdown(f'<div style="text-align:center; margin-bottom:10px;"><img src="data:image/png;base64,{b64_escudo}" style="width:50px; height:auto;"></div>', unsafe_allow_html=True)
-    
-    st.markdown(f"""
-        <p style="margin: 3px 0; font-size:13px;">📅 <b>Fecha Nacimiento:</b> {fecha_nac_str}</p>
-        <p style="margin: 3px 0; font-size:13px;">⚽ <b>Posición:</b> {posicion_str}</p>
-        <p style="margin: 3px 0; font-size:13px;">🦶 <b>Pierna Dominante:</b> {pierna_str}</p>
-    """, unsafe_allow_html=True)
-    
-    # --- CAMPOGRAMA TÁCTICO CON MAPA DE CALOR DE ZONA ---
-    st.markdown("<h5 style='margin-top:15px; margin-bottom:5px; text-align:center;'>🗺️ Mapa de Zona Habitual</h5>", unsafe_allow_html=True)
-    
-    # Coordenadas según demarcación
-    pos_low = posicion_str.lower()
-    lat_low = lateralidad_str.lower()
-    
-    if 'porter' in pos_low: x_target, y_target = 50, 90
-    elif 'central' in pos_low: x_target, y_target = 50, 75
-    elif 'lateral' in pos_low or 'carrilero' in pos_low: x_target, y_target = (85 if 'izq' in lat_low else 15), 70
-    elif 'medio' in pos_low or 'centrocampista' in pos_low or 'pivote' in pos_low: x_target, y_target = 50, 55
-    elif 'interior' in pos_low or 'mediapunta' in pos_low: x_target, y_target = (65 if 'izq' in lat_low else 35), 45
-    elif 'extremo' in pos_low: x_target, y_target = (85 if 'izq' in lat_low else 15), 25
-    elif 'delantero' in pos_low or 'punta' in pos_low: x_target, y_target = 50, 20
-    else: x_target, y_target = 50, 50
+# NOMBRE EN GRANDE
+nombre_mostrar = jugador_sel.replace('_', ' ').upper()
+st.markdown(f'<div class="player-title">{nombre_mostrar}</div>', unsafe_allow_html=True)
 
-    fig_pitch = go.Figure()
-    # Campo
-    lineas = [
-        dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1.5)),
-        dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.3)", width=1.5)),
-        dict(type="circle", x0=38, y0=42, x1=62, y1=58, line=dict(color="rgba(255,255,255,0.3)", width=1.5)),
-        dict(type="rect", x0=25, y0=2, x1=75, y1=18, line=dict(color="rgba(255,255,255,0.3)", width=1)),
-        dict(type="rect", x0=25, y0=82, x1=75, y1=98, line=dict(color="rgba(255,255,255,0.3)", width=1))
-    ]
+col_ficha_izq, col_ficha_der = st.columns([1.8, 2.2])
+
+with col_ficha_izq:
+    # Subcolumnas: Foto/Escudo/Campo a la izquierda, Info letras grandes a la derecha
+    col_foto_pitch, col_text_info = st.columns([1.0, 1.2])
     
-    # Heatmap Spot (Anillos concéntricos de calor)
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=45, color='rgba(231, 76, 60, 0.2)'), showlegend=False))
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=30, color='rgba(231, 76, 60, 0.5)'), showlegend=False))
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=15, color='rgba(231, 76, 60, 0.9)'), showlegend=False))
+    with col_foto_pitch:
+        # 1. Foto
+        if url_foto_jugador and pd.notna(url_foto_jugador):
+            st.markdown(f'<div><img src="{url_foto_jugador}" class="photo-frame"></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div><div class="photo-placeholder"><span style="font-size:55px;">👤</span></div></div>', unsafe_allow_html=True)
+        
+        # 2. Escudo
+        if b64_escudo:
+            st.markdown(f'<div style="margin-top:10px; margin-bottom:10px;"><img src="data:image/png;base64,{b64_escudo}" style="width:48px; height:auto;"></div>', unsafe_allow_html=True)
+        else:
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+        # 3. Campograma Vertical (Estrecho y Largo)
+        pos_low = posicion_str.lower()
+        
+        if 'porter' in pos_low: x_target, y_target = 50, 90
+        elif 'central' in pos_low: x_target, y_target = 50, 75
+        elif 'lateral' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 82, 70
+            else: x_target, y_target = 18, 70
+        elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 50, 55
+        elif 'interior' in pos_low or 'mediapunta' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 68, 42
+            else: x_target, y_target = 32, 42
+        elif 'extremo' in pos_low or 'carrilero' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 82, 28
+            else: x_target, y_target = 18, 28
+        elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 50, 15
+        else: x_target, y_target = 50, 50
 
-    fig_pitch.update_layout(
-        shapes=lineas, template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)',
-        xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-        yaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-        height=220, margin=dict(l=5, r=5, t=5, b=5)
-    )
-    st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
-    st.markdown('</div>', unsafe_allow_html=True)
+        fig_pitch = go.Figure()
+        lineas_campo = [
+            dict(type="rect", x0=2, y0=2, x1=98, y1=98, line=dict(color="rgba(255,255,255,0.35)", width=2)),
+            dict(type="line", x0=2, y0=50, x1=98, y1=50, line=dict(color="rgba(255,255,255,0.35)", width=2)),
+            dict(type="circle", x0=32, y0=38, x1=68, y1=62, line=dict(color="rgba(255,255,255,0.35)", width=2)),
+            dict(type="rect", x0=20, y0=2, x1=80, y1=20, line=dict(color="rgba(255,255,255,0.35)", width=1.5)),
+            dict(type="rect", x0=20, y0=80, x1=80, y1=98, line=dict(color="rgba(255,255,255,0.35)", width=1.5)),
+            dict(type="rect", x0=36, y0=2, x1=64, y1=8, line=dict(color="rgba(255,255,255,0.25)", width=1)),
+            dict(type="rect", x0=36, y0=92, x1=64, y1=98, line=dict(color="rgba(255,255,255,0.25)", width=1))
+        ]
 
-# --- COLUMNA DERECHA: RADAR Y SELECTOR DE MODO ---
-with col_tarjeta_der:
-    c_m1, c_m2, c_m3 = st.columns([1.5, 1.5, 1.5])
-    with c_m1:
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=48, color='rgba(231, 76, 60, 0.25)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=30, color='rgba(231, 76, 60, 0.55)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=15, color='rgba(231, 76, 60, 0.95)'), showlegend=False))
+
+        fig_pitch.update_layout(
+            shapes=lineas_campo, template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.7)',
+            xaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+            yaxis=dict(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+            height=300, width=150, margin=dict(l=2, r=2, t=2, b=2)
+        )
+        st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
+
+    with col_text_info:
+        # Informaciones destacadas en grande pegadas al lado
         st.markdown(f"""
-            <div class="metric-box">
-                <span style="font-size:12px; color:#A0AEC0;">MINUTOS EN LIGA</span>
-                <h3 style="margin:2px 0; color:#00A8E8;">{minutos_oficiales}′</h3>
+            <div style="padding-left: 5px; display: flex; flex-direction: column; justify-content: center; height: 100%;">
+                <div>
+                    <div class="info-label">📅 Fecha de Nacimiento</div>
+                    <div class="info-value-big">{fecha_nac_str}</div>
+                </div>
+                <div>
+                    <div class="info-label">⚽ Posición Habitual</div>
+                    <div class="info-value-big" style="color:#00A8E8;">{posicion_str}</div>
+                </div>
+                <div>
+                    <div class="info-label">🦶 Pierna Dominante</div>
+                    <div class="info-value-big">{pierna_str}</div>
+                </div>
+                <div>
+                    <div class="info-label">⏱️ Minutos en Liga</div>
+                    <div class="info-value-highlight">{minutos_oficiales}′</div>
+                </div>
             </div>
         """, unsafe_allow_html=True)
+
+with col_ficha_der:
+    c_m2, c_m3 = st.columns([1.5, 1.5])
     with c_m2:
         modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
     with c_m3:
@@ -299,11 +369,9 @@ with col_tarjeta_der:
 
     # RADAR CHART SEGÚN MODO
     if modo_analisis == "Pruebas Físicas":
-        st.caption("🎯 Anisotropía de Rendimiento: Percentiles en Evaluaciones Condicionales")
-        # Variables condicionales
+        st.caption("🎯 Percentiles en Evaluaciones Condicionales")
         categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
-        # Calculamos percentil simulado/real del jugador
-        values_perc = [75, 82, 60, 90, 68, 70] # Valores base dinámicos
+        values_perc = [75, 82, 60, 90, 68, 70]
         
         fig_radar = go.Figure()
         fig_radar.add_trace(go.Scatterpolar(
@@ -312,7 +380,7 @@ with col_tarjeta_der:
         ))
         fig_radar.update_layout(
             polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=320, margin=dict(l=30, r=30, t=30, b=30)
+            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=380, margin=dict(l=30, r=30, t=30, b=30)
         )
         st.plotly_chart(fig_radar, use_container_width=True)
 
@@ -320,8 +388,7 @@ with col_tarjeta_der:
         st.caption("⚡ Perfil GPS en Partido: Media Últimos 4 Partidos vs Máximo Histórico")
         categories_gps = ['Dist Total', 'Dist >18', 'Dist >25', 'Acc+Dec', 'V_MAX', 'AC_MAX']
         
-        # Filtramos partidos del jugador
-        df_p_jug = df_gps_all[df_gps_all['Nombre'] == jugador_sel] if not df_gps_all.empty else pd.DataFrame()
+        df_p_jug = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm] if not df_gps_all.empty else pd.DataFrame()
         
         if not df_p_jug.empty:
             ult_4 = df_p_jug.sort_values('Fecha_dt').tail(4)
@@ -348,20 +415,18 @@ with col_tarjeta_der:
         fig_radar_gps = go.Figure()
         fig_radar_gps.add_trace(go.Scatterpolar(r=media_4, theta=categories_gps, fill='toself', name='Media 4 Partidos', fillcolor='rgba(241, 196, 15, 0.3)', line=dict(color='#F1C40F')))
         fig_radar_gps.add_trace(go.Scatterpolar(r=max_4, theta=categories_gps, fill='toself', name='Pico 4 Partidos', fillcolor='rgba(46, 204, 113, 0.2)', line=dict(color='#2ECC71', dash='dash')))
-        fig_radar_gps.update_layout(polar=dict(radialaxis=dict(visible=False)), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=320, margin=dict(l=30, r=30, t=30, b=30))
+        fig_radar_gps.update_layout(polar=dict(radialaxis=dict(visible=False)), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', height=380, margin=dict(l=30, r=30, t=30, b=30))
         st.plotly_chart(fig_radar_gps, use_container_width=True)
 
 # =============================================================================
-# 5. TABLAS DE DATOS Y DISPERSIÓN
+# 6. TABLAS DE DATOS Y DISPERSIÓN
 # =============================================================================
 st.markdown("---")
 
 if modo_analisis == "Pruebas Físicas":
     st.markdown("### 📋 Histórico de Resultados en Evaluaciones Condicionales")
-    # Mostramos resumen de sus evaluaciones
     st.info("💡 Haz clic en cualquier columna para ordenar las sesiones del jugador.")
     
-    # Datos demostrativos o construidos de sus archivos
     df_hist_eval = pd.DataFrame({
         'Fecha': ['13/08/2026', '01/06/2026'],
         'Test': ['Batería Completa Inicio', 'Pretemporada'],
@@ -377,7 +442,7 @@ if modo_analisis == "Pruebas Físicas":
 else:
     st.markdown("### ⚽ Registro GPS Partido a Partido")
     
-    df_p_jug = df_gps_all[df_gps_all['Nombre'] == jugador_sel].sort_values('Fecha_dt', ascending=False) if not df_gps_all.empty else pd.DataFrame()
+    df_p_jug = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt', ascending=False) if not df_gps_all.empty else pd.DataFrame()
     
     if df_p_jug.empty:
         st.info("No hay registros GPS disponibles para este jugador.")
