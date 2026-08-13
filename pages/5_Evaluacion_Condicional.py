@@ -1407,7 +1407,6 @@ elif pest_sel == "🏋️ Tren Superior":
 # ÁREA 7: VELOCIDAD & COD
 # =============================================================================
 elif pest_sel == "⚡ Velocidad & COD":
-    st.subheader("⚡ Evaluación de Velocidad, Aceleración & COD en Campo")
     
     if df_campo is None or df_campo.empty:
         st.warning("⚠️ No se encontró el archivo 'CAMPO.xlsx' en 'data/EVALUACIONES/CAMPO/'.")
@@ -1452,7 +1451,6 @@ elif pest_sel == "⚡ Velocidad & COD":
             if alertas_j:
                 dict_detalles_campo[nom_j] = alertas_j
 
-        st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_f_campo_str})")
         c_c1, c_c2 = st.columns(2)
         with c_c1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_detalles_campo)} / {len(df_c_ult)}")
         with c_c2: 
