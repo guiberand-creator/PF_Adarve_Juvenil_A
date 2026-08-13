@@ -1412,7 +1412,7 @@ elif pest_sel == "⚡ Velocidad & COD":
         ult_f_campo_str = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt]['Fecha'].iloc[0]
         df_c_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].copy()
 
-        # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN CON DESPLEGABLES
+        # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN CON DESPLEGABLES LIMPIOS
         dict_detalles_campo = {}
         for _, row_j in df_c_ult.iterrows():
             nom_j = row_j['Nombre']
@@ -1423,9 +1423,7 @@ elif pest_sel == "⚡ Velocidad & COD":
             ts_val = row_j.get('Tecnica_Sprint', None)
             tcod_val = row_j.get('Tecnica_COD', None)
 
-            detalles_vel_acc = []
-            detalles_cod = []
-            detalles_biomec = []
+            alertas_j = []
 
             ref_v, ref_ac, ref_dec = None, None, None
             if df_ref_campo is not None and not df_ref_campo.empty:
@@ -1435,30 +1433,20 @@ elif pest_sel == "⚡ Velocidad & COD":
                     ref_ac = r_ref.iloc[0].get('AC_MAX_Ref', None)
                     ref_dec = r_ref.iloc[0].get('DEC_MAX_Ref', None)
 
-            # Velocidad y Aceleración
+            # Lógica estricta pedida: Aceptable (2) no genera alerta técnica.
             if pd.notna(v_val) and pd.notna(ref_v) and v_val < ref_v:
-                detalles_vel_acc.append(f"• <b>Velocidad Máxima (V_MAX)</b>: {v_val:.1f} km/h (Ref {pos_j}: >{ref_v:.1f} km/h)")
+                alertas_j.append("Trabajo de velocidad")
             if pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac:
-                detalles_vel_acc.append(f"• <b>Aceleración Máxima (AC_MAX)</b>: {ac_val:.2f} m/s² (Ref {pos_j}: >{ref_ac:.2f} m/s²)")
-
-            # Desaceleración / COD
+                alertas_j.append("Trabajo de AC")
             if pd.notna(dec_val) and pd.notna(ref_dec) and dec_val > ref_dec:
-                detalles_cod.append(f"• <b>Desaceleración Máxima (DEC_MAX)</b>: {dec_val:.2f} m/s² (Ref {pos_j}: <{ref_dec:.2f} m/s²)")
+                alertas_j.append("Trabajo de DEC")
+            if pd.notna(ts_val) and ts_val == 1:
+                alertas_j.append("Trabajo técnico de Sprint")
+            if pd.notna(tcod_val) and tcod_val == 1:
+                alertas_j.append("Trabajo técnico de COD")
 
-            # Biomecánica / Técnica
-            if pd.notna(ts_val) and ts_val <= 2:
-                txt_ts = "🔴 Malo" if ts_val == 1 else "🟡 Aceptable"
-                detalles_biomec.append(f"• <b>Técnica de Sprint</b>: {txt_ts} (Puntuación: {ts_val}/3)")
-            if pd.notna(tcod_val) and tcod_val <= 2:
-                txt_tcod = "🔴 Malo" if tcod_val == 1 else "🟡 Aceptable"
-                detalles_biomec.append(f"• <b>Técnica de COD</b>: {txt_tcod} (Puntuación: {tcod_val}/3)")
-
-            if detalles_vel_acc or detalles_cod or detalles_biomec:
-                dict_detalles_campo[nom_j] = {
-                    'vel_acc': detalles_vel_acc,
-                    'cod': detalles_cod,
-                    'biomec': detalles_biomec
-                }
+            if alertas_j:
+                dict_detalles_campo[nom_j] = alertas_j
 
         st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_f_campo_str})")
         c_c1, c_c2 = st.columns(2)
@@ -1475,47 +1463,17 @@ elif pest_sel == "⚡ Velocidad & COD":
             
             with col_ca1:
                 for nom, det in items_c[:mitad_c]:
-                    tags = []
-                    if det['vel_acc']: tags.append("Trabajo de Velocidad / Aceleración")
-                    if det['cod']: tags.append("Trabajo de Capacidad COD")
-                    if det['biomec']: tags.append("Optimización Biomecánica")
-                    
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(det)
                     with st.expander(header_txt):
-                        if det['vel_acc']:
-                            st.markdown("##### ⚡ Velocidad / Aceleración:")
-                            for d in det['vel_acc']:
-                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
-                        if det['cod']:
-                            st.markdown("##### 🛑 Capacidad COD (Desaceleración):")
-                            for d in det['cod']:
-                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
-                        if det['biomec']:
-                            st.markdown("##### 🔍 Biomecánica y Técnica:")
-                            for d in det['biomec']:
-                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
-
+                        for d in det:
+                            st.markdown(f"<p style='color: #CCCCCC; font-size: 14px; margin: 2px 0;'>• {d}</p>", unsafe_allow_html=True)
+                            
             with col_ca2:
                 for nom, det in items_c[mitad_c:]:
-                    tags = []
-                    if det['vel_acc']: tags.append("Trabajo de Velocidad / Aceleración")
-                    if det['cod']: tags.append("Trabajo de Capacidad COD")
-                    if det['biomec']: tags.append("Optimización Biomecánica")
-                    
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(det)
                     with st.expander(header_txt):
-                        if det['vel_acc']:
-                            st.markdown("##### ⚡ Velocidad / Aceleración:")
-                            for d in det['vel_acc']:
-                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
-                        if det['cod']:
-                            st.markdown("##### 🛑 Capacidad COD (Desaceleración):")
-                            for d in det['cod']:
-                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
-                        if det['biomec']:
-                            st.markdown("##### 🔍 Biomecánica y Técnica:")
-                            for d in det['biomec']:
-                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        for d in det:
+                            st.markdown(f"<p style='color: #CCCCCC; font-size: 14px; margin: 2px 0;'>• {d}</p>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple los objetivos cinemáticos y biomecánicos.")
 
