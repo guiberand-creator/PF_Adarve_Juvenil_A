@@ -76,30 +76,31 @@ st.markdown("""
         border: 1px dashed rgba(255, 255, 255, 0.15);
     }
     
-    /* TARJETAS CUADRADAS KPI EN FILA */
-    .kpi-tile-header {
+    /* TARJETAS COMPACTAS EN GRID 2x2 */
+    .kpi-tile-compact {
         background: rgba(30, 41, 59, 0.75);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 12px;
-        padding: 22px 12px;
+        padding: 16px 10px;
         text-align: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        margin-bottom: 12px;
         height: 100%;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    .kpi-label-header {
-        font-size: 11px !important;
+    .kpi-label-compact {
+        font-size: 10px !important;
         font-weight: 700 !important;
         color: #94A3B8 !important;
         text-transform: uppercase !important;
-        letter-spacing: 1px !important;
-        margin-bottom: 6px;
+        letter-spacing: 0.8px !important;
+        margin-bottom: 4px;
     }
-    .kpi-value-header {
-        font-size: 24px !important;
+    .kpi-value-compact {
+        font-size: 20px !important;
         font-weight: 900 !important;
         color: #FFFFFF !important;
     }
@@ -240,8 +241,6 @@ df_pos, df_cuest, df_rpe, df_gps_all = cargar_todo_informes()
 # =============================================================================
 # 3. SELECCIÓN DE JUGADOR (PARA STAFF)
 # =============================================================================
-st.title("INFORMES INDIVIDUALES DE PLANTILLA")
-
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
     lista_jugadores = sorted(df_cuest['Nombre'].dropna().unique())
@@ -307,111 +306,113 @@ url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 5. ENCABEZADO: FOTO -> ESCUDO+CAMPOGRAMA -> FICHA KPI EN UNA FILA
+# 5. DISPOSICIÓN SUPERIOR (50% ENCABEZADO AGRUPADO / 50% RADAR GIGANTE)
 # =============================================================================
 
-col_foto, col_vis, col_kpis = st.columns([1.0, 1.2, 2.8], gap="medium")
+col_izq_top, col_der_top = st.columns([1.1, 0.9], gap="large")
 
-# 1. Foto (Extremo Izquierdo)
-with col_foto:
-    if url_foto_jugador and pd.notna(url_foto_jugador):
-        st.markdown(f'<img src="{url_foto_jugador}" class="photo-full-body">', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="photo-placeholder-full"><span style="font-size:65px; color:#64748B;">👤</span></div>', unsafe_allow_html=True)
+# --- MITAD IZQUIERDA: ENCABEZADO AGRUPADO COMPACTO ---
+with col_izq_top:
+    col_foto, col_vis, col_kpis = st.columns([1.0, 1.0, 1.2], gap="small")
 
-# 2. Escudo + Tag + Campograma (Rellenando la altura vertical)
-with col_vis:
-    st.markdown(f'<div style="text-align:center; margin-bottom:2px;"><img src="{url_escudo_oficial}" style="width:58px; height:auto;"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="tag-division">JUVENIL DIVISIÓN DE HONOR</div>', unsafe_allow_html=True)
-    
-    pos_low = posicion_str.lower()
-    if 'porter' in pos_low: x_target, y_target = 34, 95
-    elif 'central' in pos_low: x_target, y_target = 34, 80
-    elif 'lateral' in pos_low:
-        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 75
-        else: x_target, y_target = 10, 75
-    elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 34, 55
-    elif 'interior' in pos_low or 'mediapunta' in pos_low:
-        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 46, 40
-        else: x_target, y_target = 22, 40
-    elif 'extremo' in pos_low or 'carrilero' in pos_low:
-        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 25
-        else: x_target, y_target = 10, 25
-    elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 34, 15
-    else: x_target, y_target = 34, 52.5
+    # 1. Foto (Extremo Izquierdo)
+    with col_foto:
+        if url_foto_jugador and pd.notna(url_foto_jugador):
+            st.markdown(f'<img src="{url_foto_jugador}" class="photo-full-body">', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="photo-placeholder-full"><span style="font-size:65px; color:#64748B;">👤</span></div>', unsafe_allow_html=True)
 
-    fig_pitch = go.Figure()
-    lineas_campo = [
-        dict(type="rect", x0=0, y0=0, x1=68, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-        dict(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-        dict(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-        dict(type="rect", x0=13.84, y0=0, x1=54.16, y1=16.5, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
-        dict(type="rect", x0=13.84, y0=88.5, x1=54.16, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
-        dict(type="rect", x0=24.84, y0=0, x1=43.16, y1=5.5, line=dict(color="rgba(255,255,255,0.3)", width=1)),
-        dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
-    ]
-
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(0, 229, 255, 0.25)'), showlegend=False))
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(0, 229, 255, 0.55)'), showlegend=False))
-    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(0, 229, 255, 0.95)'), showlegend=False))
-
-    fig_pitch.update_layout(
-        shapes=lineas_campo, template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-        yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
-        height=320, margin=dict(l=2, r=2, t=2, b=2)
-    )
-    st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
-
-# 3. Ficha KPI del Jugador en UNA SOLA FILA HORIZONTAL
-with col_kpis:
-    st.markdown('<div style="height:25px;"></div>', unsafe_allow_html=True)
-    k_col1, k_col2, k_col3, k_col4 = st.columns(4, gap="small")
-    
-    with k_col1:
-        st.markdown(f"""
-            <div class="kpi-tile-header">
-                <div class="kpi-label-header">📅 FECHA DE NACIMIENTO</div>
-                <div class="kpi-value-header">{fecha_nac_str}</div>
-            </div>
-        """, unsafe_allow_html=True)
+    # 2. Escudo + Tag + Campograma
+    with col_vis:
+        st.markdown(f'<div style="text-align:center; margin-bottom:2px;"><img src="{url_escudo_oficial}" style="width:55px; height:auto;"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tag-division">JUVENIL DIVISIÓN DE HONOR</div>', unsafe_allow_html=True)
         
-    with k_col2:
-        st.markdown(f"""
-            <div class="kpi-tile-header">
-                <div class="kpi-label-header">🦶 PIERNA HÁBIL</div>
-                <div class="kpi-value-header kpi-value-cyan">{pierna_str.upper()}</div>
-            </div>
-        """, unsafe_allow_html=True)
+        pos_low = posicion_str.lower()
+        if 'porter' in pos_low: x_target, y_target = 34, 95
+        elif 'central' in pos_low: x_target, y_target = 34, 80
+        elif 'lateral' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 75
+            else: x_target, y_target = 10, 75
+        elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 34, 55
+        elif 'interior' in pos_low or 'mediapunta' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 46, 40
+            else: x_target, y_target = 22, 40
+        elif 'extremo' in pos_low or 'carrilero' in pos_low:
+            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 25
+            else: x_target, y_target = 10, 25
+        elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 34, 15
+        else: x_target, y_target = 34, 52.5
 
-    with k_col3:
-        st.markdown(f"""
-            <div class="kpi-tile-header">
-                <div class="kpi-label-header">⏱️ MINUTOS EN LIGA</div>
-                <div class="kpi-value-header kpi-value-gold">{minutos_oficiales}′</div>
-            </div>
-        """, unsafe_allow_html=True)
+        fig_pitch = go.Figure()
+        lineas_campo = [
+            dict(type="rect", x0=0, y0=0, x1=68, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+            dict(type="rect", x0=13.84, y0=0, x1=54.16, y1=16.5, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+            dict(type="rect", x0=13.84, y0=88.5, x1=54.16, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+            dict(type="rect", x0=24.84, y0=0, x1=43.16, y1=5.5, line=dict(color="rgba(255,255,255,0.3)", width=1)),
+            dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
+        ]
 
-    with k_col4:
-        st.markdown(f"""
-            <div class="kpi-tile-header">
-                <div class="kpi-label-header">🏆 RANKING CONDICIONAL</div>
-                <div class="kpi-value-header kpi-value-green">#4</div>
-            </div>
-        """, unsafe_allow_html=True)
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(0, 229, 255, 0.25)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(0, 229, 255, 0.55)'), showlegend=False))
+        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(0, 229, 255, 0.95)'), showlegend=False))
 
-st.markdown("---")
+        fig_pitch.update_layout(
+            shapes=lineas_campo, template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+            yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
+            height=300, margin=dict(l=2, r=2, t=2, b=2)
+        )
+        st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
 
-# =============================================================================
-# 6. SECCIÓN INFERIOR: RADAR + CONTROLES + TABLAS
-# =============================================================================
+    # 3. Mosaico Compacto de Tarjetas KPI en Grid 2x2
+    with col_kpis:
+        st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+        
+        # Fila 1
+        k_r1_1, k_r1_2 = st.columns(2, gap="small")
+        with k_r1_1:
+            st.markdown(f"""
+                <div class="kpi-tile-compact">
+                    <div class="kpi-label-compact">📅 NACIMIENTO</div>
+                    <div class="kpi-value-compact">{fecha_nac_str}</div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with k_r1_2:
+            st.markdown(f"""
+                <div class="kpi-tile-compact">
+                    <div class="kpi-label-compact">🦶 PIERNA HÁBIL</div>
+                    <div class="kpi-value-compact kpi-value-cyan">{pierna_str.upper()}</div>
+                </div>
+            """, unsafe_allow_html=True)
 
-c_radar, c_controls = st.columns([1.5, 1.0], gap="large")
+        st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-with c_radar:
+        # Fila 2
+        k_r2_1, k_r2_2 = st.columns(2, gap="small")
+        with k_r2_1:
+            st.markdown(f"""
+                <div class="kpi-tile-compact">
+                    <div class="kpi-label-compact">⏱️ MINUTOS LIGA</div>
+                    <div class="kpi-value-compact kpi-value-gold">{minutos_oficiales}′</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with k_r2_2:
+            st.markdown(f"""
+                <div class="kpi-tile-compact">
+                    <div class="kpi-label-compact">🏆 RANKING</div>
+                    <div class="kpi-value-compact kpi-value-green">#4</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+# --- MITAD DERECHA: RADAR GIGANTE + CONTROLES ABAJO ---
+with col_der_top:
     st.markdown('<div class="hud-card">', unsafe_allow_html=True)
-    st.markdown('<div style="text-align:center; font-size:13px; font-weight:800; color:#94A3B8; letter-spacing:1px; margin-bottom:8px;">PERFIL TÁCTICO CONDICIONAL</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; font-size:13px; font-weight:800; color:#94A3B8; letter-spacing:1px; margin-bottom:4px;">PERFIL TÁCTICO CONDICIONAL</div>', unsafe_allow_html=True)
     
     categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
     values_jugador = [78, 85, 62, 92, 70, 75]
@@ -446,21 +447,23 @@ with c_radar:
             angularaxis=dict(gridcolor='rgba(255,255,255,0.12)', tickfont=dict(size=11, color='#FFFFFF', family="Arial Black"))
         ),
         template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-        height=380, margin=dict(l=25, r=25, t=20, b=20),
+        height=380, margin=dict(l=25, r=25, t=15, b=15),
         legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
     )
     st.plotly_chart(fig_radar, use_container_width=True)
+    
+    # Controles en 2 columnas ajustadas justo debajo del radar
+    c_ctrl1, c_ctrl2 = st.columns(2, gap="small")
+    with c_ctrl1:
+        modo_analisis = st.radio("📊 Módulo:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
+    with c_ctrl2:
+        filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
+        
     st.markdown('</div>', unsafe_allow_html=True)
 
-with c_controls:
-    st.markdown('<div class="hud-card" style="height:100%;">', unsafe_allow_html=True)
-    st.markdown('⚙️ **CONFIGURACIÓN DE ANÁLISIS**')
-    st.markdown("<br>", unsafe_allow_html=True)
-    modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"])
-    st.markdown("<br>", unsafe_allow_html=True)
-    filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
-    st.markdown('</div>', unsafe_allow_html=True)
-
+# =============================================================================
+# 6. TABLAS DE DATOS Y DISPERSIÓN
+# =============================================================================
 st.markdown("---")
 
 if modo_analisis == "Pruebas Físicas":
