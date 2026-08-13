@@ -12,7 +12,7 @@ from datetime import datetime
 from utils import aplicar_diseno_responsive
 
 # =============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS
+# 1. CONFIGURACIÓN Y ESTILOS CSS
 # =============================================================================
 aplicar_diseno_responsive()
 
@@ -55,15 +55,21 @@ if os.path.exists(_ruta_logo):
 
 st.markdown("""
     <style>
-    .player-title {
-        font-size: 34px !important;
+    .left-unified-card {
+        background-color: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        padding: 20px 15px;
+        text-align: center;
+    }
+    .player-title-centered {
+        font-size: 24px !important;
         font-weight: 800 !important;
         color: #FFFFFF !important;
-        letter-spacing: 1.5px !important;
+        letter-spacing: 1px !important;
         text-transform: uppercase !important;
-        margin-bottom: 20px !important;
-        border-bottom: 2px solid rgba(0, 168, 232, 0.4);
-        padding-bottom: 8px;
+        margin-bottom: 12px !important;
+        text-align: center !important;
     }
     .info-label {
         font-size: 11px !important;
@@ -85,24 +91,22 @@ st.markdown("""
         color: #FFC107 !important;
         margin-bottom: 18px !important;
     }
-    .photo-frame {
-        width: 185px;
-        height: 185px;
-        border-radius: 14px;
+    .photo-clean {
+        width: 170px;
+        height: 170px;
+        border-radius: 12px;
         object-fit: cover;
-        border: 2px solid #00A8E8;
         display: block;
         margin: 0 auto;
     }
-    .photo-placeholder {
-        width: 185px;
-        height: 185px;
-        border-radius: 14px;
+    .photo-placeholder-clean {
+        width: 170px;
+        height: 170px;
+        border-radius: 12px;
         background-color: #1E293B;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid #334155;
         margin: 0 auto;
     }
     </style>
@@ -213,6 +217,8 @@ df_pos, df_cuest, df_rpe, df_gps_all = cargar_todo_informes()
 # =============================================================================
 # 3. SELECCIÓN DE JUGADOR (PARA STAFF)
 # =============================================================================
+st.title("INFORMES INDIVIDUALES DE PLANTILLA")
+
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
     lista_jugadores = sorted(df_cuest['Nombre'].dropna().unique())
@@ -237,7 +243,7 @@ match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empt
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Fecha de nacimiento (Mapeo robusto)
+# Fecha de nacimiento
 fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val_fn = match_cuest.iloc[0]['Fecha_Nacimiento']
@@ -269,142 +275,131 @@ if not df_rpe.empty:
                   (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_oficiales = int(df_m['Minutos'].sum())
 
-# Escudo del Adarve
-_ruta_escudo_adarve = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen1.png"))
-b64_escudo = ""
-if os.path.exists(_ruta_escudo_adarve):
-    with open(_ruta_escudo_adarve, "rb") as _f:
-        b64_escudo = base64.b64encode(_f.read()).decode()
+# URL Escudo Oficial
+url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&lossy=1"
 
 # =============================================================================
 # 5. RENDERIZADO DEL PERFIL (DISEÑO SOLICITADO Y CENTRADO)
 # =============================================================================
 
-# NOMBRE EN CABECERA GRANDE
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
-st.markdown(f'<div class="player-title">{nombre_mostrar}</div>', unsafe_allow_html=True)
 
-col_ficha_izq, col_ficha_der = st.columns([1.8, 2.2])
+col_ficha_izq, col_ficha_mid, col_ficha_der = st.columns([1.1, 1.1, 1.8])
 
+# --- BLOQUE IZQUIERDO UNIFICADO (FOTO, NOMBRE, LOGO Y CAMPOGRAMA) ---
 with col_ficha_izq:
-    col_foto_pitch, col_text_info = st.columns([1.1, 1.1])
+    st.markdown('<div class="left-unified-card">', unsafe_allow_html=True)
     
-    with col_foto_pitch:
-        # 1. Foto Centrada
-        if url_foto_jugador and pd.notna(url_foto_jugador):
-            st.markdown(f'<div style="text-align:center;"><img src="{url_foto_jugador}" class="photo-frame"></div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="text-align:center;"><div class="photo-placeholder"><span style="font-size:65px;">👤</span></div></div>', unsafe_allow_html=True)
-        
-        # 2. Escudo Centrado y Más Grande
-        if b64_escudo:
-            st.markdown(f'<div style="text-align:center; margin-top:14px; margin-bottom:14px;"><img src="data:image/png;base64,{b64_escudo}" style="width:75px; height:auto;"></div>', unsafe_allow_html=True)
-        else:
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-        # 3. Campograma Vertical Proporcional (105m x 68m)
-        pos_low = posicion_str.lower()
-        
-        if 'porter' in pos_low: x_target, y_target = 34, 95
-        elif 'central' in pos_low: x_target, y_target = 34, 80
-        elif 'lateral' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 75
-            else: x_target, y_target = 10, 75
-        elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 34, 55
-        elif 'interior' in pos_low or 'mediapunta' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 46, 40
-            else: x_target, y_target = 22, 40
-        elif 'extremo' in pos_low or 'carrilero' in pos_low:
-            if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 25
-            else: x_target, y_target = 10, 25
-        elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 34, 15
-        else: x_target, y_target = 34, 52.5
+    # 1. Nombre centrado arriba de la foto (Sin línea azul)
+    st.markdown(f'<div class="player-title-centered">{nombre_mostrar}</div>', unsafe_allow_html=True)
+    
+    # 2. Foto sin marco azul
+    if url_foto_jugador and pd.notna(url_foto_jugador):
+        st.markdown(f'<div><img src="{url_foto_jugador}" class="photo-clean"></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div><div class="photo-placeholder-clean"><span style="font-size:65px;">👤</span></div></div>', unsafe_allow_html=True)
+    
+    # 3. Logo Oficial Adarve
+    st.markdown(f'<div style="margin-top:12px; margin-bottom:12px;"><img src="{url_escudo_oficial}" style="width:70px; height:auto;"></div>', unsafe_allow_html=True)
+    
+    # 4. Campograma Vertical Limpio (Sin fondo azul horizontal)
+    pos_low = posicion_str.lower()
+    
+    if 'porter' in pos_low: x_target, y_target = 34, 95
+    elif 'central' in pos_low: x_target, y_target = 34, 80
+    elif 'lateral' in pos_low:
+        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 75
+        else: x_target, y_target = 10, 75
+    elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: x_target, y_target = 34, 55
+    elif 'interior' in pos_low or 'mediapunta' in pos_low:
+        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 46, 40
+        else: x_target, y_target = 22, 40
+    elif 'extremo' in pos_low or 'carrilero' in pos_low:
+        if 'zurdo' in pierna_str.lower() or 'izq' in pos_low: x_target, y_target = 58, 25
+        else: x_target, y_target = 10, 25
+    elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low: x_target, y_target = 34, 15
+    else: x_target, y_target = 34, 52.5
 
-        fig_pitch = go.Figure()
-        
-        # Dimensiones reales de un campo de fútbol en metros (105m de alto x 68m de ancho)
-        lineas_campo = [
-            dict(type="rect", x0=0, y0=0, x1=68, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-            dict(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-            dict(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=dict(color="rgba(255,255,255,0.4)", width=2)),
-            dict(type="rect", x0=13.84, y0=0, x1=54.16, y1=16.5, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
-            dict(type="rect", x0=13.84, y0=88.5, x1=54.16, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
-            dict(type="rect", x0=24.84, y0=0, x1=43.16, y1=5.5, line=dict(color="rgba(255,255,255,0.3)", width=1)),
-            dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
-        ]
+    fig_pitch = go.Figure()
+    
+    # Líneas campo proporcional (105m x 68m)
+    lineas_campo = [
+        dict(type="rect", x0=0, y0=0, x1=68, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+        dict(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+        dict(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=dict(color="rgba(255,255,255,0.4)", width=2)),
+        dict(type="rect", x0=13.84, y0=0, x1=54.16, y1=16.5, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+        dict(type="rect", x0=13.84, y0=88.5, x1=54.16, y1=105, line=dict(color="rgba(255,255,255,0.4)", width=1.5)),
+        dict(type="rect", x0=24.84, y0=0, x1=43.16, y1=5.5, line=dict(color="rgba(255,255,255,0.3)", width=1)),
+        dict(type="rect", x0=24.84, y0=99.5, x1=43.16, y1=105, line=dict(color="rgba(255,255,255,0.3)", width=1))
+    ]
 
-        # Mancha de calor proporcional
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(231, 76, 60, 0.25)'), showlegend=False))
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(231, 76, 60, 0.55)'), showlegend=False))
-        fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(231, 76, 60, 0.95)'), showlegend=False))
+    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=42, color='rgba(231, 76, 60, 0.25)'), showlegend=False))
+    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=26, color='rgba(231, 76, 60, 0.55)'), showlegend=False))
+    fig_pitch.add_trace(go.Scatter(x=[x_target], y=[y_target], mode='markers', marker=dict(size=12, color='rgba(231, 76, 60, 0.95)'), showlegend=False))
 
-        # Scaleanchor garantiza que la relación de aspecto 105:68 sea PERFECTA e indeformable
-        fig_pitch.update_layout(
-            shapes=lineas_campo, template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.75)',
-            xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
-            yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
-            height=280, margin=dict(l=2, r=2, t=2, b=2)
-        )
-        st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
+    fig_pitch.update_layout(
+        shapes=lineas_campo, template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', # Fondo 100% transparente
+        xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+        yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
+        height=260, margin=dict(l=2, r=2, t=2, b=2)
+    )
+    st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with col_text_info:
-        # Texto en grande pegado al lado del bloque
-        st.markdown(f"""
-            <div style="padding-left: 10px; display: flex; flex-direction: column; justify-content: center; height: 100%;">
-                <div>
-                    <div class="info-label">📅 Fecha de Nacimiento</div>
-                    <div class="info-value-big">{fecha_nac_str}</div>
-                </div>
-                <div>
-                    <div class="info-label">⚽ Posición Habitual</div>
-                    <div class="info-value-big" style="color:#00A8E8;">{posicion_str}</div>
-                </div>
-                <div>
-                    <div class="info-label">🦶 Pierna Dominante</div>
-                    <div class="info-value-big">{pierna_str}</div>
-                </div>
-                <div>
-                    <div class="info-label">⏱️ Minutos en Liga</div>
-                    <div class="info-value-highlight">{minutos_oficiales}′</div>
-                </div>
+# --- BLOQUE CENTRAL (TEXTO DE INFORMACIONES) ---
+with col_ficha_mid:
+    st.markdown(f"""
+        <div style="padding-left: 15px; display: flex; flex-direction: column; justify-content: center; height: 100%;">
+            <div>
+                <div class="info-label">📅 Fecha de Nacimiento</div>
+                <div class="info-value-big">{fecha_nac_str}</div>
             </div>
-        """, unsafe_allow_html=True)
+            <div>
+                <div class="info-label">⚽ Posición Habitual</div>
+                <div class="info-value-big" style="color:#00A8E8;">{posicion_str}</div>
+            </div>
+            <div>
+                <div class="info-label">🦶 Pierna Dominante</div>
+                <div class="info-value-big">{pierna_str}</div>
+            </div>
+            <div>
+                <div class="info-label">⏱️ Minutos en Liga</div>
+                <div class="info-value-highlight">{minutos_oficiales}′</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
+# --- BLOQUE DERECHO (RADAR & FILTRO DE COMPARACIÓN BAJO EL GRÁFICO) ---
 with col_ficha_der:
-    c_m2, c_m3 = st.columns([1.5, 1.5])
-    with c_m2:
-        modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
-    with c_m3:
-        filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
+    modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
 
-    # =========================================================================
-    # GRÁFICO DE RADAR ULTRA ELEGANTE (PRO SCOUTING STYLE)
-    # =========================================================================
+    # RADAR CHART
     if modo_analisis == "Pruebas Físicas":
-        st.caption("🎯 Anisotropía de Rendimiento: Percentiles en Evaluaciones Condicionales")
-        
+        st.caption("🎯 Percentiles en Evaluaciones Condicionales")
         categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
-        values_jugador = [78, 85, 62, 92, 70, 75]
-        values_media_pos = [65, 70, 60, 72, 65, 68]
         
-        # Para cerrar el radar
+        # Simulamos datos para el radar de pruebas físicas
+        values_jugador = [78, 85, 62, 92, 70, 75]
+        
+        # Renderizamos primero el gráfico
         categories_closed = categories + [categories[0]]
         values_jug_closed = values_jugador + [values_jugador[0]]
-        values_med_closed = values_media_pos + [values_media_pos[0]]
+
+        # Obtenemos primero la selección del filtro (lo definimos aquí pero se muestra abajo)
+        # Para evitar problemas de orden de Streamlit, procesamos el valor después del selectbox abajo
+        
+        fig_radar = go.Figure()
+
+    # RADAR RENDERIZADO Y LUEGO FILTRO ABAJO
+    if modo_analisis == "Pruebas Físicas":
+        # Gráfico Radar
+        values_jugador = [78, 85, 62, 92, 70, 75]
+        categories_closed = categories + [categories[0]]
+        values_jug_closed = values_jugador + [values_jugador[0]]
 
         fig_radar = go.Figure()
         
-        # Trazado 1: Media Demarcación (Sutil / Dorado)
-        fig_radar.add_trace(go.Scatterpolar(
-            r=values_med_closed, theta=categories_closed,
-            fill='toself', name='Media Demarcación',
-            fillcolor='rgba(241, 196, 15, 0.12)',
-            line=dict(color='#F1C40F', width=1.5, dash='dash'),
-            marker=dict(size=4, color='#F1C40F')
-        ))
-
-        # Trazado 2: Jugador Seleccionado (Cian Intenso / Resaltado)
         fig_radar.add_trace(go.Scatterpolar(
             r=values_jug_closed, theta=categories_closed,
             fill='toself', name=jugador_sel.replace('_', ' '),
@@ -420,15 +415,12 @@ with col_ficha_der:
                 angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
             ),
             template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-            height=370, margin=dict(l=40, r=40, t=25, b=25),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            height=430, margin=dict(l=40, r=40, t=25, b=25),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
 
     else:
-        st.caption("⚡ Perfil GPS en Partido: Media Últimos 4 Partidos vs Máximo Histórico")
         categories_gps = ['Dist Total', 'Dist >18', 'Dist >25', 'Acc+Dec', 'V_MAX', 'AC_MAX']
-        
         df_p_jug = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm] if not df_gps_all.empty else pd.DataFrame()
         
         if not df_p_jug.empty:
@@ -457,26 +449,39 @@ with col_ficha_der:
         media_4_closed = media_4 + [media_4[0]]
         max_4_closed = max_4 + [max_4[0]]
 
-        fig_radar_gps = go.Figure()
-        fig_radar_gps.add_trace(go.Scatterpolar(
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
             r=media_4_closed, theta=cat_gps_closed, fill='toself', name='Media 4 Partidos',
             fillcolor='rgba(241, 196, 15, 0.25)', line=dict(color='#F1C40F', width=2, shape='spline')
         ))
-        fig_radar_gps.add_trace(go.Scatterpolar(
+        fig_radar.add_trace(go.Scatterpolar(
             r=max_4_closed, theta=cat_gps_closed, fill='toself', name='Pico Histórico',
             fillcolor='rgba(46, 204, 113, 0.2)', line=dict(color='#2ECC71', width=2, dash='dash', shape='spline')
         ))
-        fig_radar_gps.update_layout(
+        fig_radar.update_layout(
             polar=dict(
                 bgcolor='rgba(15, 23, 42, 0.6)',
                 radialaxis=dict(visible=False),
                 angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
             ),
             template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-            height=370, margin=dict(l=40, r=40, t=25, b=25),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            height=430, margin=dict(l=40, r=40, t=25, b=25),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
         )
-        st.plotly_chart(fig_radar_gps, use_container_width=True)
+
+    # 1. DIBUJAR GRÁFICO RADAR GRANDE
+    st.plotly_chart(fig_radar, use_container_width=True)
+
+    # 2. FILTRO DE COMPARACIÓN UBICADO JUSTO DEBAJO DEL GRÁFICO Y DEL MISMO ANCHO
+    filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"], key="filtro_comparacion_key")
+    
+    # Lógica de actualización de benchmark según el filtro
+    if filtro_comparacion == "Misma Demarcación":
+        values_benchmark = [68, 75, 62, 78, 68, 72]
+        label_bench = f"Media {posicion_str}"
+    else:
+        values_benchmark = [50, 50, 50, 50, 50, 50]
+        label_bench = "Media Toda la Plantilla"
 
 # =============================================================================
 # 6. TABLAS DE DATOS Y DISPERSIÓN
