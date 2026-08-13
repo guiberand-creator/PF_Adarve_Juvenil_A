@@ -667,10 +667,10 @@ elif pest_sel == "⚙️ Dinamometría":
             if add_d and add_i and abd_d and abd_i:
                 m_add = (add_d + add_i) / 2.0
                 m_abd = (abd_d + abd_i) / 2.0
-                if m_add > 0:
-                    r_aa = m_abd / m_add
-                    if r_aa < 0.90:
-                        detalles_descomp.append(f"• <b>Ratio ABD/ADD Cadera</b>: {r_aa:.2f} (Ref: >0.90)")
+                if m_abd > 0:
+                    r_aa = m_add / m_abd
+                    if r_aa < 1.05 or r_aa > 1.20:
+                        detalles_descomp.append(f"• <b>Ratio ADD/ABD Cadera</b>: {r_aa:.2f} (Ref: 1.05 - 1.20)")
 
             if detalles_fmax or detalles_asim or detalles_descomp:
                 dict_detalles[jug] = {
@@ -826,22 +826,28 @@ elif pest_sel == "⚙️ Dinamometría":
                 add_d, add_i = v('ADD_Cadera_De_Pie_Derecha'), v('ADD_Cadera_De_Pie_Izquierda')
                 abd_d, abd_i = v('ABD_Cadera_De_Pie_Derecha'), v('ABD_Cadera_De_Pie_Izquierda')
                 if add_d and add_i and abd_d and abd_i:
-                    ratios_aa.append(((abd_d + abd_i) / 2) / ((add_d + add_i) / 2))
-                    nombres_aa.append(jug)
+                    m_add = (add_d + add_i) / 2.0
+                    m_abd = (abd_d + abd_i) / 2.0
+                    if m_abd > 0:
+                        ratios_aa.append(m_add / m_abd)
+                        nombres_aa.append(jug)
 
             if ratios_aa:
                 fig_r_aa = go.Figure()
                 fig_r_aa.add_trace(go.Bar(
                     x=nombres_aa, y=ratios_aa,
-                    marker_color=['#2ECC71' if v >= 0.90 else '#E74C3C' for v in ratios_aa],
+                    marker_color=['#2ECC71' if 1.05 <= v <= 1.20 else '#E74C3C' for v in ratios_aa],
                     text=[f"<b>{v:.2f}</b>" for v in ratios_aa], textposition='outside'
                 ))
-                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=0.90, y1=0.90, line=dict(color="#2ECC71", width=3, dash="dash"))
-                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=0.90, text="Ref. (>0.90)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
+                fig_r_aa.add_shape(type="rect", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.20, fillcolor="rgba(46, 204, 113, 0.15)", line=dict(width=0), layer="below")
+                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.05, line=dict(color="#2ECC71", width=2, dash="dash"))
+                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.20, y1=1.20, line=dict(color="#2ECC71", width=2, dash="dash"))
+                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.20, text="Ref. Max (1.20)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
+                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.05, text="Ref. Min (1.05)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=-12)
                 
-                max_raa_y = max(max(ratios_aa) + 0.25, 1.2)
+                max_raa_y = max(max(ratios_aa) + 0.25, 1.4)
                 fig_r_aa.update_layout(
-                    title="⚖️ Ratio ABD / ADD Cadera (Índice)",
+                    title="⚖️ Ratio ADD / ABD Cadera (Índice)",
                     template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
                     xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_raa_y]),
                     height=450, margin=dict(l=20, r=20, t=50, b=90)
