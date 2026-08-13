@@ -753,7 +753,6 @@ elif pest_sel == "⚙️ Dinamometría":
             df_g_frel['Asimetria_Pct'] = (abs(df_g_frel[ej_d] - df_g_frel[ej_i]) / df_g_frel[[ej_d, ej_i]].max(axis=1)) * 100
 
             fig_frel = go.Figure()
-            # Poner etiquetas dentro de la barra para evitar solapamientos con la asimetría arriba
             fig_frel.add_trace(go.Bar(
                 x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#00A8E8',
                 text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='inside'
@@ -1413,18 +1412,20 @@ elif pest_sel == "⚡ Velocidad & COD":
         ult_f_campo_str = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt]['Fecha'].iloc[0]
         df_c_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].copy()
 
-        # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN
-        dict_prescripciones_campo = {}
+        # 1. INFORME DE ALERTAS Y PRESCRIPCIÓN CON DESPLEGABLES
+        dict_detalles_campo = {}
         for _, row_j in df_c_ult.iterrows():
             nom_j = row_j['Nombre']
-            pos_j = row_j['Posicion']
+            pos_j = row_j.get('Posicion', 'Sin Posición')
             v_val = row_j.get('V_MAX', None)
             ac_val = row_j.get('AC_MAX', None)
             dec_val = row_j.get('DEC_MAX', None)
             ts_val = row_j.get('Tecnica_Sprint', None)
             tcod_val = row_j.get('Tecnica_COD', None)
 
-            prescripciones_j = []
+            detalles_vel_acc = []
+            detalles_cod = []
+            detalles_biomec = []
 
             ref_v, ref_ac, ref_dec = None, None, None
             if df_ref_campo is not None and not df_ref_campo.empty:
@@ -1434,38 +1435,87 @@ elif pest_sel == "⚡ Velocidad & COD":
                     ref_ac = r_ref.iloc[0].get('AC_MAX_Ref', None)
                     ref_dec = r_ref.iloc[0].get('DEC_MAX_Ref', None)
 
-            if (pd.notna(v_val) and pd.notna(ref_v) and v_val < ref_v) or \
-               (pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac):
-                prescripciones_j.append("Trabajo de Velocidad / Aceleración")
+            # Velocidad y Aceleración
+            if pd.notna(v_val) and pd.notna(ref_v) and v_val < ref_v:
+                detalles_vel_acc.append(f"• <b>Velocidad Máxima (V_MAX)</b>: {v_val:.1f} km/h (Ref {pos_j}: >{ref_v:.1f} km/h)")
+            if pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac:
+                detalles_vel_acc.append(f"• <b>Aceleración Máxima (AC_MAX)</b>: {ac_val:.2f} m/s² (Ref {pos_j}: >{ref_ac:.2f} m/s²)")
 
+            # Desaceleración / COD
             if pd.notna(dec_val) and pd.notna(ref_dec) and dec_val > ref_dec:
-                prescripciones_j.append("Trabajo de Capacidad COD")
+                detalles_cod.append(f"• <b>Desaceleración Máxima (DEC_MAX)</b>: {dec_val:.2f} m/s² (Ref {pos_j}: <{ref_dec:.2f} m/s²)")
 
-            if (pd.notna(ts_val) and ts_val <= 2) or (pd.notna(tcod_val) and tcod_val <= 2):
-                prescripciones_j.append("Optimización Biomecánica")
+            # Biomecánica / Técnica
+            if pd.notna(ts_val) and ts_val <= 2:
+                txt_ts = "🔴 Malo" if ts_val == 1 else "🟡 Aceptable"
+                detalles_biomec.append(f"• <b>Técnica de Sprint</b>: {txt_ts} (Puntuación: {ts_val}/3)")
+            if pd.notna(tcod_val) and tcod_val <= 2:
+                txt_tcod = "🔴 Malo" if tcod_val == 1 else "🟡 Aceptable"
+                detalles_biomec.append(f"• <b>Técnica de COD</b>: {txt_tcod} (Puntuación: {tcod_val}/3)")
 
-            if prescripciones_j:
-                dict_prescripciones_campo[nom_j] = prescripciones_j
+            if detalles_vel_acc or detalles_cod or detalles_biomec:
+                dict_detalles_campo[nom_j] = {
+                    'vel_acc': detalles_vel_acc,
+                    'cod': detalles_cod,
+                    'biomec': detalles_biomec
+                }
 
         st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_f_campo_str})")
         c_c1, c_c2 = st.columns(2)
-        with c_c1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_prescripciones_campo)} / {len(df_c_ult)}")
+        with c_c1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_detalles_campo)} / {len(df_c_ult)}")
         with c_c2: 
-            pct_opt_c = ((len(df_c_ult) - len(dict_prescripciones_campo)) / len(df_c_ult) * 100) if len(df_c_ult) > 0 else 100
+            pct_opt_c = ((len(df_c_ult) - len(dict_detalles_campo)) / len(df_c_ult) * 100) if len(df_c_ult) > 0 else 100
             st.metric("Porcentaje del Vestuario en Objetivo", f"{pct_opt_c:.0f}%")
 
         st.markdown("#### 🎯 Prescripción Metodológica por Jugador:")
-        if dict_prescripciones_campo:
+        if dict_detalles_campo:
             col_ca1, col_ca2 = st.columns(2)
-            items_c = list(dict_prescripciones_campo.items())
+            items_c = list(dict_detalles_campo.items())
             mitad_c = (len(items_c) + 1) // 2
             
             with col_ca1:
-                for nom, defs in items_c[:mitad_c]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                for nom, det in items_c[:mitad_c]:
+                    tags = []
+                    if det['vel_acc']: tags.append("Trabajo de Velocidad / Aceleración")
+                    if det['cod']: tags.append("Trabajo de Capacidad COD")
+                    if det['biomec']: tags.append("Optimización Biomecánica")
+                    
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    with st.expander(header_txt):
+                        if det['vel_acc']:
+                            st.markdown("##### ⚡ Velocidad / Aceleración:")
+                            for d in det['vel_acc']:
+                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['cod']:
+                            st.markdown("##### 🛑 Capacidad COD (Desaceleración):")
+                            for d in det['cod']:
+                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['biomec']:
+                            st.markdown("##### 🔍 Biomecánica y Técnica:")
+                            for d in det['biomec']:
+                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+
             with col_ca2:
-                for nom, defs in items_c[mitad_c:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                for nom, det in items_c[mitad_c:]:
+                    tags = []
+                    if det['vel_acc']: tags.append("Trabajo de Velocidad / Aceleración")
+                    if det['cod']: tags.append("Trabajo de Capacidad COD")
+                    if det['biomec']: tags.append("Optimización Biomecánica")
+                    
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    with st.expander(header_txt):
+                        if det['vel_acc']:
+                            st.markdown("##### ⚡ Velocidad / Aceleración:")
+                            for d in det['vel_acc']:
+                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['cod']:
+                            st.markdown("##### 🛑 Capacidad COD (Desaceleración):")
+                            for d in det['cod']:
+                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['biomec']:
+                            st.markdown("##### 🔍 Biomecánica y Técnica:")
+                            for d in det['biomec']:
+                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple los objetivos cinemáticos y biomecánicos.")
 
