@@ -56,7 +56,7 @@ if os.path.exists(_ruta_logo):
 st.markdown("""
     <style>
     .player-title-header {
-        font-size: 28px !important;
+        font-size: 26px !important;
         font-weight: 800 !important;
         color: #FFFFFF !important;
         letter-spacing: 1px !important;
@@ -70,37 +70,47 @@ st.markdown("""
         text-transform: uppercase !important;
         letter-spacing: 1px !important;
         font-weight: 700 !important;
-        margin-bottom: 2px !important;
+        margin-bottom: 1px !important;
     }
     .info-value-big {
-        font-size: 19px !important;
+        font-size: 18px !important;
         font-weight: 700 !important;
         color: #FFFFFF !important;
-        margin-bottom: 16px !important;
+        margin-bottom: 14px !important;
     }
     .info-value-highlight {
-        font-size: 24px !important;
+        font-size: 22px !important;
         font-weight: 800 !important;
         color: #FFC107 !important;
-        margin-bottom: 16px !important;
+        margin-bottom: 14px !important;
     }
     .photo-clean {
-        width: 160px;
-        height: 160px;
+        width: 150px;
+        height: 150px;
         border-radius: 12px;
         object-fit: cover;
         display: block;
         margin: 0 auto;
     }
     .photo-placeholder-clean {
-        width: 160px;
-        height: 160px;
+        width: 150px;
+        height: 150px;
         border-radius: 12px;
         background-color: #1E293B;
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 0 auto;
+    }
+    .text-tag-team {
+        text-align: center;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        letter-spacing: 1.2px !important;
+        color: #A0AEC0 !important;
+        margin-top: 6px !important;
+        margin-bottom: 10px !important;
+        text-transform: uppercase !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -218,7 +228,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-c_sel, _ = st.columns([1.8, 2.2])
+c_sel, _ = st.columns([1.5, 2.5])
 with c_sel:
     jugador_sel = st.selectbox("⚽ Selecciona Jugador:", lista_jugadores)
 
@@ -270,28 +280,31 @@ if not df_rpe.empty:
 url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&lossy=1"
 
 # =============================================================================
-# 5. RENDERIZADO DEL PERFIL (DISPOSICIÓN LIMPIA Y REESTRUCTURADA)
+# 5. RENDERIZADO DEL PERFIL (DISPOSICIÓN PEGADITA Y COMPACTA)
 # =============================================================================
 
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
-col_ficha_izq, col_ficha_der = st.columns([1.8, 2.2])
+col_ficha_izq, col_ficha_der = st.columns([1.5, 2.5], gap="small")
 
-# --- SECCIÓN IZQUIERDA: BLOQUE VISUAL Y DATOS EN PARALELO ---
+# --- SECCIÓN IZQUIERDA: ORDEN SOLICITADO (ESCUDO -> FOTO -> TEXTO -> CAMPO) ---
 with col_ficha_izq:
-    col_vis, col_data = st.columns([1.0, 1.1])
+    col_vis, col_data = st.columns([0.8, 1.2], gap="small")
     
     with col_vis:
-        # 1. Foto (Sin marco azul)
+        # 1. Escudo (Arriba del todo)
+        st.markdown(f'<div style="text-align:center; margin-bottom:8px;"><img src="{url_escudo_oficial}" style="width:65px; height:auto;"></div>', unsafe_allow_html=True)
+
+        # 2. Foto (Sin marco azul)
         if url_foto_jugador and pd.notna(url_foto_jugador):
             st.markdown(f'<div style="text-align:center;"><img src="{url_foto_jugador}" class="photo-clean"></div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div style="text-align:center;"><div class="photo-placeholder-clean"><span style="font-size:60px;">👤</span></div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="text-align:center;"><div class="photo-placeholder-clean"><span style="font-size:55px;">👤</span></div></div>', unsafe_allow_html=True)
         
-        # 2. Escudo (Directamente debajo de la foto, centrado)
-        st.markdown(f'<div style="text-align:center; margin-top:10px; margin-bottom:12px;"><img src="{url_escudo_oficial}" style="width:65px; height:auto;"></div>', unsafe_allow_html=True)
+        # 3. Texto debajo de la foto: "JUVENIL DIVISIÓN DE HONOR"
+        st.markdown('<div class="text-tag-team">JUVENIL DIVISIÓN DE HONOR</div>', unsafe_allow_html=True)
         
-        # 3. Campograma Vertical (Proporcional y sin fondo azul horizontal)
+        # 4. Campograma Vertical (Proporcional y sin fondo azul horizontal)
         pos_low = posicion_str.lower()
         
         if 'porter' in pos_low: x_target, y_target = 34, 95
@@ -330,15 +343,15 @@ with col_ficha_izq:
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
             xaxis=dict(range=[-2, 70], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
             yaxis=dict(range=[-2, 107], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True, scaleanchor="x", scaleratio=1),
-            height=250, margin=dict(l=2, r=2, t=2, b=2)
+            height=240, margin=dict(l=2, r=2, t=2, b=2)
         )
         st.plotly_chart(fig_pitch, use_container_width=True, config={'staticPlot': True})
 
     with col_data:
-        # Nombre en grande en la columna de datos
+        # Nombre en grande pegadito a la columna visual
         st.markdown(f'<div class="player-title-header">{nombre_mostrar}</div>', unsafe_allow_html=True)
         st.markdown(f"""
-            <div style="padding-top: 5px;">
+            <div style="padding-top: 2px;">
                 <div>
                     <div class="info-label">📅 Fecha de Nacimiento</div>
                     <div class="info-value-big">{fecha_nac_str}</div>
@@ -358,9 +371,9 @@ with col_ficha_izq:
             </div>
         """, unsafe_allow_html=True)
 
-# --- SECCIÓN DERECHA: RADAR & CONTROLES AJUSTADOS ---
+# --- SECCIÓN DERECHA: RADAR & CONTROLES COMPACTOS ---
 with col_ficha_der:
-    c_m1, c_m2 = st.columns([1.2, 1.8])
+    c_m1, c_m2 = st.columns([1.2, 1.8], gap="small")
     with c_m1:
         modo_analisis = st.radio("📊 Módulo de Análisis:", ["Pruebas Físicas", "Rendimiento en Campo"], horizontal=True)
 
@@ -369,11 +382,7 @@ with col_ficha_der:
         st.caption("🎯 Anisotropía de Rendimiento: Percentiles en Evaluaciones Condicionales")
         categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
         
-        # Percentil del jugador seleccionado
         values_jugador = [78, 85, 62, 92, 70, 75]
-        
-        # Benchmark según la opción
-        # (Si la lógica requiere cambio de datos, lo asignamos antes de graficar)
         values_media_pos = [65, 70, 60, 72, 65, 68]
         
         categories_closed = categories + [categories[0]]
@@ -405,7 +414,7 @@ with col_ficha_der:
                 angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
             ),
             template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-            height=380, margin=dict(l=35, r=35, t=20, b=20),
+            height=370, margin=dict(l=35, r=35, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
         )
 
@@ -457,7 +466,7 @@ with col_ficha_der:
                 angularaxis=dict(gridcolor='rgba(255,255,255,0.15)', tickfont=dict(size=12, color='#FFFFFF', family="Arial Black"))
             ),
             template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-            height=380, margin=dict(l=35, r=35, t=20, b=20),
+            height=370, margin=dict(l=35, r=35, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
         )
 
@@ -465,7 +474,7 @@ with col_ficha_der:
     st.plotly_chart(fig_radar, use_container_width=True)
 
     # Filtro de comparación estrecho y ajustado abajo
-    c_fil1, c_fil2 = st.columns([1.2, 1.8])
+    c_fil1, c_fil2 = st.columns([1.2, 1.8], gap="small")
     with c_fil1:
         filtro_comparacion = st.selectbox("⚖️ Comparar Percentil vs:", ["Toda la Plantilla", "Misma Demarcación"])
 
