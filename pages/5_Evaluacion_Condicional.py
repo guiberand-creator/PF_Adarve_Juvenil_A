@@ -199,13 +199,12 @@ def cargar_datos_evaluaciones():
             'Name': 'Nombre',
             'Date': 'Fecha',
             'Exercise': 'Exercise',
-            'MaxForce (raw)': 'Fmax_Abs',
-            'RFD_FITTED_BEST_AVG_RFD_IN_X_MS_150_-1': 'RFD_150'
+            'MaxForce (raw)': 'Fmax_Abs'
         }
         df_dina.rename(columns=renomb_d, inplace=True)
         df_dina['Nombre'] = df_dina['Nombre'].astype(str).str.strip()
         
-        # FIX: Limpiar caracteres extraños "\u00BA" o el símbolo "°" del nombre del ejercicio
+        # Limpieza de caracteres extraños (\u00BA, °)
         df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.replace(r'\\u00BA', '', regex=True).str.replace('°', '', regex=False).str.strip()
         
         df_dina['Fecha_dt'] = pd.to_datetime(df_dina['Fecha'], dayfirst=True, errors='coerce')
@@ -604,8 +603,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 dict_pesos[nom] = float(df_p_j.iloc[-1]['Peso'])
 
         df_dina_agg = df_dina.groupby(['Fecha', 'Fecha_dt', 'Nombre', 'Exercise'], as_index=False).agg({
-            'Fmax_Abs': 'mean',
-            'RFD_150': 'mean'
+            'Fmax_Abs': 'mean'
         })
 
         df_dina_agg['Peso_Jug'] = df_dina_agg['Nombre'].map(dict_pesos)
@@ -616,8 +614,8 @@ elif pest_sel == "⚙️ Dinamometría":
         df_d_ult = df_dina_agg[df_dina_agg['Fecha_dt'] == ult_fecha_dina].copy()
 
         piv_frel = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='Fmax_Rel', aggfunc='mean')
-        piv_rfd = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='RFD_150', aggfunc='mean')
         
+        # --- PRESCRIPCIONES Y ALERTAS (SIN RFD) ---
         dict_prescripciones = {}
         for jug in piv_frel.index:
             prescripciones_j = []
@@ -633,24 +631,12 @@ elif pest_sel == "⚙️ Dinamometría":
             add_d, add_i = val(piv_frel, 'ADD_Cadera_De_Pie_Derecha'), val(piv_frel, 'ADD_Cadera_De_Pie_Izquierda')
             abd_d, abd_i = val(piv_frel, 'ABD_Cadera_De_Pie_Derecha'), val(piv_frel, 'ABD_Cadera_De_Pie_Izquierda')
 
-            rfd_ext_d, rfd_ext_i = val(piv_rfd, 'Extension_rodilla_90_Derecha'), val(piv_rfd, 'Extension_rodilla_90_Izquierda')
-            rfd_flx_d, rfd_flx_i = val(piv_rfd, 'Flexion_rodilla_90_Derecha'), val(piv_rfd, 'Flexion_rodilla_90_Izquierda')
-            rfd_add_d, rfd_add_i = val(piv_rfd, 'ADD_Cadera_De_Pie_Derecha'), val(piv_rfd, 'ADD_Cadera_De_Pie_Izquierda')
-            rfd_abd_d, rfd_abd_i = val(piv_rfd, 'ABD_Cadera_De_Pie_Derecha'), val(piv_rfd, 'ABD_Cadera_De_Pie_Izquierda')
-
             def_fmax = False
             if ext_d and ext_i and ((ext_d + ext_i) / 2 < 8.0): def_fmax = True
             if flx_d and flx_i and ((flx_d + flx_i) / 2 < 4.0): def_fmax = True
             if add_d and add_i and ((add_d + add_i) / 2 < 4.0): def_fmax = True
             if abd_d and abd_i and ((abd_d + abd_i) / 2 < 3.8): def_fmax = True
             if def_fmax: prescripciones_j.append("Trabajo de Fuerza Máxima")
-
-            def_rfd = False
-            if rfd_ext_d and rfd_ext_i and ((rfd_ext_d + rfd_ext_i) / 2 < 8000): def_rfd = True
-            if rfd_flx_d and rfd_flx_i and ((rfd_flx_d + rfd_flx_i) / 2 < 4000): def_rfd = True
-            if rfd_add_d and rfd_add_i and ((rfd_add_d + rfd_add_i) / 2 < 1500): def_rfd = True
-            if rfd_abd_d and rfd_abd_i and ((rfd_abd_d + rfd_abd_i) / 2 < 1300): def_rfd = True
-            if def_rfd: prescripciones_j.append("Trabajo de Velocidad")
 
             has_asim = False
             if ext_d and ext_i and (abs(ext_d - ext_i) / max(ext_d, ext_i) * 100 > 10): has_asim = True
@@ -691,148 +677,112 @@ elif pest_sel == "⚙️ Dinamometría":
             ["Extensión Rodilla 90°", "Flexión Rodilla 90°", "ABD Cadera de Pie", "ADD Cadera de Pie"]
         )
 
-        if bloque_ejercicio == "Extensión Rodilla 90°": ej_d, ej_i, umbral_frel, umbral_rfd = 'Extension_rodilla_90_Derecha', 'Extension_rodilla_90_Izquierda', 8.0, 8000
-        elif bloque_ejercicio == "Flexión Rodilla 90°": ej_d, ej_i, umbral_frel, umbral_rfd = 'Flexion_rodilla_90_Derecha', 'Flexion_rodilla_90_Izquierda', 4.0, 4000
-        elif bloque_ejercicio == "ABD Cadera de Pie": ej_d, ej_i, umbral_frel, umbral_rfd = 'ABD_Cadera_De_Pie_Derecha', 'ABD_Cadera_De_Pie_Izquierda', 3.8, 1300
-        else: ej_d, ej_i, umbral_frel, umbral_rfd = 'ADD_Cadera_De_Pie_Derecha', 'ADD_Cadera_De_Pie_Izquierda', 4.0, 1500
+        if bloque_ejercicio == "Extensión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Extension_rodilla_90_Derecha', 'Extension_rodilla_90_Izquierda', 8.0
+        elif bloque_ejercicio == "Flexión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Flexion_rodilla_90_Derecha', 'Flexion_rodilla_90_Izquierda', 4.0
+        elif bloque_ejercicio == "ABD Cadera de Pie": ej_d, ej_i, umbral_frel = 'ABD_Cadera_De_Pie_Derecha', 'ABD_Cadera_De_Pie_Izquierda', 3.8
+        else: ej_d, ej_i, umbral_frel = 'ADD_Cadera_De_Pie_Derecha', 'ADD_Cadera_De_Pie_Izquierda', 4.0
 
-        col_izq, col_der = st.columns([7, 3])
+        # --- GRÁFICO 1: PICO DE FUERZA RELATIVO Y % ASIMETRÍA (ANCHO COMPLETO) ---
+        if ej_d in piv_frel.columns and ej_i in piv_frel.columns:
+            df_g_frel = piv_frel[[ej_d, ej_i]].dropna().reset_index()
+            df_g_frel['Asimetria_Pct'] = (abs(df_g_frel[ej_d] - df_g_frel[ej_i]) / df_g_frel[[ej_d, ej_i]].max(axis=1)) * 100
 
-        with col_izq:
-            if ej_d in piv_frel.columns and ej_i in piv_frel.columns:
-                df_g_frel = piv_frel[[ej_d, ej_i]].dropna().reset_index()
-                df_g_frel['Asimetria_Pct'] = (abs(df_g_frel[ej_d] - df_g_frel[ej_i]) / df_g_frel[[ej_d, ej_i]].max(axis=1)) * 100
+            fig_frel = go.Figure()
+            # Poner etiquetas dentro de la barra para evitar solapamientos con la asimetría arriba
+            fig_frel.add_trace(go.Bar(
+                x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#00A8E8',
+                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='inside'
+            ))
+            fig_frel.add_trace(go.Bar(
+                x=df_g_frel['Nombre'], y=df_g_frel[ej_i], name='Izquierda (I)', marker_color='#FF9F1C',
+                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_i]], textposition='inside'
+            ))
 
-                fig_frel = go.Figure()
-                fig_frel.add_trace(go.Bar(
-                    x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#00A8E8',
-                    text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='outside'
-                ))
-                fig_frel.add_trace(go.Bar(
-                    x=df_g_frel['Nombre'], y=df_g_frel[ej_i], name='Izquierda (I)', marker_color='#FF9F1C',
-                    text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_i]], textposition='outside'
-                ))
+            max_alturas_f = df_g_frel[[ej_d, ej_i]].max(axis=1)
+            for idx_f, row_f in df_g_frel.iterrows():
+                asim_val = row_f['Asimetria_Pct']
+                color_texto = "#E74C3C" if asim_val > 10 else "#2ECC71"
+                pos_y = max_alturas_f.iloc[idx_f] + 0.25
 
-                max_alturas_f = df_g_frel[[ej_d, ej_i]].max(axis=1)
-                for idx_f, row_f in df_g_frel.iterrows():
-                    asim_val = row_f['Asimetria_Pct']
-                    color_texto = "#E74C3C" if asim_val > 10 else "#2ECC71"
-                    pos_y = max_alturas_f.iloc[idx_f] + 0.20
-
-                    fig_frel.add_annotation(
-                        x=row_f['Nombre'], y=pos_y,
-                        text=f"<b>{asim_val:.1f}%</b>",
-                        showarrow=False,
-                        font=dict(color=color_texto, size=15)
-                    )
-
-                fig_frel.add_shape(type="line", x0=-0.5, x1=len(df_g_frel)-0.5, y0=umbral_frel, y1=umbral_frel, line=dict(color="#2ECC71", width=3, dash="dash"))
-                fig_frel.add_annotation(x=len(df_g_frel)-1, y=umbral_frel, text=f"Ref. Óptima (>{umbral_frel} N/kg)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
-
-                fig_frel.update_layout(
-                    title=f"💪 Pico de Fuerza Relativo (N/kg) y % Asimetría - {bloque_ejercicio}",
-                    barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max(df_g_frel[ej_d].max(), df_g_frel[ej_i].max()) + 1.2]),
-                    height=420, margin=dict(l=20, r=20, t=50, b=90), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                fig_frel.add_annotation(
+                    x=row_f['Nombre'], y=pos_y,
+                    text=f"<b>{asim_val:.1f}%</b>",
+                    showarrow=False,
+                    font=dict(color=color_texto, size=14)
                 )
-                st.plotly_chart(fig_frel, use_container_width=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+            fig_frel.add_shape(type="line", x0=-0.5, x1=len(df_g_frel)-0.5, y0=umbral_frel, y1=umbral_frel, line=dict(color="#2ECC71", width=3, dash="dash"))
+            fig_frel.add_annotation(x=len(df_g_frel)-1, y=umbral_frel, text=f"Ref. Óptima (>{umbral_frel} N/kg)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
 
-                if ej_d in piv_rfd.columns and ej_i in piv_rfd.columns:
-                    df_g_rfd = piv_rfd[[ej_d, ej_i]].dropna().reset_index()
-                    df_g_rfd['Asimetria_RFD_Pct'] = (abs(df_g_rfd[ej_d] - df_g_rfd[ej_i]) / df_g_rfd[[ej_d, ej_i]].max(axis=1)) * 100
+            max_y_val = max(df_g_frel[ej_d].max(), df_g_frel[ej_i].max()) + 1.2
+            fig_frel.update_layout(
+                title=f"💪 Pico de Fuerza Relativo (N/kg) y % Asimetría - {bloque_ejercicio}",
+                barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max_y_val]),
+                height=460, margin=dict(l=20, r=20, t=50, b=90), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_frel, use_container_width=True)
 
-                    fig_rfd = go.Figure()
-                    fig_rfd.add_trace(go.Bar(
-                        x=df_g_rfd['Nombre'], y=df_g_rfd[ej_d], name='RFD D (N/s)', marker_color='#00A8E8',
-                        text=[f"<b>{v:.0f}</b>" for v in df_g_rfd[ej_d]], textposition='outside'
-                    ))
-                    fig_rfd.add_trace(go.Bar(
-                        x=df_g_rfd['Nombre'], y=df_g_rfd[ej_i], name='RFD I (N/s)', marker_color='#FF9F1C',
-                        text=[f"<b>{v:.0f}</b>" for v in df_g_rfd[ej_i]], textposition='outside'
-                    ))
+        st.markdown("<br>", unsafe_allow_html=True)
 
-                    max_alturas_r = df_g_rfd[[ej_d, ej_i]].max(axis=1)
-                    for idx_r, row_r in df_g_rfd.iterrows():
-                        asim_rfd_val = row_r['Asimetria_RFD_Pct']
-                        color_texto_rfd = "#E74C3C" if asim_rfd_val > 10 else "#2ECC71"
-                        pos_y_r = max_alturas_r.iloc[idx_r] + 250
+        # --- GRÁFICO 2: RATIOS ABAJO (ANCHO COMPLETO) ---
+        if "Rodilla" in bloque_ejercicio:
+            ratios_fe, nombres_fe = [], []
+            for jug in piv_frel.index:
+                def v(ej): return float(piv_frel.loc[jug, ej]) if ej in piv_frel.columns and pd.notna(piv_frel.loc[jug, ej]) else None
+                ext_d, ext_i = v('Extension_rodilla_90_Derecha'), v('Extension_rodilla_90_Izquierda')
+                flx_d, flx_i = v('Flexion_rodilla_90_Derecha'), v('Flexion_rodilla_90_Izquierda')
+                if ext_d and ext_i and flx_d and flx_i:
+                    ratios_fe.append(((flx_d + flx_i) / 2) / ((ext_d + ext_i) / 2))
+                    nombres_fe.append(jug)
 
-                        fig_rfd.add_annotation(
-                            x=row_r['Nombre'], y=pos_y_r,
-                            text=f"<b>{asim_rfd_val:.1f}%</b>",
-                            showarrow=False,
-                            font=dict(color=color_texto_rfd, size=15)
-                        )
+            if ratios_fe:
+                fig_r_fe = go.Figure()
+                fig_r_fe.add_trace(go.Bar(
+                    x=nombres_fe, y=ratios_fe,
+                    marker_color=['#2ECC71' if v >= 0.60 else '#E74C3C' for v in ratios_fe],
+                    text=[f"<b>{v:.2f}</b>" for v in ratios_fe], textposition='outside'
+                ))
+                fig_r_fe.add_shape(type="line", x0=-0.5, x1=len(nombres_fe)-0.5, y0=0.60, y1=0.60, line=dict(color="#2ECC71", width=3, dash="dash"))
+                fig_r_fe.add_annotation(x=len(nombres_fe)-1, y=0.60, text="Ref. (>0.60)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
+                
+                max_r_y = max(max(ratios_fe) + 0.2, 1.0)
+                fig_r_fe.update_layout(
+                    title="⚖️ Ratio Flexión / Extensión Rodilla (Índice)",
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_r_y]),
+                    height=450, margin=dict(l=20, r=20, t=50, b=90)
+                )
+                st.plotly_chart(fig_r_fe, use_container_width=True)
 
-                    fig_rfd.add_shape(type="line", x0=-0.5, x1=len(df_g_rfd)-0.5, y0=umbral_rfd, y1=umbral_rfd, line=dict(color="#2ECC71", width=3, dash="dash"))
-                    fig_rfd.add_annotation(x=len(df_g_rfd)-1, y=umbral_rfd, text=f"Ref. Óptima (>{umbral_rfd} N/s)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
+        else:
+            ratios_aa, nombres_aa = [], []
+            for jug in piv_frel.index:
+                def v(ej): return float(piv_frel.loc[jug, ej]) if ej in piv_frel.columns and pd.notna(piv_frel.loc[jug, ej]) else None
+                add_d, add_i = v('ADD_Cadera_De_Pie_Derecha'), v('ADD_Cadera_De_Pie_Izquierda')
+                abd_d, abd_i = v('ABD_Cadera_De_Pie_Derecha'), v('ABD_Cadera_De_Pie_Izquierda')
+                if add_d and add_i and abd_d and abd_i:
+                    ratios_aa.append(((abd_d + abd_i) / 2) / ((add_d + add_i) / 2))
+                    nombres_aa.append(jug)
 
-                    fig_rfd.update_layout(
-                        title=f"⚡ Tasa de Desarrollo de Fuerza (RFD a 150ms N/s) y % Asimetría - {bloque_ejercicio}",
-                        barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-45), yaxis=dict(title="RFD (N/s)", range=[0, max(df_g_rfd[ej_d].max(), df_g_rfd[ej_i].max()) + 1800]),
-                        height=420, margin=dict(l=20, r=20, t=50, b=90), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-                    st.plotly_chart(fig_rfd, use_container_width=True)
-
-        with col_der:
-            if "Rodilla" in bloque_ejercicio:
-                ratios_fe, nombres_fe = [], []
-                for jug in piv_frel.index:
-                    def v(ej): return float(piv_frel.loc[jug, ej]) if ej in piv_frel.columns and pd.notna(piv_frel.loc[jug, ej]) else None
-                    ext_d, ext_i = v('Extension_rodilla_90_Derecha'), v('Extension_rodilla_90_Izquierda')
-                    flx_d, flx_i = v('Flexion_rodilla_90_Derecha'), v('Flexion_rodilla_90_Izquierda')
-                    if ext_d and ext_i and flx_d and flx_i:
-                        ratios_fe.append(((flx_d + flx_i) / 2) / ((ext_d + ext_i) / 2))
-                        nombres_fe.append(jug)
-
-                if ratios_fe:
-                    fig_r_fe = go.Figure()
-                    fig_r_fe.add_trace(go.Bar(
-                        x=nombres_fe, y=ratios_fe,
-                        marker_color=['#2ECC71' if v >= 0.60 else '#E74C3C' for v in ratios_fe],
-                        text=[f"<b>{v:.2f}</b>" for v in ratios_fe], textposition='outside'
-                    ))
-                    fig_r_fe.add_shape(type="line", x0=-0.5, x1=len(nombres_fe)-0.5, y0=0.60, y1=0.60, line=dict(color="#2ECC71", width=3, dash="dash"))
-                    fig_r_fe.add_annotation(x=len(nombres_fe)-1, y=0.60, text="Ref. (>0.60)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
-                    
-                    fig_r_fe.update_layout(
-                        title="⚖️ Ratio Flexión / Extensión Rodilla (Índice)",
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max(max(ratios_fe)+0.25, 1.0)]),
-                        height=860, margin=dict(l=10, r=10, t=50, b=90)
-                    )
-                    st.plotly_chart(fig_r_fe, use_container_width=True)
-
-            else:
-                ratios_aa, nombres_aa = [], []
-                for jug in piv_frel.index:
-                    def v(ej): return float(piv_frel.loc[jug, ej]) if ej in piv_frel.columns and pd.notna(piv_frel.loc[jug, ej]) else None
-                    add_d, add_i = v('ADD_Cadera_De_Pie_Derecha'), v('ADD_Cadera_De_Pie_Izquierda')
-                    abd_d, abd_i = v('ABD_Cadera_De_Pie_Derecha'), v('ABD_Cadera_De_Pie_Izquierda')
-                    if add_d and add_i and abd_d and abd_i:
-                        ratios_aa.append(((abd_d + abd_i) / 2) / ((add_d + add_i) / 2))
-                        nombres_aa.append(jug)
-
-                if ratios_aa:
-                    fig_r_aa = go.Figure()
-                    fig_r_aa.add_trace(go.Bar(
-                        x=nombres_aa, y=ratios_aa,
-                        marker_color=['#2ECC71' if v >= 0.90 else '#E74C3C' for v in ratios_aa],
-                        text=[f"<b>{v:.2f}</b>" for v in ratios_aa], textposition='outside'
-                    ))
-                    fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=0.90, y1=0.90, line=dict(color="#2ECC71", width=3, dash="dash"))
-                    fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=0.90, text="Ref. (>0.90)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
-                    
-                    fig_r_aa.update_layout(
-                        title="⚖️ Ratio ABD / ADD Cadera (Índice)",
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max(max(ratios_aa)+0.3, 1.3)]),
-                        height=860, margin=dict(l=10, r=10, t=50, b=90)
-                    )
-                    st.plotly_chart(fig_r_aa, use_container_width=True)
+            if ratios_aa:
+                fig_r_aa = go.Figure()
+                fig_r_aa.add_trace(go.Bar(
+                    x=nombres_aa, y=ratios_aa,
+                    marker_color=['#2ECC71' if v >= 0.90 else '#E74C3C' for v in ratios_aa],
+                    text=[f"<b>{v:.2f}</b>" for v in ratios_aa], textposition='outside'
+                ))
+                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=0.90, y1=0.90, line=dict(color="#2ECC71", width=3, dash="dash"))
+                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=0.90, text="Ref. (>0.90)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
+                
+                max_raa_y = max(max(ratios_aa) + 0.25, 1.2)
+                fig_r_aa.update_layout(
+                    title="⚖️ Ratio ABD / ADD Cadera (Índice)",
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_raa_y]),
+                    height=450, margin=dict(l=20, r=20, t=50, b=90)
+                )
+                st.plotly_chart(fig_r_aa, use_container_width=True)
 
 # =============================================================================
 # ÁREA 5: SALTOS
