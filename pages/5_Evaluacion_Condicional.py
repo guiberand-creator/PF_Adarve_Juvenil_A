@@ -615,10 +615,12 @@ elif pest_sel == "⚙️ Dinamometría":
 
         piv_frel = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='Fmax_Rel', aggfunc='mean')
         
-        # --- PRESCRIPCIONES Y ALERTAS (SIN RFD) ---
-        dict_prescripciones = {}
+        # --- EXTRACCIÓN Y CONSTRUCCIÓN DE DETALLES PARA DESPLEGABLES ---
+        dict_detalles = {}
         for jug in piv_frel.index:
-            prescripciones_j = []
+            detalles_fmax = []
+            detalles_asim = []
+            detalles_descomp = []
             
             def val(piv, ej_name):
                 if ej_name in piv.columns:
@@ -626,47 +628,110 @@ elif pest_sel == "⚙️ Dinamometría":
                     return float(v) if pd.notna(v) else None
                 return None
 
+            nombres_ej = [
+                ('Extension_rodilla_90', 'Extensión Rodilla 90°', 8.0),
+                ('Flexion_rodilla_90', 'Flexión Rodilla 90°', 4.0),
+                ('ABD_Cadera_De_Pie', 'ABD Cadera de Pie', 3.8),
+                ('ADD_Cadera_De_Pie', 'ADD Cadera de Pie', 4.0)
+            ]
+
+            for base_key, label_ej, ref_val in nombres_ej:
+                d_v = val(piv_frel, f"{base_key}_Derecha")
+                i_v = val(piv_frel, f"{base_key}_Izquierda")
+
+                if d_v is not None and i_v is not None:
+                    med = (d_v + i_v) / 2.0
+                    if med < ref_val:
+                        detalles_fmax.append(f"• <b>{label_ej}</b>: {med:.2f} N/kg (Ref: >{ref_val:.1f} N/kg)")
+                    
+                    max_v = max(d_v, i_v)
+                    if max_v > 0:
+                        asim = (abs(d_v - i_v) / max_v) * 100.0
+                        if asim > 10.0:
+                            detalles_asim.append(f"• <b>{label_ej}</b>: {asim:.1f}% asimetría (D: {d_v:.2f} | I: {i_v:.2f} N/kg)")
+
+            # Ratios
             ext_d, ext_i = val(piv_frel, 'Extension_rodilla_90_Derecha'), val(piv_frel, 'Extension_rodilla_90_Izquierda')
             flx_d, flx_i = val(piv_frel, 'Flexion_rodilla_90_Derecha'), val(piv_frel, 'Flexion_rodilla_90_Izquierda')
             add_d, add_i = val(piv_frel, 'ADD_Cadera_De_Pie_Derecha'), val(piv_frel, 'ADD_Cadera_De_Pie_Izquierda')
             abd_d, abd_i = val(piv_frel, 'ABD_Cadera_De_Pie_Derecha'), val(piv_frel, 'ABD_Cadera_De_Pie_Izquierda')
 
-            def_fmax = False
-            if ext_d and ext_i and ((ext_d + ext_i) / 2 < 8.0): def_fmax = True
-            if flx_d and flx_i and ((flx_d + flx_i) / 2 < 4.0): def_fmax = True
-            if add_d and add_i and ((add_d + add_i) / 2 < 4.0): def_fmax = True
-            if abd_d and abd_i and ((abd_d + abd_i) / 2 < 3.8): def_fmax = True
-            if def_fmax: prescripciones_j.append("Trabajo de Fuerza Máxima")
+            if ext_d and ext_i and flx_d and flx_i:
+                m_ext = (ext_d + ext_i) / 2.0
+                m_flx = (flx_d + flx_i) / 2.0
+                if m_ext > 0:
+                    r_fe = m_flx / m_ext
+                    if r_fe < 0.60:
+                        detalles_descomp.append(f"• <b>Ratio Flexión/Extensión Rodilla</b>: {r_fe:.2f} (Ref: >0.60)")
 
-            has_asim = False
-            if ext_d and ext_i and (abs(ext_d - ext_i) / max(ext_d, ext_i) * 100 > 10): has_asim = True
-            if flx_d and flx_i and (abs(flx_d - flx_i) / max(flx_d, flx_i) * 100 > 10): has_asim = True
-            if add_d and add_i and (abs(add_d - add_i) / max(add_d, add_i) * 100 > 10): has_asim = True
-            if abd_d and abd_i and (abs(abd_d - abd_i) / max(abd_d, abd_i) * 100 > 10): has_asim = True
-            if has_asim: prescripciones_j.append("Corregir Asimetrías")
+            if add_d and add_i and abd_d and abd_i:
+                m_add = (add_d + add_i) / 2.0
+                m_abd = (abd_d + abd_i) / 2.0
+                if m_add > 0:
+                    r_aa = m_abd / m_add
+                    if r_aa < 0.90:
+                        detalles_descomp.append(f"• <b>Ratio ABD/ADD Cadera</b>: {r_aa:.2f} (Ref: >0.90)")
 
-            has_descomp = False
-            if ext_d and ext_i and flx_d and flx_i and (((flx_d + flx_i) / 2) / ((ext_d + ext_i) / 2) < 0.60): has_descomp = True
-            if add_d and add_i and abd_d and abd_i and (((abd_d + abd_i) / 2) / ((add_d + add_i) / 2) < 0.90): has_descomp = True
-            if has_descomp: prescripciones_j.append("Corregir Descompensaciones")
-
-            if prescripciones_j: dict_prescripciones[jug] = prescripciones_j
+            if detalles_fmax or detalles_asim or detalles_descomp:
+                dict_detalles[jug] = {
+                    'fmax': detalles_fmax,
+                    'asim': detalles_asim,
+                    'descomp': detalles_descomp
+                }
 
         c_d1, c_d2 = st.columns(2)
-        with c_d1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_prescripciones)} / {len(piv_frel)}")
-        with c_d2: st.metric("Porcentaje del Vestuario en Objetivo", f"{((len(piv_frel) - len(dict_prescripciones)) / len(piv_frel) * 100):.0f}%")
+        with c_d1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_detalles)} / {len(piv_frel)}")
+        with c_d2: st.metric("Porcentaje del Vestuario en Objetivo", f"{((len(piv_frel) - len(dict_detalles)) / len(piv_frel) * 100):.0f}%")
 
-        if dict_prescripciones:
+        # --- RENDERIZADO EN DESPLEGABLES (EXPANDERS) ---
+        if dict_detalles:
             col_da1, col_da2 = st.columns(2)
-            items_d = list(dict_prescripciones.items())
+            items_d = list(dict_detalles.items())
             mitad_d = (len(items_d) + 1) // 2
             
             with col_da1:
-                for nom, defs in items_d[:mitad_d]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                for nom, det in items_d[:mitad_d]:
+                    tags = []
+                    if det['fmax']: tags.append("Trabajo de Fuerza Máxima")
+                    if det['asim']: tags.append("Corregir Asimetrías")
+                    if det['descomp']: tags.append("Corregir Descompensaciones")
+                    
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    with st.expander(header_txt):
+                        if det['fmax']:
+                            st.markdown("##### 💪 Déficit de Fuerza Máxima:")
+                            for d in det['fmax']:
+                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['asim']:
+                            st.markdown("##### ⚖️ Asimetrías a Corregir (>10%):")
+                            for d in det['asim']:
+                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['descomp']:
+                            st.markdown("##### ⚡ Descompensaciones (Ratios):")
+                            for d in det['descomp']:
+                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+
             with col_da2:
-                for nom, defs in items_d[mitad_d:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                for nom, det in items_d[mitad_d:]:
+                    tags = []
+                    if det['fmax']: tags.append("Trabajo de Fuerza Máxima")
+                    if det['asim']: tags.append("Corregir Asimetrías")
+                    if det['descomp']: tags.append("Corregir Descompensaciones")
+                    
+                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    with st.expander(header_txt):
+                        if det['fmax']:
+                            st.markdown("##### 💪 Déficit de Fuerza Máxima:")
+                            for d in det['fmax']:
+                                st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['asim']:
+                            st.markdown("##### ⚖️ Asimetrías a Corregir (>10%):")
+                            for d in det['asim']:
+                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        if det['descomp']:
+                            st.markdown("##### ⚡ Descompensaciones (Ratios):")
+                            for d in det['descomp']:
+                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Formidable! Todo el vestuario cumple los umbrales óptimos.")
 
