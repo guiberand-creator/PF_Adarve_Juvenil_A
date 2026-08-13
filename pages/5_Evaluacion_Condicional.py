@@ -629,10 +629,10 @@ elif pest_sel == "⚙️ Dinamometría":
                 return None
 
             nombres_ej = [
-                ('Extension_rodilla_90', 'Extensión Rodilla 90°', 8.0),
-                ('Flexion_rodilla_90', 'Flexión Rodilla 90°', 4.0),
-                ('ABD_Cadera_De_Pie', 'ABD Cadera de Pie', 3.8),
-                ('ADD_Cadera_De_Pie', 'ADD Cadera de Pie', 4.0)
+                ('Extension_rodilla_90', 'Extensión Rodilla 90°', 6.0),
+                ('Flexion_rodilla_90', 'Flexión Rodilla 90°', 3.5),
+                ('ABD_Cadera_De_Pie', 'ABD Cadera de Pie', 3.5),
+                ('ADD_Cadera_De_Pie', 'ADD Cadera de Pie', 3.6)
             ]
 
             for base_key, label_ej, ref_val in nombres_ej:
@@ -742,10 +742,10 @@ elif pest_sel == "⚙️ Dinamometría":
             ["Extensión Rodilla 90°", "Flexión Rodilla 90°", "ABD Cadera de Pie", "ADD Cadera de Pie"]
         )
 
-        if bloque_ejercicio == "Extensión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Extension_rodilla_90_Derecha', 'Extension_rodilla_90_Izquierda', 8.0
-        elif bloque_ejercicio == "Flexión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Flexion_rodilla_90_Derecha', 'Flexion_rodilla_90_Izquierda', 4.0
-        elif bloque_ejercicio == "ABD Cadera de Pie": ej_d, ej_i, umbral_frel = 'ABD_Cadera_De_Pie_Derecha', 'ABD_Cadera_De_Pie_Izquierda', 3.8
-        else: ej_d, ej_i, umbral_frel = 'ADD_Cadera_De_Pie_Derecha', 'ADD_Cadera_De_Pie_Izquierda', 4.0
+        if bloque_ejercicio == "Extensión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Extension_rodilla_90_Derecha', 'Extension_rodilla_90_Izquierda', 6.0
+        elif bloque_ejercicio == "Flexión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Flexion_rodilla_90_Derecha', 'Flexion_rodilla_90_Izquierda', 3.5
+        elif bloque_ejercicio == "ABD Cadera de Pie": ej_d, ej_i, umbral_frel = 'ABD_Cadera_De_Pie_Derecha', 'ABD_Cadera_De_Pie_Izquierda', 3.5
+        else: ej_d, ej_i, umbral_frel = 'ADD_Cadera_De_Pie_Derecha', 'ADD_Cadera_De_Pie_Izquierda', 3.6
 
         # --- GRÁFICO 1: PICO DE FUERZA RELATIVO Y % ASIMETRÍA (ANCHO COMPLETO) ---
         if ej_d in piv_frel.columns and ej_i in piv_frel.columns:
