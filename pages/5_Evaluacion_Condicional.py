@@ -1247,7 +1247,6 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 # ÁREA 6: TREN SUPERIOR
 # =============================================================================
 elif pest_sel == "🏋️ Tren Superior":
-    st.subheader("🏋️ Evaluación de Fuerza de Tren Superior")
     
     if df_fts is None or df_fts.empty:
         st.warning("⚠️ No se encontró el archivo 'FUERZA_TS.xlsx' en 'data/EVALUACIONES/FUERZA TREN SUPERIOR/'.")
@@ -1279,7 +1278,6 @@ elif pest_sel == "🏋️ Tren Superior":
                 prescripciones_j.append("Trabajo de Fuerza Tren Superior")
                 dict_prescripciones_ts[nom_j] = prescripciones_j
 
-        st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_fecha_ts_str})")
         c_ts1, c_ts2 = st.columns(2)
         with c_ts1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_prescripciones_ts)} / {len(df_fts_ult)}")
         with c_ts2: st.metric("Porcentaje del Vestuario en Objetivo", f"{((len(df_fts_ult) - len(dict_prescripciones_ts)) / len(df_fts_ult) * 100):.0f}%")
