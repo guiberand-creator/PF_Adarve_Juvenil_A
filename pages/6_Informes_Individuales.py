@@ -121,13 +121,16 @@ def norm_nom(texto):
     if pd.isna(texto): return ""
     return " ".join(str(texto).replace('_', ' ').strip().lower().split())
 
-# SELLO FIJO SIDEBAR
+# SELLO Y LOGO BLANCO OFICIAL
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
 _ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
+if not os.path.exists(_ruta_logo):
+    _ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen1.png"))
 
+escudo_src = ""
 if os.path.exists(_ruta_logo):
     with open(_ruta_logo, "rb") as _f:
-        _b64 = base64.b64encode(_f.read()).decode()
+        escudo_src = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
     st.sidebar.markdown(f"""
         <style>
         .footer-sello-unico {{
@@ -138,7 +141,7 @@ if os.path.exists(_ruta_logo):
         .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
         </style>
         <div class="footer-sello-unico">
-            <img src="data:image/png;base64,{_b64}">
+            <img src="{escudo_src}">
             <p>© 2026 All Rights Reserved</p>
         </div>
     """, unsafe_allow_html=True)
@@ -164,7 +167,6 @@ def cargar_todo_informes():
         c_p = next((c for c in df_pos.columns if 'posic' in str(c).lower()), df_pos.columns[1])
         c_foto = next((c for c in df_pos.columns if 'foto' in str(c).lower() or 'url' in str(c).lower()), None)
         
-        # Identificar columna posterior a Posición (Lado / Perfil)
         cols_list = list(df_pos.columns)
         c_lado = next((c for c in df_pos.columns if any(k in str(c).lower() for k in ['lado', 'perfil', 'espec', 'sub', 'demarc']) and c not in [c_n, c_p, c_foto]), None)
         if not c_lado and len(cols_list) > 2:
@@ -496,11 +498,10 @@ cmj_pico = df_saltos[(df_saltos['Nombre_Norm'] == jug_norm) & (df_saltos['Tipo']
 vmax_pico = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm]['V_MAX'].max() if df_gps_all is not None and not df_gps_all.empty else 31.8
 dri_pico = df_dri[df_dri['Nombre_Norm'] == jug_norm]['DRI'].max() if df_dri is not None and not df_dri.empty else 2.15
 
-url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&lossy=1"
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 4. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE
+# 4. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE (ALTURA DENTRO DEL RECUADRO: 340PX)
 # =============================================================================
 def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig = go.Figure()
@@ -556,15 +557,15 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig.update_xaxes(visible=False, range=[-2, 102])
     fig.update_yaxes(visible=False, range=[-2, 102], scaleanchor="x", scaleratio=1.35)
     fig.update_layout(
-        height=240, margin=dict(l=0, r=0, t=0, b=0),
+        height=340, margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
     )
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (AJUSTADO AL BORDER DEL RANKING)
+# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (AJUSTADO HASTA EL BORDER DEL RANKING Y CAMPOGRAMA EXPUESTO)
 # =============================================================================
-col_photo, col_hero, col_pitch = st.columns([1.0, 2.6, 1.0], gap="medium")
+col_photo, col_hero, col_pitch = st.columns([1.0, 2.8, 1.1], gap="medium")
 
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
@@ -589,7 +590,7 @@ with col_hero:
         <div>
           <div style="display:flex; justify-content:space-between; align-items:center;">
               <span class="pd-badge">{pos_label_full}</span>
-              <img src="{url_escudo_oficial}" style="width:44px; height:auto;">
+              <img src="{escudo_src}" style="width:48px; height:auto;">
           </div>
           <h1 class="pd-name" style="margin-top:0.4rem;">{nombre_mostrar}</h1>
           <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
