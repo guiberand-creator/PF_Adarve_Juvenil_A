@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import plotly.express as px
 import os
 import glob
@@ -37,58 +38,26 @@ PRIMARY = "#e11d48"          # Crimson Accent
 PRIMARY_SOFT = "rgba(225, 29, 72, 0.15)"
 TEAM = "#38bdf8"             # Cool Blue
 GOOD = "#22c55e"
+WARNING = "#f59e0b"
 PLOT_FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif"
 
 def inject_v0_css():
     st.markdown(f"""
         <style>
         .stApp {{ background: {BG}; }}
-        
-        /* 100% ANCHO REAL DE PANTALLA */
-        .block-container {{ 
-            padding-top: 1.2rem !important; 
-            padding-bottom: 3rem !important; 
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            max-width: 100% !important; 
-        }}
-
-        /* ALINEACIÓN SUPERIOR DE COLUMNAS */
-        div[data-testid="column"] {{
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-        }}
-
-        /* RECUADRO HERO V0 EXCLUSIVO DEL JUGADOR - ALTURA FIJA 330PX */
+        .block-container {{ padding-top: 1.2rem !important; padding-bottom: 3rem !important; padding-left: 2rem !important; padding-right: 2rem !important; max-width: 100% !important; }}
+        div[data-testid="column"] {{ display: flex; flex-direction: column; justify-content: flex-start; }}
         .pd-hero {{
-            background:
-                radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%),
-                linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
-            border: 1px solid {BORDER};
-            border-radius: 18px;
-            padding: 1.5rem 1.75rem;
-            width: 100%;
-            height: 330px;
-            box-sizing: border-box;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            margin-top: 0px !important;
+            background: radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%), linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
+            border: 1px solid {BORDER}; border-radius: 18px; padding: 1.5rem 1.75rem; width: 100%; height: 330px;
+            box-sizing: border-box; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; justify-content: space-between; margin-top: 0px !important;
         }}
-
         .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
         .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; margin-bottom: 1.5rem; }}
         .pd-badge {{
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            background: {PRIMARY_SOFT}; color: {PRIMARY};
-            border: 1px solid rgba(225,29,72,0.35);
-            padding: 0.25rem 0.8rem; border-radius: 999px;
-            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+            display: inline-flex; align-items: center; gap: 0.4rem; background: {PRIMARY_SOFT}; color: {PRIMARY};
+            border: 1px solid rgba(225,29,72,0.35); padding: 0.25rem 0.8rem; border-radius: 999px; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
         }}
-
-        /* Fact Grid v0 (1 Fila x 4 columnas) */
         .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
         .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }}
         .pd-fact .k {{ color: {MUTED}; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
@@ -96,39 +65,12 @@ def inject_v0_css():
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
-
-        /* DIMENSIONES FIJAS Y RÍGIDAS PARA LA FOTO (330px DE ALTURA) */
-        .photo-v0 {{
-            height: 330px !important;
-            width: 100% !important;
-            max-width: 260px !important;
-            object-fit: contain !important;
-            display: block;
-            margin: 0 auto;
-            filter: drop-shadow(0px 10px 20px rgba(225, 29, 72, 0.25));
-        }}
-        .photo-placeholder-v0 {{
-            height: 330px !important;
-            width: 100% !important;
-            max-width: 260px !important;
-            border-radius: 16px;
-            background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
-            display: flex; align-items: center; justify-content: center;
-            border: 1px solid {BORDER};
-            margin: 0 auto;
-        }}
-
-        .pd-section-title {{
-            font-size: 0.85rem; font-weight: 800; text-transform: uppercase;
-            letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem;
-        }}
-
-        /* Tabs v0 */
+        .photo-v0 {{ height: 330px !important; width: 100% !important; max-width: 260px !important; object-fit: contain !important; display: block; margin: 0 auto; filter: drop-shadow(0px 10px 20px rgba(225, 29, 72, 0.25)); }}
+        .photo-placeholder-v0 {{ height: 330px !important; width: 100% !important; max-width: 260px !important; border-radius: 16px; background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE}); display: flex; align-items: center; justify-content: center; border: 1px solid {BORDER}; margin: 0 auto; }}
+        .pd-section-title {{ font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem; }}
+        [data-testid="stMetricDelta"] svg {{ display: none; }}
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
-        .stTabs [data-baseweb="tab"] {{
-            background: {SURFACE}; border: 1px solid {BORDER};
-            border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED};
-        }}
+        .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         </style>
     """, unsafe_allow_html=True)
@@ -139,30 +81,20 @@ def norm_nom(texto):
     if pd.isna(texto): return ""
     return " ".join(str(texto).replace('_', ' ').strip().lower().split())
 
-# CARGA DE LOGOS Y ESCUDOS
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
-
-# 1. Logo del menú lateral (Firma Guillermo Mateos Vivar)
 _ruta_logo_sidebar = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
 if os.path.exists(_ruta_logo_sidebar):
     with open(_ruta_logo_sidebar, "rb") as _f:
         b64_sidebar = base64.b64encode(_f.read()).decode()
     st.sidebar.markdown(f"""
         <style>
-        .footer-sello-unico {{
-            position: fixed; bottom: 20px; left: 10px; width: 260px; text-align: center;
-            z-index: 999; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15);
-        }}
+        .footer-sello-unico {{ position: fixed; bottom: 20px; left: 10px; width: 260px; text-align: center; z-index: 999; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); }}
         .footer-sello-unico img {{ width: 195px; height: auto; margin-bottom: 8px; }}
         .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
         </style>
-        <div class="footer-sello-unico">
-            <img src="data:image/png;base64,{b64_sidebar}">
-            <p>© 2026 All Rights Reserved</p>
-        </div>
+        <div class="footer-sello-unico"><img src="data:image/png;base64,{b64_sidebar}"><p>© 2026 All Rights Reserved</p></div>
     """, unsafe_allow_html=True)
 
-# 2. Escudo Oficial para el Hero Card (Imagen2.png - Logo UA)
 _ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen2.png"))
 url_escudo_oficial = ""
 if os.path.exists(_ruta_escudo_oficial):
@@ -170,7 +102,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
+# 2. CARGA DE DATOS MULTIFUENTE
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -182,12 +114,10 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
-    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA SEGURO)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
         df_pos.columns = [str(c).strip() for c in df_pos.columns]
-        
         c_n = next((c for c in df_pos.columns if 'jugador' in c.lower() or 'nombre' in c.lower()), df_pos.columns[0])
         c_p = next((c for c in df_pos.columns if 'posic' in c.lower()), None)
         c_lado = next((c for c in df_pos.columns if any(k in c.lower() for k in ['lateralidad', 'lado', 'perfil'])), None)
@@ -201,11 +131,9 @@ def cargar_todo_informes():
         if c_foto: renomb_dict[c_foto] = 'Foto_URL'
         if c_nac: renomb_dict[c_nac] = 'Fecha_Nacimiento_Pos'
         if c_pierna: renomb_dict[c_pierna] = 'Pierna_Pos'
-
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
-        # FIX A PRUEBA DE BALAS PARA FECHAS VACÍAS O NULAS (NaT)
         if 'Fecha_Nacimiento_Pos' in df_pos.columns:
             def safe_format_date(x):
                 if pd.isna(x): return ""
@@ -213,29 +141,21 @@ def cargar_todo_informes():
                 return str(x).replace('00:00:00', '').strip()
             df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(safe_format_date)
 
-    # 1. Cuestionario Inicial (Búsqueda Limpia y Robusta)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
-
-        c_n, c_fn, c_pos, c_pierna = None, None, None, None
-        for col in df_cuest.columns:
-            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
-            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
-            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
-            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
-
+        c_n = next((col for col in df_cuest.columns if any(k in col for k in ['nombre', 'jugador', 'apellidos'])), None)
+        c_fn = next((col for col in df_cuest.columns if any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple'])), None)
+        c_pos = next((col for col in df_cuest.columns if any(k in col for k in ['posici', 'pos', 'demarc'])), None)
+        c_pierna = next((col for col in df_cuest.columns if any(k in col for k in ['pierna', 'pie', 'habil', 'hábil'])), None)
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
         if c_pos: ren[c_pos] = 'Posicion_Habitual'
         if c_pierna: ren[c_pierna] = 'Pierna_Dominante'
-
         df_cuest = df_cuest.rename(columns=ren)
-        if 'Nombre' in df_cuest.columns:
-            df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
+        if 'Nombre' in df_cuest.columns: df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
 
-    # 2. Peso
     r_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
     df_peso = pd.read_excel(r_peso) if os.path.exists(r_peso) else pd.DataFrame()
     if not df_peso.empty:
@@ -243,7 +163,6 @@ def cargar_todo_informes():
         df_peso['Fecha_dt'] = pd.to_datetime(df_peso.iloc[:, 1], dayfirst=True, errors='coerce')
         df_peso.rename(columns={df_peso.columns[2]: 'Peso'}, inplace=True)
 
-    # 3. RPE
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     if not df_rpe.empty:
         cols = df_rpe.columns
@@ -258,7 +177,6 @@ def cargar_todo_informes():
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
-    # 4. GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -298,9 +216,7 @@ def cargar_todo_informes():
                 df_gps_all['Dist_18'] *= 1000
                 df_gps_all['Dist_25'] *= 1000
 
-    # 5. Evaluaciones Físicas
     df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo = None, None, None, None, None, None, None
-    
     r_mov = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "MOVILIDAD.xlsx")
     if os.path.exists(r_mov):
         df_mov = pd.read_excel(r_mov)
@@ -325,22 +241,19 @@ def cargar_todo_informes():
     elif os.path.exists(os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")): archivo_encontrado = os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")
     elif os.path.exists(dir_dina):
         for arch in os.listdir(dir_dina):
-            if 'dinamometria' in arch.lower():
-                archivo_encontrado = os.path.join(dir_dina, arch)
-                break
+            if 'dinamometria' in arch.lower(): archivo_encontrado = os.path.join(dir_dina, arch); break
 
     if archivo_encontrado:
-        if archivo_encontrado.endswith('.xlsx') or archivo_encontrado.endswith('.xls'): df_dina = pd.read_excel(archivo_encontrado)
-        else:
-            try: df_dina = pd.read_csv(archivo_encontrado, sep=';', encoding='utf-8')
-            except: df_dina = pd.read_csv(archivo_encontrado, sep=',', encoding='utf-8')
-        if df_dina is not None and not df_dina.empty:
-            df_dina.rename(columns={'Name': 'Nombre', 'Date': 'Fecha', 'Exercise': 'Exercise', 'MaxForce (raw)': 'Fmax_Abs'}, inplace=True)
-            df_dina['Fmax_Abs'] = pd.to_numeric(df_dina['Fmax_Abs'].astype(str).str.replace(',', '.'), errors='coerce')
-            df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.replace(r'\\u00BA', '', regex=True).str.replace('°', '', regex=False).str.strip()
-            df_dina['Fecha_dt'] = pd.to_datetime(df_dina['Fecha'], dayfirst=True, errors='coerce')
-            df_dina['Fecha'] = df_dina['Fecha_dt'].dt.strftime('%d/%m/%Y')
-            df_dina['Nombre_Norm'] = df_dina['Nombre'].apply(norm_nom)
+        try:
+            df_dina = pd.read_excel(archivo_encontrado) if archivo_encontrado.endswith('.xlsx') else pd.read_csv(archivo_encontrado, sep=';', encoding='utf-8')
+            if df_dina is not None and not df_dina.empty:
+                df_dina.rename(columns={'Name': 'Nombre', 'Date': 'Fecha', 'Exercise': 'Exercise', 'MaxForce (raw)': 'Fmax_Abs'}, inplace=True)
+                df_dina['Fmax_Abs'] = pd.to_numeric(df_dina['Fmax_Abs'].astype(str).str.replace(',', '.'), errors='coerce')
+                df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.replace(r'\\u00BA', '', regex=True).str.replace('°', '', regex=False).str.strip()
+                df_dina['Fecha_dt'] = pd.to_datetime(df_dina['Fecha'], dayfirst=True, errors='coerce')
+                df_dina['Fecha'] = df_dina['Fecha_dt'].dt.strftime('%d/%m/%Y')
+                df_dina['Nombre_Norm'] = df_dina['Nombre'].apply(norm_nom)
+        except: pass
 
     r_saltos = os.path.join("data", "EVALUACIONES", "SALTOS", "SALTOS.xlsx")
     if os.path.exists(r_saltos):
@@ -403,7 +316,6 @@ def cargar_todo_informes():
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if num_col in df_campo.columns: df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
 
-    # CÁLCULO DE RANKING GLOBAL REAL
     dict_rankings_reales = {}
     if not df_pos.empty:
         df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
@@ -450,12 +362,7 @@ def cargar_todo_informes():
             df_rank_base = merge_ult(df_rank_base, df_campo, 'V_MAX', 'V_MAX')
             df_rank_base = merge_ult(df_rank_base, df_campo, 'AC_MAX', 'AC_MAX')
 
-        columnas_pruebas = {
-            'Movilidad_Score': True, 'VAM': True, 'Fmax_Rel': True,
-            'CMJ_Altura': True, 'DRI': True, 'Tren_Superior_Reps': True,
-            'V_MAX': True, 'AC_MAX': True
-        }
-
+        columnas_pruebas = {'Movilidad_Score': True, 'VAM': True, 'Fmax_Rel': True, 'CMJ_Altura': True, 'DRI': True, 'Tren_Superior_Reps': True, 'V_MAX': True, 'AC_MAX': True}
         cols_puntos = []
         for col_raw, mayor_es_mejor in columnas_pruebas.items():
             if col_raw in df_rank_base.columns:
@@ -474,8 +381,22 @@ def cargar_todo_informes():
 
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
+# Funciones aux. calculo std
+def calc_mean_std(df, date_col, val_col):
+    if df is None or df.empty: return pd.DataFrame()
+    dff = df.dropna(subset=[val_col]).copy()
+    if dff.empty: return pd.DataFrame()
+    dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
+    agg = dff.groupby(date_col).agg(
+        Fecha=('Fecha', 'first'),
+        Mean=(val_col, 'mean'),
+        Std=(val_col, 'std')
+    ).reset_index().sort_values(date_col)
+    agg['Std'] = agg['Std'].fillna(0)
+    return agg
+
 # =============================================================================
-# 3. SELECTOR DE JUGADOR (FILA SUPERIOR INDEPENDIENTE Y DEL ANCHO DE LA FOTO)
+# 3. SELECTOR DE JUGADOR (FILA SUPERIOR INDEPENDIENTE)
 # =============================================================================
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
@@ -485,58 +406,38 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Selector en una fila superior exclusiva, coincidiendo en anchura con la foto
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
-    jugador_sel = st.selectbox(
-        "Selector oculto:", 
-        lista_jugadores, 
-        label_visibility="collapsed"
-    )
+    jugador_sel = st.selectbox("Selector oculto:", lista_jugadores, label_visibility="collapsed")
 
 st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
-
 jug_norm = norm_nom(jugador_sel)
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
-
-# BUSCADOR INTELIGENTE (Fuzzy Match) PARA CUESTIONARIO Y POSICIONES
-match_cuest = pd.DataFrame()
-if not df_cuest.empty and 'Nombre_Norm' in df_cuest.columns:
-    m = df_cuest[df_cuest['Nombre_Norm'] == jug_norm]
-    if m.empty:
-        # Búsqueda difusa si falta un apellido
-        def fuzzy_match(n):
-            if not n: return False
-            n_str = str(n).lower()
-            j_str = jug_norm.lower()
-            if n_str in j_str or j_str in n_str: return True
-            n_words = set(n_str.split())
-            j_words = set(j_str.split())
-            return len(n_words.intersection(j_words)) >= 2
-        m = df_cuest[df_cuest['Nombre_Norm'].apply(fuzzy_match)]
-    match_cuest = m
+match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empty else pd.DataFrame()
+if match_cuest.empty and not df_cuest.empty and 'Nombre_Norm' in df_cuest.columns:
+    def fuzzy_match(n):
+        if pd.isna(n): return False
+        n_str, j_str = str(n).lower(), jug_norm.lower()
+        if n_str in j_str or j_str in n_str: return True
+        return len(set(n_str.split()) & set(j_str.split())) >= 2
+    match_cuest = df_cuest[df_cuest['Nombre_Norm'].apply(fuzzy_match)]
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Extracción de Nacimiento Directamente desde Posiciones o Cuestionario
 fecha_nac_str = "Por definir"
 if not match_pos.empty and 'Fecha_Nacimiento_Pos' in match_pos.columns:
     val = str(match_pos.iloc[0]['Fecha_Nacimiento_Pos']).replace('00:00:00', '').strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '', 'nat']: 
-        fecha_nac_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '', 'nat']: fecha_nac_str = val
 elif not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val = str(match_cuest.iloc[-1]['Fecha_Nacimiento']).strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
-        fecha_nac_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
 
-# Posición y Lado
 posicion_str = "Por definir"
 if not match_pos.empty and 'Posicion' in match_pos.columns:
     posicion_str = str(match_pos.iloc[0]['Posicion']).strip()
 elif not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
     val_p = str(match_cuest.iloc[-1]['Posicion_Habitual']).strip()
-    if val_p.lower() not in ['nan', 'none', 'por definir', '0', '']: 
-        posicion_str = val_p
+    if val_p.lower() not in ['nan', 'none', 'por definir', '0', '']: posicion_str = val_p
 
 lado_str = ""
 if not match_pos.empty and 'Lado' in match_pos.columns:
@@ -544,38 +445,30 @@ if not match_pos.empty and 'Lado' in match_pos.columns:
     if pd.notna(val_l) and str(val_l).strip().lower() not in ['nan', 'none', '']:
         lado_str = str(val_l).strip()
 
-# Extracción Pierna Dominante Directamente desde Posiciones o Cuestionario
 pierna_str = "Por definir"
 if not match_pos.empty and 'Pierna_Pos' in match_pos.columns:
     val = str(match_pos.iloc[0]['Pierna_Pos']).strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
-        pierna_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
 elif not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val = str(match_cuest.iloc[-1]['Pierna_Dominante']).strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
-        pierna_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
 
-# Minutos en Liga Reales (Desde 06/09/2026)
 minutos_oficiales = 0
 if not df_rpe.empty:
     fecha_inicio_liga = pd.to_datetime("2026-09-06")
     df_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_oficiales = int(df_m['Minutos'].sum())
 
-# Ranking Real
 ranking_real_str = dict_rankings_reales.get(jug_norm, "#--")
-
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 4. CAMPOGRAMA CON PROPORCIONES OFICIALES (GEOMETRÍA RÍGIDA A 330PX)
+# 4. CAMPOGRAMA CON PROPORCIONES OFICIALES
 # =============================================================================
 def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig = go.Figure()
     line = dict(color=BORDER, width=1.5)
     pitch = "#0f1c14"
-
-    # Dimensiones oficiales 68 x 105
     fig.add_shape(type="rect", x0=0, y0=0, x1=68, y1=105, line=line, fillcolor=pitch, layer="below")
     fig.add_shape(type="line", x0=0, y0=52.5, x1=68, y1=52.5, line=line)
     fig.add_shape(type="circle", x0=24.85, y0=43.35, x1=43.15, y1=61.65, line=line)
@@ -585,11 +478,9 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
 
     pos_low = (str(pos_str) + " " + str(lado_s)).lower()
     pierna_low = str(pierna_s).lower()
-
     es_izq = any(k in pos_low for k in ['izq', 'zurd', 'left']) or ('zurd' in pierna_low)
     es_der = any(k in pos_low for k in ['der', 'dext', 'right', 'diest']) or ('diest' in pierna_low or 'dext' in pierna_low)
 
-    # Coordenadas ajustadas a 68x105
     if 'porter' in pos_low or 'gk' in pos_low: px, py, code_text = 34, 8, "POR"
     elif 'central' in pos_low or 'cb' in pos_low:
         if 'izq' in pos_low: px, py, code_text = 24, 20, "CI"
@@ -609,50 +500,31 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     elif 'extremo' in pos_low or 'banda' in pos_low or 'wing' in pos_low:
         if 'izq' in pos_low or (es_izq and not 'der' in pos_low): px, py, code_text = 10, 80, "EI"
         else: px, py, code_text = 58, 80, "ED"
-    elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low or 'st' in pos_low:
-        px, py, code_text = 34, 92, "DC"
+    elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low or 'st' in pos_low: px, py, code_text = 34, 92, "DC"
     else: px, py, code_text = 34, 52.5, "JUG"
 
-    fig.add_trace(go.Scatter(
-        x=[px], y=[py], mode="markers+text", text=[f"<b>{code_text}</b>"],
-        textposition="middle center", textfont=dict(color="#ffffff", size=10, family="sans-serif"),
-        marker=dict(size=28, color=PRIMARY, line=dict(color="#ffffff", width=2)),
-        hovertemplate=f"<b>{nombre_mostrar}</b><br>{pos_str} {lado_s}<extra></extra>",
-        showlegend=False,
-    ))
-
-    # Anclaje de proporciones activado (scaleratio=1) para que no se deforme
+    fig.add_trace(go.Scatter(x=[px], y=[py], mode="markers+text", text=[f"<b>{code_text}</b>"], textposition="middle center", textfont=dict(color="#ffffff", size=10, family="sans-serif"), marker=dict(size=28, color=PRIMARY, line=dict(color="#ffffff", width=2)), hovertemplate=f"<b>{nombre_mostrar}</b><br>{pos_str} {lado_s}<extra></extra>", showlegend=False))
     fig.update_xaxes(visible=False, range=[-3, 71])
     fig.update_yaxes(visible=False, range=[-3, 108], scaleanchor="x", scaleratio=1)
-    fig.update_layout(
-        height=330, margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
-    )
+    fig.update_layout(height=330, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     return fig
 
 # =============================================================================
-# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA SUPERIOR)
+# 5. RENDERIZADO DEL ENCABEZADO
 # =============================================================================
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.7, 1.1], gap="medium")
 
-# COLUMNA 1: FOTO DEL JUGADOR (330px)
 with col_photo:
-    if url_foto_jugador and pd.notna(url_foto_jugador):
-        st.markdown(f'<img src="{url_foto_jugador}" class="photo-v0">', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
+    if url_foto_jugador and pd.notna(url_foto_jugador): st.markdown(f'<img src="{url_foto_jugador}" class="photo-v0">', unsafe_allow_html=True)
+    else: st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE EN RED BADGE, POSICIÓN GIGANTE
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
-    
     html_hero = f"""
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <div style="margin-bottom: 0.6rem;">
-                        <span class="pd-badge">{nombre_mostrar}</span>
-                    </div>
+                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
                     <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
@@ -668,7 +540,6 @@ with col_hero:
     """
     st.markdown(html_hero, unsafe_allow_html=True)
 
-# COLUMNA 3: CAMPOGRAMA (330px)
 with col_pitch:
     st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
 
@@ -679,50 +550,30 @@ st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
-# -----------------------------------------------------------------------------
-# SUB-PAGE 1: CONDITIONING TESTS (MEJORES REGISTROS HISTÓRICOS Y RANKING)
-# -----------------------------------------------------------------------------
 with tab_tests:
     st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
     
-    # Motor buscador de "Mejor Marca" y "Ranking de Equipo"
-    def get_best_and_rank(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None, ascending=False):
-        if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns:
-            return None
-        
+    def get_best(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None):
+        if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns: return None
         dff = df.copy()
-        if filter_col and filter_col in dff.columns and filter_val:
-            dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
-        
-        dff = dff.dropna(subset=[col_val])
-        if dff.empty: return None
-        
+        if filter_col and filter_col in dff.columns and filter_val: dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
         dff[col_val] = pd.to_numeric(dff[col_val], errors='coerce')
         dff = dff.dropna(subset=[col_val])
-        if dff.empty: return None
-        
-        idx_max = dff.groupby(col_jugador)[col_val].idxmax()
-        best_per_player = dff.loc[idx_max].copy()
-        
-        jug_data = best_per_player[best_per_player[col_jugador] == jug_norm_val]
+        jug_data = dff[dff[col_jugador] == jug_norm_val]
         if jug_data.empty: return None
-        
-        return jug_data.iloc[0][col_val]
+        if 'DEC_MAX' in col_val: return jug_data[col_val].min() # Para Dec max buscamos el minimo (mas negativo)
+        return jug_data[col_val].max()
 
-    # Extracción de las 9 Métricas demandadas
-    v_cmj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo', 'CMJ')
-    v_vam = get_best_and_rank(df_vam, 'Nombre_Norm', jug_norm, 'VAM')
-    
-    # Búsqueda de Drop Jump 50cm (Filtra de df_dri directamente)
-    v_dj = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'Altura')
-    v_dri = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'DRI')
-    v_pb = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Press_Banca')
-    v_dom = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Dominada')
-    v_vmax = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'V_MAX')
-    v_ac = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'AC_MAX')
-    v_dec = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'DEC_MAX')
+    v_cmj = get_best(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo', 'CMJ')
+    v_vam = get_best(df_vam, 'Nombre_Norm', jug_norm, 'VAM')
+    v_dj = get_best(df_dri, 'Nombre_Norm', jug_norm, 'Altura')
+    v_dri = get_best(df_dri, 'Nombre_Norm', jug_norm, 'DRI')
+    v_pb = get_best(df_fts, 'Nombre_Norm', jug_norm, 'Press_Banca')
+    v_dom = get_best(df_fts, 'Nombre_Norm', jug_norm, 'Dominada')
+    v_vmax = get_best(df_campo, 'Nombre_Norm', jug_norm, 'V_MAX')
+    v_ac = get_best(df_campo, 'Nombre_Norm', jug_norm, 'AC_MAX')
+    v_dec = get_best(df_campo, 'Nombre_Norm', jug_norm, 'DEC_MAX')
 
-    # Grid de KPIs en 2 filas
     r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
     r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
 
@@ -731,15 +582,13 @@ with tab_tests:
             fmt_val = f"{val:.{decimals}f} {unit}".strip()
             if unit == "reps": fmt_val = f"{int(val)} {unit}"
             col.metric(title, fmt_val)
-        else:
-            col.metric(title, "-")
+        else: col.metric(title, "-")
 
     render_kpi(r1c1, "Salto CMJ", v_cmj, "cm")
     render_kpi(r1c2, "Prueba 5 min", v_vam, "km/h")
     render_kpi(r1c3, "Drop Jump (50cm)", v_dj, "cm")
     render_kpi(r1c4, "Índice DRI DJ", v_dri, "", decimals=2)
     render_kpi(r1c5, "Press Banca", v_pb, "reps")
-
     render_kpi(r2c1, "Dominadas", v_dom, "reps")
     render_kpi(r2c2, "V. Máx", v_vmax, "km/h")
     render_kpi(r2c3, "Acel. Máx", v_ac, "m/s²", decimals=2)
@@ -747,104 +596,181 @@ with tab_tests:
 
     st.divider()
 
-    left_col, right_col = st.columns([1.3, 1], gap="large")
+    left_col, right_col = st.columns([1.5, 1], gap="large")
 
     with left_col:
         st.markdown('<div class="pd-section-title">Evolución de tests en el tiempo</div>', unsafe_allow_html=True)
-        test_categoria = st.selectbox(
-            "Selecciona Batería de Tests:",
-            ["🩺 Movilidad", "🫁 VAM Aeróbico", "⚙️ Dinamometría", "🚀 Saltos & DRI", "🏋️ Tren Superior"],
-            label_visibility="collapsed"
-        )
-        st.markdown("<br>", unsafe_allow_html=True)
+        test_categoria = st.selectbox("Selecciona Batería de Tests:", ["🩺 Movilidad", "🫁 VAM Aeróbico", "⚙️ Dinamometría", "🚀 Saltos & DRI", "🏋️ Tren Superior", "⚡ Velocidad en Campo"], label_visibility="collapsed")
+        
+        df_j_mov = df_mov[df_mov['Nombre_Norm'] == jug_norm].copy() if df_mov is not None and not df_mov.empty else pd.DataFrame()
+        df_j_vam = df_vam[df_vam['Nombre_Norm'] == jug_norm].copy() if df_vam is not None and not df_vam.empty else pd.DataFrame()
+        df_j_dina = df_dina[df_dina['Nombre_Norm'] == jug_norm].copy() if df_dina is not None and not df_dina.empty else pd.DataFrame()
+        df_j_s = df_saltos[df_saltos['Nombre_Norm'] == jug_norm].copy() if df_saltos is not None and not df_saltos.empty else pd.DataFrame()
+        df_j_ts = df_fts[df_fts['Nombre_Norm'] == jug_norm].copy() if df_fts is not None and not df_fts.empty else pd.DataFrame()
+        df_j_campo = df_campo[df_campo['Nombre_Norm'] == jug_norm].copy() if df_campo is not None and not df_campo.empty else pd.DataFrame()
 
         if test_categoria == "🩺 Movilidad":
-            if df_mov is not None and not df_mov.empty:
-                df_j_mov = df_mov[df_mov['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
-                if not df_j_mov.empty:
-                    fechas_str = df_j_mov['Fecha'].tolist()
-                    fig_mov_line = go.Figure()
-                    fig_mov_line.add_trace(go.Scatter(x=fechas_str, y=df_j_mov['DORSIFLEX_D'], mode='lines+markers', name='Dorsiflexión D', line=dict(color=PRIMARY, width=3, shape='spline')))
-                    fig_mov_line.add_trace(go.Scatter(x=fechas_str, y=df_j_mov['DORSIFLEX_I'], mode='lines+markers', name='Dorsiflexión I', line=dict(color=TEAM, width=3, shape='spline')))
-                    fig_mov_line.add_shape(type="line", x0=-0.5, x1=len(fechas_str)-0.5, y0=12, y1=12, line=dict(color=GOOD, width=2, dash="dash"))
-                    fig_mov_line.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
-                    st.plotly_chart(fig_mov_line, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos para este jugador.")
+            sub_mov = st.radio("Test de Movilidad:", ["Dorsiflexión", "Rotación Interna", "Flexión Cadera", "Lumbar"], horizontal=True)
+            if not df_j_mov.empty:
+                fig_m = go.Figure()
+                if sub_mov == "Dorsiflexión":
+                    agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'DORSIFLEX_D')
+                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Derecha', line=dict(color=PRIMARY, width=3)))
+                    agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'DORSIFLEX_I')
+                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers', name='Izquierda', line=dict(color=TEAM, width=3)))
+                    fig_m.add_hline(y=12, line_dash="dash", line_color=GOOD, annotation_text="Ref: 12 cm")
+                elif sub_mov == "Rotación Interna":
+                    agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'ROT_INT_D')
+                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Derecha', line=dict(color=PRIMARY, width=3)))
+                    agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'ROT_INT_I')
+                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers', name='Izquierda', line=dict(color=TEAM, width=3)))
+                    fig_m.add_hline(y=35, line_dash="dash", line_color=GOOD, annotation_text="Ref: 35°")
+                elif sub_mov == "Flexión Cadera":
+                    agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'FLEX_CAD_D')
+                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Derecha', line=dict(color=PRIMARY, width=3)))
+                    agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'FLEX_CAD_I')
+                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers', name='Izquierda', line=dict(color=TEAM, width=3)))
+                    fig_m.add_hline(y=90, line_dash="dash", line_color=GOOD, annotation_text="Ref: 90°")
+                elif sub_mov == "Lumbar":
+                    agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'LUMBAR')
+                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Lumbar', line=dict(color=PRIMARY, width=3)))
+                
+                fig_m.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                st.plotly_chart(fig_m, use_container_width=True, config={"displayModeBar": False})
+            else: st.info("No hay datos para este test.")
 
         elif test_categoria == "🫁 VAM Aeróbico":
-            if df_vam is not None and not df_vam.empty:
-                df_j_vam = df_vam[df_vam['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
-                if not df_j_vam.empty:
-                    fechas_str = df_j_vam['Fecha'].tolist()
-                    fig_vam_line = go.Figure()
-                    fig_vam_line.add_trace(go.Scatter(x=fechas_str, y=df_j_vam['VAM'], mode='lines+markers', name='VAM (km/h)', line=dict(color=PRIMARY, width=3, shape='spline')))
-                    fig_vam_line.add_shape(type="line", x0=-0.5, x1=len(fechas_str)-0.5, y0=15.5, y1=15.5, line=dict(color=GOOD, width=2, dash="dash"))
-                    fig_vam_line.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
-                    st.plotly_chart(fig_vam_line, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos para este jugador.")
+            if not df_j_vam.empty:
+                agg = calc_mean_std(df_j_vam, 'Fecha_dt', 'VAM')
+                fig_v = go.Figure()
+                fig_v.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='VAM', line=dict(color=PRIMARY, width=3)))
+                fig_v.add_hline(y=15.5, line_dash="dash", line_color=GOOD, annotation_text="Ref Posición: 15.5 km/h")
+                fig_v.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                st.plotly_chart(fig_v, use_container_width=True, config={"displayModeBar": False})
+            else: st.info("No hay datos aeróbicos.")
 
         elif test_categoria == "⚙️ Dinamometría":
-            if df_dina is not None and not df_dina.empty:
-                df_j_dina = df_dina[df_dina['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
-                if not df_j_dina.empty:
-                    piv_dina = df_j_dina.pivot_table(index=['Fecha', 'Fecha_dt'], columns='Exercise', values='Fmax_Abs', aggfunc='mean').reset_index().sort_values('Fecha_dt')
-                    fechas_str = piv_dina['Fecha'].tolist()
-                    fig_dina_line = go.Figure()
-                    if 'Extension_rodilla_90_Derecha' in piv_dina.columns:
-                        fig_dina_line.add_trace(go.Scatter(x=fechas_str, y=piv_dina['Extension_rodilla_90_Derecha']/70.0, mode='lines+markers', name='Ext. Rodilla D (N/kg)', line=dict(color=PRIMARY, width=3, shape='spline')))
-                    if 'Extension_rodilla_90_Izquierda' in piv_dina.columns:
-                        fig_dina_line.add_trace(go.Scatter(x=fechas_str, y=piv_dina['Extension_rodilla_90_Izquierda']/70.0, mode='lines+markers', name='Ext. Rodilla I (N/kg)', line=dict(color=TEAM, width=3, shape='spline')))
-                    fig_dina_line.add_shape(type="line", x0=-0.5, x1=len(fechas_str)-0.5, y0=6.0, y1=6.0, line=dict(color=GOOD, width=2, dash="dash"))
-                    fig_dina_line.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
-                    st.plotly_chart(fig_dina_line, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos para este jugador.")
+            if not df_j_dina.empty:
+                df_j_dina['Fmax_Abs'] = pd.to_numeric(df_j_dina['Fmax_Abs'], errors='coerce')
+                agg = df_j_dina.groupby(['Fecha', 'Fecha_dt', 'Exercise'], as_index=False)['Fmax_Abs'].mean().sort_values('Fecha_dt')
+                fig_d = px.bar(agg, x='Fecha', y='Fmax_Abs', color='Exercise', barmode='group', color_discrete_sequence=[PRIMARY, TEAM, GOOD, WARNING, "#8b5cf6"])
+                fig_d.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
+                st.plotly_chart(fig_d, use_container_width=True, config={"displayModeBar": False})
+            else: st.info("No hay datos de dinamometría.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            if df_saltos is not None and not df_saltos.empty:
-                df_j_s = df_saltos[df_saltos['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
+            sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Scatter Índice DRI"], horizontal=True)
+            if sub_s == "Evolución CMJ (Der/Izq)":
                 if not df_j_s.empty:
-                    piv_s = df_j_s.pivot_table(index=['Fecha', 'Fecha_dt'], columns='Tipo', values='Altura', aggfunc='mean').reset_index().sort_values('Fecha_dt')
-                    fechas_str = piv_s['Fecha'].tolist()
-                    fig_salto_line = go.Figure()
-                    if 'CMJ' in piv_s.columns:
-                        fig_salto_line.add_trace(go.Scatter(x=fechas_str, y=piv_s['CMJ'], mode='lines+markers', name='CMJ (cm)', line=dict(color=PRIMARY, width=3, shape='spline')))
-                    fig_salto_line.add_shape(type="line", x0=-0.5, x1=len(fechas_str)-0.5, y0=38.0, y1=38.0, line=dict(color=GOOD, width=2, dash="dash"))
-                    fig_salto_line.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
-                    st.plotly_chart(fig_salto_line, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos para este jugador.")
+                    fig_s = go.Figure()
+                    for t, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'CMJ Derecha', TEAM), ('CMJ_I', 'CMJ Izquierda', WARNING)]:
+                        df_t = df_j_s[df_j_s['Tipo'].astype(str).str.upper() == t]
+                        agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
+                        if not agg.empty: fig_s.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name=col_name, line=dict(color=c_color, width=3)))
+                    fig_s.add_hline(y=38, line_dash="dash", line_color=GOOD, annotation_text="Ref CMJ Posición")
+                    fig_s.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                    st.plotly_chart(fig_s, use_container_width=True, config={"displayModeBar": False})
+                else: st.info("No hay datos de saltos.")
+            else:
+                df_j_dri = df_dri[df_dri['Nombre_Norm'] == jug_norm] if df_dri is not None and not df_dri.empty else pd.DataFrame()
+                if not df_j_dri.empty:
+                    fig_dri = px.scatter(df_j_dri, x='Altura', y='DRI', text='Fecha', size_max=12, color_discrete_sequence=[PRIMARY])
+                    fig_dri.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=2, color='white')))
+                    fig_dri.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                    st.plotly_chart(fig_dri, use_container_width=True, config={"displayModeBar": False})
+                else: st.info("No hay datos DRI.")
 
-        else:
-            if df_fts is not None and not df_fts.empty:
-                df_j_ts = df_fts[df_fts['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
-                if not df_j_ts.empty:
-                    fechas_str = df_j_ts['Fecha'].tolist()
-                    fig_ts_line = go.Figure()
-                    fig_ts_line.add_trace(go.Scatter(x=fechas_str, y=df_j_ts['Press_Banca'], mode='lines+markers', name='Press Banca (reps)', line=dict(color=PRIMARY, width=3, shape='spline')))
-                    fig_ts_line.add_trace(go.Scatter(x=fechas_str, y=df_j_ts['Dominada'], mode='lines+markers', name='Dominadas (reps)', line=dict(color=TEAM, width=3, shape='spline')))
-                    fig_ts_line.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
-                    st.plotly_chart(fig_ts_line, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos para este jugador.")
+        elif test_categoria == "🏋️ Tren Superior":
+            if not df_j_ts.empty:
+                fig_ts = go.Figure()
+                agg_pb = calc_mean_std(df_j_ts, 'Fecha_dt', 'Press_Banca')
+                agg_dom = calc_mean_std(df_j_ts, 'Fecha_dt', 'Dominada')
+                
+                # Media Equipo Referencia
+                mean_eq_pb = df_fts['Press_Banca'].mean() if df_fts is not None and not df_fts.empty else 0
+                mean_eq_dom = df_fts['Dominada'].mean() if df_fts is not None and not df_fts.empty else 0
+
+                if not agg_pb.empty: fig_ts.add_trace(go.Scatter(x=agg_pb['Fecha'], y=agg_pb['Mean'], error_y=dict(type='data', array=agg_pb['Std'], visible=True), mode='lines+markers', name='Press Banca', line=dict(color=PRIMARY, width=3)))
+                if not agg_dom.empty: fig_ts.add_trace(go.Scatter(x=agg_dom['Fecha'], y=agg_dom['Mean'], error_y=dict(type='data', array=agg_dom['Std'], visible=True), mode='lines+markers', name='Dominadas', line=dict(color=TEAM, width=3)))
+                
+                fig_ts.add_hline(y=mean_eq_pb, line_dash="dash", line_color=PRIMARY, opacity=0.5, annotation_text="Media Eq PB")
+                fig_ts.add_hline(y=mean_eq_dom, line_dash="dash", line_color=TEAM, opacity=0.5, annotation_text="Media Eq Dom")
+                
+                fig_ts.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                st.plotly_chart(fig_ts, use_container_width=True, config={"displayModeBar": False})
+            else: st.info("No hay datos de Tren Superior.")
+
+        elif test_categoria == "⚡ Velocidad en Campo":
+            if not df_j_campo.empty:
+                agg_v = calc_mean_std(df_j_campo, 'Fecha_dt', 'V_MAX')
+                agg_ac = calc_mean_std(df_j_campo, 'Fecha_dt', 'AC_MAX')
+                agg_dec = calc_mean_std(df_j_campo, 'Fecha_dt', 'DEC_MAX')
+                
+                fig_vel = make_subplots(specs=[[{"secondary_y": True}]])
+                if not agg_v.empty: fig_vel.add_trace(go.Scatter(x=agg_v['Fecha'], y=agg_v['Mean'], error_y=dict(type='data', array=agg_v['Std'], visible=True), mode='lines+markers', name='V_MAX (km/h)', line=dict(color=PRIMARY, width=3)), secondary_y=False)
+                if not agg_ac.empty: fig_vel.add_trace(go.Scatter(x=agg_ac['Fecha'], y=agg_ac['Mean'], mode='lines+markers', name='Acel Max (m/s²)', line=dict(color=GOOD, width=2, dash='dot')), secondary_y=True)
+                if not agg_dec.empty: fig_vel.add_trace(go.Scatter(x=agg_dec['Fecha'], y=agg_dec['Mean'], mode='lines+markers', name='Decel Max (m/s²)', line=dict(color=WARNING, width=2, dash='dot')), secondary_y=True)
+                
+                fig_vel.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
+                st.plotly_chart(fig_vel, use_container_width=True, config={"displayModeBar": False})
+            else: st.info("No hay datos de Velocidad en Campo.")
 
     with right_col:
-        st.markdown('<div class="pd-section-title">Perfil v0 &middot; Jugador vs Media Demarcación</div>', unsafe_allow_html=True)
-        categories = ['Movilidad', 'VAM', 'Dinamometría', 'CMJ', 'DRI', 'Tren Sup.']
-        values_jugador = [78, 85, 62, 92, 70, 75]
-        values_media_pos = [65, 70, 60, 72, 65, 68]
+        st.markdown('<div class="pd-section-title">Perfil Percentil &middot; Radar</div>', unsafe_allow_html=True)
         
-        categories_closed = categories + [categories[0]]
-        values_jug_closed = values_jugador + [values_jugador[0]]
-        values_med_closed = values_media_pos + [values_media_pos[0]]
+        # Filtro de fecha para Radar
+        if df_rank_base is not None and not df_rank_base.empty and 'Fecha_dt' in df_rank_base.columns:
+            min_d, max_d = df_rank_base['Fecha_dt'].min(), df_rank_base['Fecha_dt'].max()
+            if pd.notna(min_d) and pd.notna(max_d) and min_d != max_d:
+                filtro_radar = st.slider("Filtro temporal", min_value=min_d.date(), max_value=max_d.date(), value=(min_d.date(), max_d.date()))
+                df_radar = df_rank_base[(df_rank_base['Fecha_dt'].dt.date >= filtro_radar[0]) & (df_rank_base['Fecha_dt'].dt.date <= filtro_radar[1])].copy()
+            else: df_radar = df_rank_base.copy()
+        else: df_radar = pd.DataFrame()
 
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(r=values_med_closed, theta=categories_closed, fill="toself", name="Media Demarcación", line=dict(color=TEAM, width=2), fillcolor="rgba(56,189,248,0.15)"))
-        fig_radar.add_trace(go.Scatterpolar(r=values_jug_closed, theta=categories_closed, fill="toself", name=nombre_mostrar, line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)"))
-        
-        fig_radar.update_layout(
-            height=420, margin=dict(l=50, r=50, t=30, b=30), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            polar=dict(bgcolor=SURFACE_2, radialaxis=dict(range=[0, 100], gridcolor=BORDER, tickfont=dict(color=MUTED, size=10)), angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=11))),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
-        )
-        st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+        if not df_radar.empty:
+            df_radar['CMJ_Altura'] = pd.to_numeric(df_radar.get('CMJ_Altura', np.nan), errors='coerce')
+            df_radar['VAM'] = pd.to_numeric(df_radar.get('VAM', np.nan), errors='coerce')
+            df_radar['DRI'] = pd.to_numeric(df_radar.get('DRI', np.nan), errors='coerce')
+            df_radar['Tren_Superior_Reps'] = pd.to_numeric(df_radar.get('Tren_Superior_Reps', np.nan), errors='coerce')
+            df_radar['V_MAX'] = pd.to_numeric(df_radar.get('V_MAX', np.nan), errors='coerce')
+            
+            categories = ['VAM', 'CMJ', 'DRI', 'Tren Sup.', 'V_MAX']
+            
+            def calc_pct(col):
+                if col not in df_radar.columns: return pd.Series(index=df_radar.index, dtype=float)
+                return df_radar[col].rank(pct=True) * 100
+
+            df_radar['pct_vam'] = calc_pct('VAM')
+            df_radar['pct_cmj'] = calc_pct('CMJ_Altura')
+            df_radar['pct_dri'] = calc_pct('DRI')
+            df_radar['pct_ts'] = calc_pct('Tren_Superior_Reps')
+            df_radar['pct_vmax'] = calc_pct('V_MAX')
+
+            df_jug_r = df_radar[df_radar['Nombre_Norm'] == jug_norm]
+            df_pos_r = df_radar[df_radar['Posicion'].astype(str).str.contains(posicion_str.split()[0], case=False, na=False)] if posicion_str != "Por definir" else df_radar
+
+            v_j = [df_jug_r['pct_vam'].mean(), df_jug_r['pct_cmj'].mean(), df_jug_r['pct_dri'].mean(), df_jug_r['pct_ts'].mean(), df_jug_r['pct_vmax'].mean()]
+            v_p = [df_pos_r['pct_vam'].mean(), df_pos_r['pct_cmj'].mean(), df_pos_r['pct_dri'].mean(), df_pos_r['pct_ts'].mean(), df_pos_r['pct_vmax'].mean()]
+            v_eq = [df_radar['pct_vam'].mean(), df_radar['pct_cmj'].mean(), df_radar['pct_dri'].mean(), df_radar['pct_ts'].mean(), df_radar['pct_vmax'].mean()]
+
+            # Cerrar poligono
+            v_j = [(x if pd.notna(x) else 0) for x in v_j]; v_j.append(v_j[0])
+            v_p = [(x if pd.notna(x) else 0) for x in v_p]; v_p.append(v_p[0])
+            v_eq = [(x if pd.notna(x) else 0) for x in v_eq]; v_eq.append(v_eq[0])
+            cat_cl = categories + [categories[0]]
+
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(r=v_eq, theta=cat_cl, fill="none", name="Media Equipo", line=dict(color=MUTED, width=1.5, dash='dash')))
+            fig_radar.add_trace(go.Scatterpolar(r=v_p, theta=cat_cl, fill="toself", name="Media Demarcación", line=dict(color=TEAM, width=2), fillcolor="rgba(56,189,248,0.15)"))
+            fig_radar.add_trace(go.Scatterpolar(r=v_j, theta=cat_cl, fill="toself", name=nombre_mostrar, line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)"))
+            
+            fig_radar.update_layout(
+                height=360, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                polar=dict(bgcolor=SURFACE_2, radialaxis=dict(range=[0, 100], gridcolor=BORDER, tickfont=dict(color=MUTED, size=9)), angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=11))),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10))
+            )
+            st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+        else: st.info("No hay datos suficientes para calcular percentiles en este rango.")
 
 # -----------------------------------------------------------------------------
 # SUB-PAGE 2: GPS DATA
