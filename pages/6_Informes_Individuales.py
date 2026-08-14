@@ -103,7 +103,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
+# 2. CARGA DE DATOS MULTIFUENTE
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -546,8 +546,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
-                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
+                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
+                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -568,7 +568,7 @@ with col_pitch:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
-# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0
+# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
@@ -622,7 +622,7 @@ with tab_tests:
 
     st.divider()
 
-    left_col, right_col = st.columns([1.5, 1], gap="large")
+    left_col, right_col = st.columns([1.3, 1], gap="large")
 
     with left_col:
         st.markdown('<div class="pd-section-title">Evolución de tests en el tiempo</div>', unsafe_allow_html=True)
@@ -736,11 +736,11 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ", "Evolución DRI y DJ"], horizontal=True)
-            if sub_s == "Evolución CMJ":
+            sub_s = st.radio("Vista:", ["Evolución CMJ, slCMJright, slCMJleft", "Evolución DRI y DJ"], horizontal=True)
+            if "CMJ" in sub_s:
                 if not df_j_s.empty:
                     fig_s = go.Figure()
-                    for t_norm, col_name, c_color in [('CMJ', 'CMJ', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: 
@@ -845,15 +845,12 @@ with tab_tests:
         all_dates = all_dates.dropna()
 
         if not all_dates.empty:
-            min_d, max_d = all_dates.min(), all_dates.max()
-            if min_d != max_d:
-                filtro_radar = st.slider("Filtro temporal (Z-Score)", min_value=min_d.date(), max_value=max_d.date(), value=(min_d.date(), max_d.date()))
-            else:
-                filtro_radar = (min_d.date(), max_d.date())
+            unique_dates = np.sort(all_dates.dt.date.unique())[::-1]
+            filtro_radar = st.selectbox("Fecha de Evaluación (Z-Score):", unique_dates, format_func=lambda x: x.strftime('%d/%m/%Y'))
 
-            def get_metric_zscore(df, val_col, date_range):
+            def get_metric_zscore(df, val_col, target_date):
                 if df is None or df.empty or val_col not in df.columns: return pd.DataFrame()
-                dff = df[(df['Fecha_dt'].dt.date >= date_range[0]) & (df['Fecha_dt'].dt.date <= date_range[1])].copy()
+                dff = df[df['Fecha_dt'].dt.date == target_date].copy()
                 if dff.empty: return pd.DataFrame()
                 dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
                 agg = dff.groupby('Nombre_Norm')[val_col].max().reset_index()
@@ -910,13 +907,13 @@ with tab_tests:
             fig_radar.add_trace(go.Scatterpolar(r=v_j, theta=cat_cl, fill="toself", name=nombre_mostrar, line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)"))
             
             fig_radar.update_layout(
-                height=360, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                height=550, margin=dict(l=60, r=60, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 polar=dict(
                     bgcolor=SURFACE_2, 
-                    radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=9)), 
-                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=11))
+                    radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=10)), 
+                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
                 ),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10))
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
             )
             st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
         else:
