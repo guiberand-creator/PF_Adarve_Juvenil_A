@@ -46,14 +46,21 @@ def inject_v0_css():
         
         /* 100% ANCHO REAL DE PANTALLA */
         .block-container {{ 
-            padding-top: 1.5rem !important; 
+            padding-top: 1.2rem !important; 
             padding-bottom: 3rem !important; 
             padding-left: 2rem !important;
             padding-right: 2rem !important;
             max-width: 100% !important; 
         }}
 
-        /* RECUADRO HERO V0 EXCLUSIVO DEL JUGADOR */
+        /* ALINEACIÓN SUPERIOR DE COLUMNAS */
+        div[data-testid="column"] {{
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }}
+
+        /* RECUADRO HERO V0 EXCLUSIVO DEL JUGADOR - ALTURA FIJA 330PX */
         .pd-hero {{
             background:
                 radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%),
@@ -71,21 +78,21 @@ def inject_v0_css():
             margin-top: 0px !important;
         }}
 
-        .pd-name {{ font-size: 2.1rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
-        .pd-club {{ color: {MUTED}; font-size: 0.9rem; margin-top: 0.2rem; }}
+        .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
+        .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; }}
         .pd-badge {{
             display: inline-flex; align-items: center; gap: 0.4rem;
             background: {PRIMARY_SOFT}; color: {PRIMARY};
             border: 1px solid rgba(225,29,72,0.35);
-            padding: 0.15rem 0.6rem; border-radius: 999px;
-            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 0.25rem 0.8rem; border-radius: 999px;
+            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
         }}
 
         /* Fact Grid v0 (1 Fila x 4 columnas) */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-top: 0.5rem; }}
-        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.6rem 0.8rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.70rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
-        .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
+        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .v {{ font-size: 1.3rem; font-weight: 800; margin-top: 0.25rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
@@ -204,7 +211,7 @@ def cargar_todo_informes():
         for col in df_cuest.columns:
             if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
             elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
-            elif any(k in col for k in ['posición', 'pos', 'demarcación']): c_pos = col
+            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
             elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
 
         ren = {}
@@ -505,6 +512,11 @@ fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val = str(match_cuest.iloc[0]['Fecha_Nacimiento']).strip()
     if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
+elif not match_pos.empty:
+    col_fn_pos = next((c for c in match_pos.columns if 'nacim' in str(c).lower()), None)
+    if col_fn_pos:
+        val = str(match_pos.iloc[0][col_fn_pos]).strip()
+        if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
 
 # Posición y Lado
 posicion_str = "Por definir"
@@ -525,6 +537,11 @@ pierna_str = "Por definir"
 if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val = str(match_cuest.iloc[0]['Pierna_Dominante']).strip()
     if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
+elif not match_pos.empty:
+    col_p_pos = next((c for c in match_pos.columns if 'pierna' in str(c).lower()), None)
+    if col_p_pos:
+        val = str(match_pos.iloc[0][col_p_pos]).strip()
+        if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
 
 # Minutos en Liga Reales (Desde 06/09/2026)
 minutos_oficiales = 0
@@ -618,19 +635,21 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px) CON NOMBRE Y POSICIÓN INTERCAMBIADOS
+# COLUMNA 2: RECUADRO HTML PURO (330px)
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
     html_hero = f"""
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <span class="pd-badge">{nombre_mostrar}</span>
+                <div>
+                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
+                    <div style="margin-top: 0.6rem;">
+                        <span class="pd-badge">{pos_label_full}</span>
+                    </div>
+                    <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
+                </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
-            </div>
-            <div style="margin-bottom: auto; margin-top: auto;">
-                <h1 class="pd-name">{pos_label_full}</h1>
-                <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
             </div>
             <div class="pd-facts">
                 <div class="pd-fact"><div class="k">Nacimiento</div><div class="v">{fecha_nac_str}</div></div>
