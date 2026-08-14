@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import os
 from utils import aplicar_diseno_responsive
 
@@ -1093,7 +1094,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
-    st.markdown("### Evolución individual del salto por Demarcación")
+    st.markdown("### Evolución individual del salto")
 
     if df_saltos is None or df_saltos.empty:
         st.warning("⚠️ No se encontraron los datos locales de saltos para desglosar por posición.")
@@ -1110,7 +1111,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
         else:
             col_f_pos, col_sp_pos = st.columns([1, 2])
             with col_f_pos:
-                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos_2")
+                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos")
 
             pos_a_mostrar_s = posiciones_s if pos_sel_saltos == "Todas las Demarcaciones" else [pos_sel_saltos]
 
