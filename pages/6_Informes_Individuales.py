@@ -115,12 +115,10 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
-    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA SEGURO)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
         df_pos.columns = [str(c).strip() for c in df_pos.columns]
-        
         c_n = next((c for c in df_pos.columns if 'jugador' in c.lower() or 'nombre' in c.lower()), df_pos.columns[0])
         c_p = next((c for c in df_pos.columns if 'posic' in c.lower()), None)
         c_lado = next((c for c in df_pos.columns if any(k in c.lower() for k in ['lateralidad', 'lado', 'perfil'])), None)
@@ -134,7 +132,6 @@ def cargar_todo_informes():
         if c_foto: renomb_dict[c_foto] = 'Foto_URL'
         if c_nac: renomb_dict[c_nac] = 'Fecha_Nacimiento_Pos'
         if c_pierna: renomb_dict[c_pierna] = 'Pierna_Pos'
-
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
@@ -145,29 +142,21 @@ def cargar_todo_informes():
                 return str(x).replace('00:00:00', '').strip()
             df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(safe_format_date)
 
-    # 1. Cuestionario Inicial
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
-
-        c_n, c_fn, c_pos, c_pierna = None, None, None, None
-        for col in df_cuest.columns:
-            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
-            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
-            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
-            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
-
+        c_n = next((col for col in df_cuest.columns if any(k in col for k in ['nombre', 'jugador', 'apellidos'])), None)
+        c_fn = next((col for col in df_cuest.columns if any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple'])), None)
+        c_pos = next((col for col in df_cuest.columns if any(k in col for k in ['posici', 'pos', 'demarc'])), None)
+        c_pierna = next((col for col in df_cuest.columns if any(k in col for k in ['pierna', 'pie', 'habil', 'hábil'])), None)
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
         if c_pos: ren[c_pos] = 'Posicion_Habitual'
         if c_pierna: ren[c_pierna] = 'Pierna_Dominante'
-
         df_cuest = df_cuest.rename(columns=ren)
-        if 'Nombre' in df_cuest.columns:
-            df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
+        if 'Nombre' in df_cuest.columns: df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
 
-    # 2. Peso
     r_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
     df_peso = pd.read_excel(r_peso) if os.path.exists(r_peso) else pd.DataFrame()
     if not df_peso.empty:
@@ -175,7 +164,6 @@ def cargar_todo_informes():
         df_peso['Fecha_dt'] = pd.to_datetime(df_peso.iloc[:, 1], dayfirst=True, errors='coerce')
         df_peso.rename(columns={df_peso.columns[2]: 'Peso'}, inplace=True)
 
-    # 3. RPE
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     if not df_rpe.empty:
         cols = df_rpe.columns
@@ -190,7 +178,6 @@ def cargar_todo_informes():
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
-    # 4. GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -230,9 +217,7 @@ def cargar_todo_informes():
                 df_gps_all['Dist_18'] *= 1000
                 df_gps_all['Dist_25'] *= 1000
 
-    # 5. Evaluaciones Físicas
     df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo = None, None, None, None, None, None, None
-    
     r_mov = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "MOVILIDAD.xlsx")
     if os.path.exists(r_mov):
         df_mov = pd.read_excel(r_mov)
@@ -257,9 +242,7 @@ def cargar_todo_informes():
     elif os.path.exists(os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")): archivo_encontrado = os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")
     elif os.path.exists(dir_dina):
         for arch in os.listdir(dir_dina):
-            if 'dinamometria' in arch.lower():
-                archivo_encontrado = os.path.join(dir_dina, arch)
-                break
+            if 'dinamometria' in arch.lower(): archivo_encontrado = os.path.join(dir_dina, arch); break
 
     if archivo_encontrado:
         try:
@@ -685,7 +668,7 @@ with tab_tests:
                 agg = df_j_dina.groupby(['Fecha', 'Fecha_dt', 'Exercise'], as_index=False)['Fmax_Abs'].mean()
                 
                 def get_lado_base(ex):
-                    ex_str = str(ex)
+                    ex_str = str(ex).strip()
                     ex_low = ex_str.lower()
                     if "derecha" in ex_low or "_der" in ex_low or " der" in ex_low: lado = "Derecha"
                     elif "izquierda" in ex_low or "_izq" in ex_low or " izq" in ex_low: lado = "Izquierda"
@@ -695,22 +678,37 @@ with tab_tests:
                     base = re.sub(r'(?i)[_-]?izquierda', '', base)
                     base = re.sub(r'(?i)[_-]?der\b', '', base)
                     base = re.sub(r'(?i)[_-]?izq\b', '', base)
-                    base = base.replace('_', ' ').strip()
-                    return pd.Series([lado, base])
+                    return pd.Series([lado, base.replace('_', ' ').strip()])
                     
                 agg[['Lado', 'Base_Exercise']] = agg['Exercise'].apply(get_lado_base)
-                agg = agg.sort_values(['Fecha_dt', 'Base_Exercise', 'Lado'])
+                agg = agg.sort_values(['Fecha_dt', 'Base_Exercise'])
                 
-                fig_d = px.bar(
-                    agg, x=['Fecha', 'Base_Exercise'], y='Fmax_Abs', color='Lado', barmode='group', 
-                    color_discrete_map={'Derecha': PRIMARY, 'Izquierda': TEAM, 'Bilateral': GOOD}
-                )
+                fig_d = go.Figure()
+                for lado, color in [('Derecha', PRIMARY), ('Izquierda', TEAM), ('Bilateral', GOOD)]:
+                    df_lado = agg[agg['Lado'] == lado]
+                    if not df_lado.empty:
+                        fig_d.add_trace(go.Bar(
+                            x=[df_lado['Fecha'], df_lado['Base_Exercise']],
+                            y=df_lado['Fmax_Abs'],
+                            name=lado,
+                            marker_color=color,
+                            text=df_lado['Fmax_Abs'].round(1),
+                            textposition='outside',
+                            textfont=dict(color=TEXT)
+                        ))
+                
                 fig_d.update_layout(
-                    height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), 
-                    legend=dict(orientation="h", y=-0.3, title=""), xaxis_title="", yaxis_title="Fuerza Máx Absoluta", margin=dict(b=40)
+                    height=400, 
+                    barmode='group',
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    font=dict(color=TEXT),
+                    xaxis=dict(tickangle=0, dividerwidth=2, dividercolor=BORDER),
+                    yaxis_title="Fmax Abs (N)",
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5, title="")
                 )
                 st.plotly_chart(fig_d, use_container_width=True, config={"displayModeBar": False})
-            else: st.info("No hay datos de dinamometría.")
+            else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
             sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Scatter Índice DRI"], horizontal=True)
