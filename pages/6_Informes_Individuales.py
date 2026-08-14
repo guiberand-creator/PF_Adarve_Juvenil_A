@@ -139,18 +139,14 @@ def norm_nom(texto):
     if pd.isna(texto): return ""
     return " ".join(str(texto).replace('_', ' ').strip().lower().split())
 
-# SELLO Y LOGO BLANCO OFICIAL
+# CARGA DE LOGOS Y ESCUDOS
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
-_ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen2.png"))
-if not os.path.exists(_ruta_escudo_oficial):
-    _ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
 
-url_escudo_oficial = ""
-if os.path.exists(_ruta_escudo_oficial):
-    with open(_ruta_escudo_oficial, "rb") as _f:
-        url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
-
-if url_escudo_oficial:
+# 1. Logo del menú lateral (Firma Guillermo Mateos Vivar)
+_ruta_logo_sidebar = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
+if os.path.exists(_ruta_logo_sidebar):
+    with open(_ruta_logo_sidebar, "rb") as _f:
+        b64_sidebar = base64.b64encode(_f.read()).decode()
     st.sidebar.markdown(f"""
         <style>
         .footer-sello-unico {{
@@ -161,10 +157,17 @@ if url_escudo_oficial:
         .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
         </style>
         <div class="footer-sello-unico">
-            <img src="{url_escudo_oficial}">
+            <img src="data:image/png;base64,{b64_sidebar}">
             <p>© 2026 All Rights Reserved</p>
         </div>
     """, unsafe_allow_html=True)
+
+# 2. Escudo Oficial para el Hero Card (Imagen2.png - Logo UA)
+_ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen2.png"))
+url_escudo_oficial = ""
+if os.path.exists(_ruta_escudo_oficial):
+    with open(_ruta_escudo_oficial, "rb") as _f:
+        url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
 # 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
@@ -482,7 +485,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Selector en una fila superior exclusiva, coincidiendo en anchura con la foto
+# Selector en una fila superior exclusiva, coincidiendo en anchura (proporción 1.0) con la columna de la foto
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
     jugador_sel = st.selectbox(
@@ -633,7 +636,7 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA)
+# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA SUPERIOR)
 # =============================================================================
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.7, 1.1], gap="medium")
 
@@ -644,7 +647,7 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px)
+# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE EN RED BADGE, POSICIÓN GIGANTE
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
@@ -652,10 +655,10 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
-                    <div style="margin-top: 0.6rem;">
-                        <span class="pd-badge">{pos_label_full}</span>
+                    <div style="margin-bottom: 0.6rem;">
+                        <span class="pd-badge">{nombre_mostrar}</span>
                     </div>
+                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
