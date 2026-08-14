@@ -103,7 +103,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE
+# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -267,13 +267,10 @@ def cargar_todo_informes():
         ren_s.update({c: 'Altura' for c in df_saltos.columns if 'altura' in str(c).lower()})
         ren_s.update({c: 'Fecha_Hora' for c in df_saltos.columns if 'fecha' in str(c).lower()})
         df_saltos.rename(columns=ren_s, inplace=True)
-        
-        # Filtro infalible para parsear la fecha separando posibles horas adjuntas
         df_saltos['Fecha_dt'] = pd.to_datetime(df_saltos['Fecha_Hora'].astype(str).str.split(' ').str[0], dayfirst=True, errors='coerce')
         df_saltos['Fecha'] = df_saltos['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_saltos['Nombre_Norm'] = df_saltos['Nombre'].apply(norm_nom)
         
-        # MAPEO BILINGÜE PARA RECONOCER RIGHT/LEFT Y DER/IZQ
         def map_salto_type(t):
             t_up = str(t).upper()
             if 'CMJ' in t_up:
@@ -401,10 +398,15 @@ def cargar_todo_informes():
 
     r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
     df_ref_vam = pd.read_excel(r_ref_vam) if os.path.exists(r_ref_vam) else pd.DataFrame()
+    
+    df_ref_campo = pd.DataFrame()
+    r_ref_campo_files = glob.glob(os.path.join("data", "EVALUACIONES", "CAMPO", "Referencia campo*.xlsx"))
+    if r_ref_campo_files:
+        df_ref_campo = pd.read_excel(r_ref_campo_files[0])
 
-    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam
+    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam, df_ref_campo
 
-df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam = cargar_todo_informes()
+df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam, df_ref_campo = cargar_todo_informes()
 
 def calc_mean_std(df, date_col, val_col):
     if df is None or df.empty or val_col not in df.columns: return pd.DataFrame()
@@ -734,11 +736,11 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Evolución DRI y DJ"], horizontal=True)
-            if sub_s == "Evolución CMJ (Der/Izq)":
+            sub_s = st.radio("Vista:", ["Evolución CMJ", "Evolución DRI y DJ"], horizontal=True)
+            if sub_s == "Evolución CMJ":
                 if not df_j_s.empty:
                     fig_s = go.Figure()
-                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: 
@@ -762,8 +764,8 @@ with tab_tests:
                     if not agg_dj.empty: 
                         fig_dri.add_trace(go.Scatter(x=agg_dj['Fecha'], y=agg_dj['Mean'], error_y=dict(type='data', array=agg_dj['Std'], visible=True), mode='lines+markers', name='Altura DJ (cm)', line=dict(color=TEAM, width=3, dash='dot'), marker=dict(size=8)), secondary_y=True)
                     
-                    fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, showgrid=True, gridcolor=BORDER, rangemode='tozero')
-                    fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, showgrid=False, rangemode='tozero')
+                    fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, showgrid=True, gridcolor=BORDER, zeroline=False, rangemode='tozero')
+                    fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, showgrid=False, zeroline=False, rangemode='tozero')
                     
                     fig_dri.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2), barmode='group')
                     st.plotly_chart(fig_dri, use_container_width=True, config={"displayModeBar": False})
@@ -799,8 +801,34 @@ with tab_tests:
                 if not agg_ac.empty: fig_vel.add_trace(go.Scatter(x=agg_ac['Fecha'], y=agg_ac['Mean'], mode='lines+markers', name='Acel Max (m/s²)', line=dict(color=GOOD, width=2, dash='dot')), secondary_y=True)
                 if not agg_dec.empty: fig_vel.add_trace(go.Scatter(x=agg_dec['Fecha'], y=agg_dec['Mean'], mode='lines+markers', name='Decel Max (m/s²)', line=dict(color=WARNING, width=2, dash='dot')), secondary_y=True)
                 
-                fig_vel.update_yaxes(showgrid=True, gridcolor=BORDER, secondary_y=False)
-                fig_vel.update_yaxes(showgrid=False, secondary_y=True)
+                ref_vmax, ref_acmax, ref_decmax = None, None, None
+                if df_ref_campo is not None and not df_ref_campo.empty:
+                    df_ref_campo.columns = [str(c).strip().lower() for c in df_ref_campo.columns]
+                    c_pos_c = next((c for c in df_ref_campo.columns if 'posic' in c), df_ref_campo.columns[0])
+                    c_vmax = next((c for c in df_ref_campo.columns if 'v_max' in c or 'v. max' in c or 'vmax' in c), None)
+                    c_acmax = next((c for c in df_ref_campo.columns if 'ac_max' in c or 'ac. max' in c or 'acmax' in c or 'acel' in c), None)
+                    c_decmax = next((c for c in df_ref_campo.columns if 'dec_max' in c or 'dec. max' in c or 'decmax' in c or 'decel' in c), None)
+                    for _, row in df_ref_campo.iterrows():
+                        ref_p = str(row[c_pos_c]).strip().lower()
+                        if ref_p and ref_p in posicion_str.lower():
+                            if c_vmax: ref_vmax = pd.to_numeric(row[c_vmax], errors='coerce')
+                            if c_acmax: ref_acmax = pd.to_numeric(row[c_acmax], errors='coerce')
+                            if c_decmax: ref_decmax = pd.to_numeric(row[c_decmax], errors='coerce')
+                            break
+                
+                if pd.isna(ref_vmax) or ref_vmax is None: ref_vmax = df_campo['V_MAX'].mean() if not df_campo.empty else None
+                if pd.isna(ref_acmax) or ref_acmax is None: ref_acmax = df_campo['AC_MAX'].mean() if not df_campo.empty else None
+                if pd.isna(ref_decmax) or ref_decmax is None: ref_decmax = df_campo['DEC_MAX'].mean() if not df_campo.empty else None
+
+                if ref_vmax and pd.notna(ref_vmax):
+                    fig_vel.add_hline(y=ref_vmax, line_dash="dash", line_color=PRIMARY, annotation_text=f"Ref V.Máx: {ref_vmax:.1f}", yref="y")
+                if ref_acmax and pd.notna(ref_acmax):
+                    fig_vel.add_hline(y=ref_acmax, line_dash="dash", line_color=GOOD, annotation_text=f"Ref AC.Máx: {ref_acmax:.2f}", yref="y2")
+                if ref_decmax and pd.notna(ref_decmax):
+                    fig_vel.add_hline(y=ref_decmax, line_dash="dash", line_color=WARNING, annotation_text=f"Ref DEC.Máx: {ref_decmax:.2f}", yref="y2")
+
+                fig_vel.update_yaxes(showgrid=True, gridcolor=BORDER, zeroline=False, secondary_y=False)
+                fig_vel.update_yaxes(showgrid=False, zeroline=False, secondary_y=True)
                 fig_vel.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
                 st.plotly_chart(fig_vel, use_container_width=True, config={"displayModeBar": False})
             else: st.info("No hay datos de Velocidad en Campo.")
