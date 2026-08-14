@@ -89,9 +89,9 @@ def inject_v0_css():
         }}
 
         /* Fact Grid v0 (1 Fila x 4 columnas) */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.5rem; }}
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-top: 0.5rem; }}
         .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.6rem 0.8rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.70rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
         .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
@@ -101,7 +101,7 @@ def inject_v0_css():
         .photo-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 250px !important;
+            max-width: 260px !important;
             object-fit: contain !important;
             display: block;
             margin: 0 auto;
@@ -110,7 +110,7 @@ def inject_v0_css():
         .photo-placeholder-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 250px !important;
+            max-width: 260px !important;
             border-radius: 16px;
             background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
             display: flex; align-items: center; justify-content: center;
@@ -179,46 +179,45 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
-    # 0. Posiciones.xlsx
+    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
-        c_n = next((c for c in df_pos.columns if 'jugador' in str(c).lower() or 'nombre' in str(c).lower()), df_pos.columns[0])
-        c_p = next((c for c in df_pos.columns if 'posic' in str(c).lower()), df_pos.columns[1])
-        c_foto = next((c for c in df_pos.columns if 'foto' in str(c).lower() or 'url' in str(c).lower()), None)
+        df_pos.columns = [str(c).strip() for c in df_pos.columns]
         
-        cols_list = list(df_pos.columns)
-        c_lado = next((c for c in df_pos.columns if any(k in str(c).lower() for k in ['lado', 'perfil', 'espec', 'sub', 'demarc']) and c not in [c_n, c_p, c_foto]), None)
-        if not c_lado and len(cols_list) > 2:
-            p_idx = cols_list.index(c_p)
-            if p_idx + 1 < len(cols_list):
-                cand = cols_list[p_idx + 1]
-                if cand != c_foto: c_lado = cand
+        c_n = next((c for c in df_pos.columns if 'jugador' in c.lower() or 'nombre' in c.lower()), df_pos.columns[0])
+        c_p = next((c for c in df_pos.columns if 'posic' in c.lower()), None)
+        c_lado = next((c for c in df_pos.columns if any(k in c.lower() for k in ['lateralidad', 'lado', 'perfil'])), None)
+        c_foto = next((c for c in df_pos.columns if any(k in c.lower() for k in ['foto', 'url'])), None)
+        c_nac = next((c for c in df_pos.columns if 'nacimiento' in c.lower()), None)
+        c_pierna = next((c for c in df_pos.columns if 'pierna' in c.lower()), None)
 
-        renomb_dict = {c_n: 'Nombre', c_p: 'Posicion'}
-        if c_foto: renomb_dict[c_foto] = 'Foto_URL'
+        renomb_dict = {c_n: 'Nombre'}
+        if c_p: renomb_dict[c_p] = 'Posicion'
         if c_lado: renomb_dict[c_lado] = 'Lado'
+        if c_foto: renomb_dict[c_foto] = 'Foto_URL'
+        if c_nac: renomb_dict[c_nac] = 'Fecha_Nacimiento_Pos'
+        if c_pierna: renomb_dict[c_pierna] = 'Pierna_Pos'
 
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
-    # 1. Cuestionario Inicial (Búsqueda Láser de Nombres Exactos de Columna)
+        if 'Fecha_Nacimiento_Pos' in df_pos.columns:
+            df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(
+                lambda x: x.strftime('%d/%m/%Y') if isinstance(x, pd.Timestamp) or isinstance(x, datetime) else str(x).replace('00:00:00', '').strip()
+            )
+
+    # 1. Cuestionario Inicial (Búsqueda Limpia y Robusta)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
-        df_cuest.columns = [str(c).strip() for c in df_cuest.columns]
+        df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
 
-        def find_exact_or_partial(cols, exact, partials):
-            for c in cols:
-                if exact.lower() in c.lower(): return c
-            for c in cols:
-                for p in partials:
-                    if p.lower() in c.lower(): return c
-            return None
-
-        c_n = find_exact_or_partial(df_cuest.columns, 'nombre y apellidos', ['nombre', 'jugador']) or df_cuest.columns[0]
-        c_fn = find_exact_or_partial(df_cuest.columns, 'fecha de nacimiento', ['nacimiento', 'nacim', 'dob'])
-        c_pos = find_exact_or_partial(df_cuest.columns, 'posición en el campo', ['posición', 'posicion', 'demarc'])
-        c_pierna = find_exact_or_partial(df_cuest.columns, 'pierna dominante', ['pierna', 'pie', 'hábil'])
+        c_n, c_fn, c_pos, c_pierna = None, None, None, None
+        for col in df_cuest.columns:
+            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
+            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
+            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
+            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
 
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
@@ -470,7 +469,7 @@ def cargar_todo_informes():
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
 # =============================================================================
-# 3. SELECTOR DE JUGADOR EN FILA SUPERIOR (MISMAS DIMENSIONES QUE LA FOTO)
+# 3. SELECTOR DE JUGADOR (FILA SUPERIOR INDEPENDIENTE Y DEL ANCHO DE LA FOTO)
 # =============================================================================
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
@@ -480,7 +479,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Selector en una fila superior exclusiva, coincidiendo en anchura (proporción 1.0) con la columna de la foto
+# Selector en una fila superior exclusiva, coincidiendo en anchura con la foto
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
     jugador_sel = st.selectbox(
@@ -513,19 +512,25 @@ if not df_cuest.empty and 'Nombre_Norm' in df_cuest.columns:
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Extracción de Nacimiento Blindada
+# Extracción de Nacimiento Directamente desde Posiciones o Cuestionario
 fecha_nac_str = "Por definir"
-if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
+if not match_pos.empty and 'Fecha_Nacimiento_Pos' in match_pos.columns:
+    val = str(match_pos.iloc[0]['Fecha_Nacimiento_Pos']).replace('00:00:00', '').strip()
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '', 'nat']: 
+        fecha_nac_str = val
+elif not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val = str(match_cuest.iloc[-1]['Fecha_Nacimiento']).strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
+        fecha_nac_str = val
 
 # Posición y Lado
 posicion_str = "Por definir"
-if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
+if not match_pos.empty and 'Posicion' in match_pos.columns:
+    posicion_str = str(match_pos.iloc[0]['Posicion']).strip()
+elif not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
     val_p = str(match_cuest.iloc[-1]['Posicion_Habitual']).strip()
-    if val_p.lower() not in ['nan', 'none', 'por definir', '0', '']: posicion_str = val_p
-elif not match_pos.empty:
-    posicion_str = str(match_pos.iloc[0].get('Posicion', 'Por definir')).strip()
+    if val_p.lower() not in ['nan', 'none', 'por definir', '0', '']: 
+        posicion_str = val_p
 
 lado_str = ""
 if not match_pos.empty and 'Lado' in match_pos.columns:
@@ -533,11 +538,16 @@ if not match_pos.empty and 'Lado' in match_pos.columns:
     if pd.notna(val_l) and str(val_l).strip().lower() not in ['nan', 'none', '']:
         lado_str = str(val_l).strip()
 
-# Extracción Pierna Dominante Blindada
+# Extracción Pierna Dominante Directamente desde Posiciones o Cuestionario
 pierna_str = "Por definir"
-if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
+if not match_pos.empty and 'Pierna_Pos' in match_pos.columns:
+    val = str(match_pos.iloc[0]['Pierna_Pos']).strip()
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
+        pierna_str = val
+elif not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val = str(match_cuest.iloc[-1]['Pierna_Dominante']).strip()
-    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
+    if val.lower() not in ['nan', 'none', 'por definir', '0', '']: 
+        pierna_str = val
 
 # Minutos en Liga Reales (Desde 06/09/2026)
 minutos_oficiales = 0
