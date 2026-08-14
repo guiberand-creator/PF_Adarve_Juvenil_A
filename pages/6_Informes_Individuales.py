@@ -145,10 +145,13 @@ def cargar_todo_informes():
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
-        c_n = next((col for col in df_cuest.columns if any(k in col for k in ['nombre', 'jugador', 'apellidos'])), None)
-        c_fn = next((col for col in df_cuest.columns if any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple'])), None)
-        c_pos = next((col for col in df_cuest.columns if any(k in col for k in ['posici', 'pos', 'demarc'])), None)
-        c_pierna = next((col for col in df_cuest.columns if any(k in col for k in ['pierna', 'pie', 'habil', 'hábil'])), None)
+        c_n, c_fn, c_pos, c_pierna = None, None, None, None
+        for col in df_cuest.columns:
+            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
+            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
+            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
+            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
+
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
@@ -388,7 +391,7 @@ def cargar_todo_informes():
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam = cargar_todo_informes()
 
 def calc_mean_std(df, date_col, val_col):
-    if df is None or df.empty: return pd.DataFrame()
+    if df is None or df.empty or val_col not in df.columns: return pd.DataFrame()
     dff = df.dropna(subset=[val_col]).copy()
     if dff.empty: return pd.DataFrame()
     dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
@@ -711,26 +714,50 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Scatter Índice DRI"], horizontal=True)
+            sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Evolución DRI y DJ"], horizontal=True)
             if sub_s == "Evolución CMJ (Der/Izq)":
                 if not df_j_s.empty:
+                    # Traductor de nombres para saltos CMJ unipedales y bilaterales
+                    def map_salto_type(t):
+                        t_up = str(t).upper()
+                        if 'CMJ' in t_up:
+                            if 'DER' in t_up or ' D' in t_up or '_D' in t_up: return 'CMJ_D'
+                            if 'IZQ' in t_up or ' I' in t_up or '_I' in t_up: return 'CMJ_I'
+                            return 'CMJ'
+                        return t_up
+                    
+                    df_j_s['Tipo_Norm'] = df_j_s['Tipo'].apply(map_salto_type)
+                    
                     fig_s = go.Figure()
-                    for t, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'CMJ Derecha', TEAM), ('CMJ_I', 'CMJ Izquierda', WARNING)]:
-                        df_t = df_j_s[df_j_s['Tipo'].astype(str).str.upper() == t]
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'CMJ Derecha', TEAM), ('CMJ_I', 'CMJ Izquierda', WARNING)]:
+                        df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: fig_s.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name=col_name, line=dict(color=c_color, width=3)))
-                    fig_s.add_hline(y=38, line_dash="dash", line_color=GOOD, annotation_text="Ref CMJ Posición")
+                    
+                    fig_s.add_hline(y=38, line_dash="dash", line_color=PRIMARY, annotation_text="Ref CMJ Posición")
+                    fig_s.add_hline(y=21, line_dash="dash", line_color=WARNING, annotation_text="Ref slCMJ Posición")
+                    
                     fig_s.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
                     st.plotly_chart(fig_s, use_container_width=True, config={"displayModeBar": False})
                 else: st.info("No hay datos de saltos.")
             else:
-                df_j_dri = df_dri[df_dri['Nombre_Norm'] == jug_norm] if df_dri is not None and not df_dri.empty else pd.DataFrame()
+                df_j_dri = df_dri[df_dri['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt') if df_dri is not None and not df_dri.empty else pd.DataFrame()
                 if not df_j_dri.empty:
-                    fig_dri = px.scatter(df_j_dri, x='Altura', y='DRI', text='Fecha', size_max=12, color_discrete_sequence=[PRIMARY])
-                    fig_dri.update_traces(textposition='top center', marker=dict(size=10, line=dict(width=2, color='white')))
-                    fig_dri.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
+                    fig_dri = make_subplots(specs=[[{"secondary_y": True}]])
+                    agg_dri = calc_mean_std(df_j_dri, 'Fecha_dt', 'DRI')
+                    agg_dj = calc_mean_std(df_j_dri, 'Fecha_dt', 'Altura')
+                    
+                    if not agg_dri.empty: 
+                        fig_dri.add_trace(go.Scatter(x=agg_dri['Fecha'], y=agg_dri['Mean'], error_y=dict(type='data', array=agg_dri['Std'], visible=True), mode='lines+markers', name='Índice DRI', line=dict(color=PRIMARY, width=3)), secondary_y=False)
+                    if not agg_dj.empty: 
+                        fig_dri.add_trace(go.Scatter(x=agg_dj['Fecha'], y=agg_dj['Mean'], error_y=dict(type='data', array=agg_dj['Std'], visible=True), mode='lines+markers', name='Altura DJ (cm)', line=dict(color=TEAM, width=3, dash='dot')), secondary_y=True)
+                    
+                    fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, color=PRIMARY)
+                    fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, color=TEAM)
+                    
+                    fig_dri.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
                     st.plotly_chart(fig_dri, use_container_width=True, config={"displayModeBar": False})
-                else: st.info("No hay datos DRI.")
+                else: st.info("No hay datos DRI y Drop Jump.")
 
         elif test_categoria == "🏋️ Tren Superior":
             if not df_j_ts.empty:
