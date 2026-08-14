@@ -546,8 +546,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
-                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
+                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
+                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -568,7 +568,7 @@ with col_pitch:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
-# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
+# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
@@ -736,11 +736,11 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ, slCMJright, slCMJleft", "Evolución DRI y DJ"], horizontal=True)
-            if "CMJ" in sub_s:
+            sub_s = st.radio("Vista:", ["Evolución CMJ", "Evolución DRI y DJ"], horizontal=True)
+            if sub_s == "Evolución CMJ":
                 if not df_j_s.empty:
                     fig_s = go.Figure()
-                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: 
@@ -834,59 +834,93 @@ with tab_tests:
             else: st.info("No hay datos de Velocidad en Campo.")
 
     with right_col:
-        st.markdown('<div class="pd-section-title">Perfil Percentil &middot; Radar</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Perfil Z-Score &middot; Radar</div>', unsafe_allow_html=True)
         
-        if df_rank_base is not None and not df_rank_base.empty and 'Fecha_dt' in df_rank_base.columns:
-            min_d, max_d = df_rank_base['Fecha_dt'].min(), df_rank_base['Fecha_dt'].max()
-            if pd.notna(min_d) and pd.notna(max_d) and min_d != max_d:
-                filtro_radar = st.slider("Filtro temporal", min_value=min_d.date(), max_value=max_d.date(), value=(min_d.date(), max_d.date()))
-                df_radar = df_rank_base[(df_rank_base['Fecha_dt'].dt.date >= filtro_radar[0]) & (df_rank_base['Fecha_dt'].dt.date <= filtro_radar[1])].copy()
-            else: df_radar = df_rank_base.copy()
-        else: df_radar = pd.DataFrame()
+        all_dates = pd.Series(dtype='datetime64[ns]')
+        if df_vam is not None and not df_vam.empty: all_dates = pd.concat([all_dates, df_vam['Fecha_dt']])
+        if df_saltos is not None and not df_saltos.empty: all_dates = pd.concat([all_dates, df_saltos['Fecha_dt']])
+        if df_dri is not None and not df_dri.empty: all_dates = pd.concat([all_dates, df_dri['Fecha_dt']])
+        if df_fts is not None and not df_fts.empty: all_dates = pd.concat([all_dates, df_fts['Fecha_dt']])
+        if df_campo is not None and not df_campo.empty: all_dates = pd.concat([all_dates, df_campo['Fecha_dt']])
+        all_dates = all_dates.dropna()
 
-        if not df_radar.empty:
-            df_radar['CMJ_Altura'] = pd.to_numeric(df_radar.get('CMJ_Altura', np.nan), errors='coerce')
-            df_radar['VAM'] = pd.to_numeric(df_radar.get('VAM', np.nan), errors='coerce')
-            df_radar['DRI'] = pd.to_numeric(df_radar.get('DRI', np.nan), errors='coerce')
-            df_radar['Tren_Superior_Reps'] = pd.to_numeric(df_radar.get('Tren_Superior_Reps', np.nan), errors='coerce')
-            df_radar['V_MAX'] = pd.to_numeric(df_radar.get('V_MAX', np.nan), errors='coerce')
-            
+        if not all_dates.empty:
+            min_d, max_d = all_dates.min(), all_dates.max()
+            if min_d != max_d:
+                filtro_radar = st.slider("Filtro temporal (Z-Score)", min_value=min_d.date(), max_value=max_d.date(), value=(min_d.date(), max_d.date()))
+            else:
+                filtro_radar = (min_d.date(), max_d.date())
+
+            def get_metric_zscore(df, val_col, date_range):
+                if df is None or df.empty or val_col not in df.columns: return pd.DataFrame()
+                dff = df[(df['Fecha_dt'].dt.date >= date_range[0]) & (df['Fecha_dt'].dt.date <= date_range[1])].copy()
+                if dff.empty: return pd.DataFrame()
+                dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
+                agg = dff.groupby('Nombre_Norm')[val_col].max().reset_index()
+                mean_v = agg[val_col].mean()
+                std_v = agg[val_col].std()
+                if pd.isna(std_v) or std_v == 0: std_v = 1
+                agg[f'Z_{val_col}'] = (agg[val_col] - mean_v) / std_v
+                return agg
+
+            df_radar = df_pos[['Nombre_Norm', 'Posicion']].copy() if not df_pos.empty else pd.DataFrame(columns=['Nombre_Norm', 'Posicion'])
+
+            df_vam_z = get_metric_zscore(df_vam, 'VAM', filtro_radar)
+            if not df_vam_z.empty: df_radar = pd.merge(df_radar, df_vam_z[['Nombre_Norm', 'Z_VAM']], on='Nombre_Norm', how='left')
+
+            df_cmj = df_saltos[df_saltos['Tipo_Norm'] == 'CMJ'] if df_saltos is not None and not df_saltos.empty else pd.DataFrame()
+            df_cmj_z = get_metric_zscore(df_cmj, 'Altura', filtro_radar)
+            if not df_cmj_z.empty: 
+                df_cmj_z.rename(columns={'Z_Altura': 'Z_CMJ'}, inplace=True)
+                df_radar = pd.merge(df_radar, df_cmj_z[['Nombre_Norm', 'Z_CMJ']], on='Nombre_Norm', how='left')
+
+            df_dri_z = get_metric_zscore(df_dri, 'DRI', filtro_radar)
+            if not df_dri_z.empty: df_radar = pd.merge(df_radar, df_dri_z[['Nombre_Norm', 'Z_DRI']], on='Nombre_Norm', how='left')
+
+            if df_fts is not None and not df_fts.empty:
+                df_fts_t = df_fts.copy()
+                df_fts_t['Tren_Sup'] = pd.to_numeric(df_fts_t['Press_Banca'], errors='coerce').fillna(0) + pd.to_numeric(df_fts_t['Dominada'], errors='coerce').fillna(0)
+                df_ts_z = get_metric_zscore(df_fts_t, 'Tren_Sup', filtro_radar)
+                if not df_ts_z.empty: df_radar = pd.merge(df_radar, df_ts_z[['Nombre_Norm', 'Z_Tren_Sup']], on='Nombre_Norm', how='left')
+
+            df_vmax_z = get_metric_zscore(df_campo, 'V_MAX', filtro_radar)
+            if not df_vmax_z.empty: df_radar = pd.merge(df_radar, df_vmax_z[['Nombre_Norm', 'Z_V_MAX']], on='Nombre_Norm', how='left')
+
             categories = ['VAM', 'CMJ', 'DRI', 'Tren Sup.', 'V_MAX']
+            cols = ['Z_VAM', 'Z_CMJ', 'Z_DRI', 'Z_Tren_Sup', 'Z_V_MAX']
             
-            def calc_pct(col):
-                if col not in df_radar.columns: return pd.Series(index=df_radar.index, dtype=float)
-                return df_radar[col].rank(pct=True) * 100
-
-            df_radar['pct_vam'] = calc_pct('VAM')
-            df_radar['pct_cmj'] = calc_pct('CMJ_Altura')
-            df_radar['pct_dri'] = calc_pct('DRI')
-            df_radar['pct_ts'] = calc_pct('Tren_Superior_Reps')
-            df_radar['pct_vmax'] = calc_pct('V_MAX')
+            for c in cols:
+                if c not in df_radar.columns: df_radar[c] = np.nan
 
             df_jug_r = df_radar[df_radar['Nombre_Norm'] == jug_norm]
             df_pos_r = df_radar[df_radar['Posicion'].astype(str).str.contains(posicion_str.split()[0], case=False, na=False)] if posicion_str != "Por definir" else df_radar
 
-            v_j = [df_jug_r['pct_vam'].mean(), df_jug_r['pct_cmj'].mean(), df_jug_r['pct_dri'].mean(), df_jug_r['pct_ts'].mean(), df_jug_r['pct_vmax'].mean()]
-            v_p = [df_pos_r['pct_vam'].mean(), df_pos_r['pct_cmj'].mean(), df_pos_r['pct_dri'].mean(), df_pos_r['pct_ts'].mean(), df_pos_r['pct_vmax'].mean()]
-            v_eq = [df_radar['pct_vam'].mean(), df_radar['pct_cmj'].mean(), df_radar['pct_dri'].mean(), df_radar['pct_ts'].mean(), df_radar['pct_vmax'].mean()]
+            v_j = [df_jug_r[c].mean() for c in cols]
+            v_p = [df_pos_r[c].mean() for c in cols]
+            v_eq = [0, 0, 0, 0, 0]
 
             v_j = [(x if pd.notna(x) else 0) for x in v_j]; v_j.append(v_j[0])
             v_p = [(x if pd.notna(x) else 0) for x in v_p]; v_p.append(v_p[0])
-            v_eq = [(x if pd.notna(x) else 0) for x in v_eq]; v_eq.append(v_eq[0])
+            v_eq.append(v_eq[0])
             cat_cl = categories + [categories[0]]
 
             fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=v_eq, theta=cat_cl, fill="none", name="Media Equipo", line=dict(color=MUTED, width=1.5, dash='dash')))
+            fig_radar.add_trace(go.Scatterpolar(r=v_eq, theta=cat_cl, fill="none", name="Media Equipo (0)", line=dict(color=MUTED, width=1.5, dash='dash')))
             fig_radar.add_trace(go.Scatterpolar(r=v_p, theta=cat_cl, fill="toself", name="Media Demarcación", line=dict(color=TEAM, width=2), fillcolor="rgba(56,189,248,0.15)"))
             fig_radar.add_trace(go.Scatterpolar(r=v_j, theta=cat_cl, fill="toself", name=nombre_mostrar, line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)"))
             
             fig_radar.update_layout(
                 height=360, margin=dict(l=40, r=40, t=20, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                polar=dict(bgcolor=SURFACE_2, radialaxis=dict(range=[0, 100], gridcolor=BORDER, tickfont=dict(color=MUTED, size=9)), angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=11))),
+                polar=dict(
+                    bgcolor=SURFACE_2, 
+                    radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=9)), 
+                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=11))
+                ),
                 legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10))
             )
             st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
-        else: st.info("No hay datos suficientes para calcular percentiles en este rango.")
+        else:
+            st.info("No hay fechas registradas para calcular el Z-Score.")
 
 # -----------------------------------------------------------------------------
 # SUB-PAGE 2: GPS DATA
