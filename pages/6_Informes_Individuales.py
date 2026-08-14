@@ -53,24 +53,17 @@ def inject_v0_css():
             max-width: 100% !important; 
         }}
 
-        /* Card Primitive v0 */
-        .pd-card {{
-            background: {SURFACE};
-            border: 1px solid {BORDER};
-            border-radius: 14px;
-            padding: 1.1rem 1.25rem;
-        }}
-
-        /* Header Band v0 */
-        .pd-hero {{
+        /* RECUADRO UNIFICADO HERO TARGETING STREAMLIT COLUMN */
+        div[data-testid="stColumn"]:has(.hero-card-marker) {{
             background:
                 radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%),
-                linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
-            border: 1px solid {BORDER};
-            border-radius: 18px;
-            padding: 1.25rem 1.5rem;
-            width: 100%;
+                linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%) !important;
+            border: 1px solid {BORDER} !important;
+            border-radius: 18px !important;
+            padding: 1.25rem 1.5rem !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
         }}
+
         .pd-name {{ font-size: 2.2rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
         .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.35rem; }}
         .pd-badge {{
@@ -569,7 +562,7 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (CON 4 CARDAS KPI Y ESCUDO OFICIAL)
+# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (EXPANDIDO 100% ANCHO CON RECUADRO)
 # =============================================================================
 col_photo, col_hero = st.columns([1.0, 3.6], gap="medium")
 
@@ -589,8 +582,8 @@ with col_hero:
         <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
     """
     
-    # Renderizamos Hero Box Unificado
-    st.markdown('<div class="pd-hero">', unsafe_allow_html=True)
+    # Marcador CSS especial + Estructura de columnas dentro del gran contenedor Hero Card
+    st.markdown('<div class="hero-card-marker"></div>', unsafe_allow_html=True)
     c_info, c_pitch = st.columns([2.5, 1.1], gap="medium")
     
     with c_info:
@@ -610,8 +603,6 @@ with col_hero:
         )
     with c_pitch:
         st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
