@@ -13,6 +13,58 @@ if 'logeado' not in st.session_state or not st.session_state['logeado']:
     st.warning("⚠️ Por favor, inicia sesión en la página principal para acceder.")
     st.stop()
 
+# -----------------------------------------------------------------------------
+# FUNCIÓN DE ESTILO SHADCN UI PARA PLOTLY
+# -----------------------------------------------------------------------------
+def aplicar_estilo_shadcn(fig):
+    """Inyecta la estética de Shadcn UI en los gráficos de Plotly"""
+    fig.update_layout(
+        font=dict(family="Inter, sans-serif", color="#94a3b8", size=12),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+            tickfont=dict(color="#64748b", size=11)
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.05)",
+            griddash="solid",
+            zeroline=False,
+            showline=False,
+            tickfont=dict(color="#64748b", size=11)
+        ),
+        hoverlabel=dict(
+            bgcolor="#0f172a",
+            bordercolor="#1e293b",
+            font_size=13,
+            font_family="Inter, sans-serif",
+            font_color="#f8fafc"
+        ),
+        bargap=0.25,
+        bargroupgap=0.1
+    )
+    
+    # Manejo del eje Y secundario si existe
+    if 'yaxis2' in fig.layout:
+        fig.update_layout(
+            yaxis2=dict(
+                showgrid=False,
+                zeroline=False,
+                showline=False,
+                tickfont=dict(color="#64748b", size=11)
+            )
+        )
+
+    # Limpiamos el borde de la barra para que quede plana y aplicamos radio
+    fig.update_traces(marker=dict(line=dict(width=0)), selector=dict(type='bar'))
+    try:
+        fig.update_traces(marker_cornerradius=4, selector=dict(type='bar'))
+    except: pass
+    
+    return fig
 
 # -----------------------------------------------------------------------------
 # SELLO FIJO AL PIE DEL SIDEBAR (+30% TAMAÑO)
@@ -104,11 +156,10 @@ df_raw, error_hoja = obtener_datos_carga_real()
 # ==============================================================================
 # 2. INTERFAZ GENERAL DE CARGA INTERNA
 # ==============================================================================
-# 🛠️ AQUI HEMOS CAMBIADO EL TITULO PARA ELIMINAR EL MARGEN 🛠️
 st.markdown("""
     <div style="margin-bottom: 15px;">
-        <h1 style="margin-bottom: 0px; padding-bottom: 0px;">CARGA INTERNA (RPE)</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.</p>
+        <h1 style="margin-bottom: 0px; padding-bottom: 0px; font-weight: 800; letter-spacing: -0.5px;">CARGA INTERNA (RPE)</h1>
+        <p style="color: #94a3b8; font-size: 15px; margin-top: 5px;">Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -127,7 +178,7 @@ else:
     df_colectivo = df_filtrado[~((df_filtrado['Tipo de Sesión'].astype(str).str.lower().str.strip() == 'partido') & (df_filtrado['Minutos Jugados'] < 70))].copy()
 
     # ==============================================================================
-    # BLOCK 1 (LO PRIMERO): SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)
+    # BLOCK 1: SISTEMA DE ALERTAS AUTOMÁTICAS (TODA LA PLANTILLA)
     # ==============================================================================   
     alertas_sobrecarga = []
     alertas_subentreno = []
@@ -189,7 +240,7 @@ else:
     df_diario_equipo['Semana'] = df_diario_equipo['Fecha_dt'].dt.isocalendar().week
     df_diario_equipo['Tipo_Txt'] = df_diario_equipo['Tipo de Sesión']
     
-    # 2. Mapeo de Semanas de Temporada (2026/2027)
+    # 2. Mapeo de Semanas de Temporada
     semana_inicio_temporada = 32 
     
     def calcular_semana_futbolistica_diario(row):
@@ -250,27 +301,27 @@ else:
         fig_diario.add_trace(
             go.Bar(
                 x=df_diario_equipo['Eje_X_Diario'], y=df_diario_equipo['Carga_Individual'], 
-                name="Volumen Carga", marker_color='#B31F24',
+                name="Volumen Carga", marker_color='#3b82f6', # Blue Shadcn
                 text=df_diario_equipo['Tipo_Txt'], textposition='outside', cliponaxis=False
             ), secondary_y=False
         )
         fig_diario.add_trace(
-            go.Scatter(x=df_diario_equipo['Eje_X_Diario'], y=df_diario_equipo['RPE_Muscular'], name="RPE Muscular (Fuerza)", line=dict(color='#FFC107', width=2.5), mode='lines+markers'),
+            go.Scatter(x=df_diario_equipo['Eje_X_Diario'], y=df_diario_equipo['RPE_Muscular'], name="RPE Muscular (Fuerza)", line=dict(color='#f59e0b', width=2.5), mode='lines+markers'),
             secondary_y=True
         )
         fig_diario.add_trace(
-            go.Scatter(x=df_diario_equipo['Eje_X_Diario'], y=df_diario_equipo['RPE_Cardio'], name="RPE Cardio (Aeróbico)", line=dict(color='#00A8E8', width=2.5), mode='lines+markers'),
+            go.Scatter(x=df_diario_equipo['Eje_X_Diario'], y=df_diario_equipo['RPE_Cardio'], name="RPE Cardio (Aeróbico)", line=dict(color='#10b981', width=2.5), mode='lines+markers'),
             secondary_y=True
         )
         
         # Separadores entre semanas (Lunes)
         for idx, row in df_diario_equipo.iterrows():
             if row['Fecha_dt'].weekday() == 0:
-                fig_diario.add_vline(x=row['Eje_X_Diario'], line_width=1, line_dash="dash", line_color="#888888")
+                fig_diario.add_vline(x=row['Eje_X_Diario'], line_width=1, line_dash="dash", line_color="rgba(255,255,255,0.1)")
 
+        fig_diario = aplicar_estilo_shadcn(fig_diario)
         fig_diario.update_layout(
-            template="plotly_dark", margin=dict(t=50, b=20, l=10, r=10), 
-            hovermode="x unified", height=380, 
+            hovermode="x unified", height=380, margin=dict(t=30, b=20, l=10, r=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0),
             xaxis=dict(type='category')
         )
@@ -282,17 +333,26 @@ else:
     with col_graf2:
         st.markdown("#### Bloque Acumulado Semanal")
         fig_sem = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_sem.add_trace(go.Bar(x=df_macro['Eje_X_Labels'], y=df_macro['Carga_Semanal'], name="Carga Semanal", marker_color='#7A1215'), secondary_y=False)
-        fig_sem.add_trace(go.Scatter(x=df_macro['Eje_X_Labels'], y=df_macro['Monotonia'], name="Monotonía", line=dict(color='#FFC107', width=2.5), mode='lines+markers'), secondary_y=True)
-        fig_sem.add_hline(y=2.0, line_dash="dash", line_color="#B31F24", secondary_y=True)
-        fig_sem.update_layout(template="plotly_dark", margin=dict(t=50, b=20, l=10, r=10), hovermode="x unified", height=380, legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0), xaxis=dict(type='category'))
+        
+        fig_sem.add_trace(go.Bar(x=df_macro['Eje_X_Labels'], y=df_macro['Carga_Semanal'], name="Carga Semanal", marker_color='#8b5cf6'), secondary_y=False) # Purple Shadcn
+        fig_sem.add_trace(go.Scatter(x=df_macro['Eje_X_Labels'], y=df_macro['Monotonia'], name="Monotonía", line=dict(color='#f59e0b', width=2.5), mode='lines+markers'), secondary_y=True)
+        fig_sem.add_hline(y=2.0, line_dash="dash", line_color="#ef4444", secondary_y=True) # Red Shadcn
+        
+        fig_sem = aplicar_estilo_shadcn(fig_sem)
+        fig_sem.update_layout(
+            hovermode="x unified", height=380, margin=dict(t=30, b=20, l=10, r=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0), 
+            xaxis=dict(type='category')
+        )
         fig_sem.update_yaxes(title_text="Carga Semanal (UA)", secondary_y=False)
         st.plotly_chart(fig_sem, use_container_width=True)
         
     st.markdown("#### Evolución del Training Strain")
     fig_strain = go.Figure()
-    fig_strain.add_trace(go.Scatter(x=df_macro['Eje_X_Labels'], y=df_macro['Training_Strain'], name="Strain", fill='tozeroy', line=dict(color='#B31F24', width=2)))
-    fig_strain.update_layout(template="plotly_dark", height=180, margin=dict(t=10, b=10), xaxis=dict(type='category'))
+    fig_strain.add_trace(go.Scatter(x=df_macro['Eje_X_Labels'], y=df_macro['Training_Strain'], name="Strain", fill='tozeroy', line=dict(color='#ef4444', width=2))) # Red Shadcn
+    
+    fig_strain = aplicar_estilo_shadcn(fig_strain)
+    fig_strain.update_layout(height=180, margin=dict(t=10, b=10), xaxis=dict(type='category'))
     st.plotly_chart(fig_strain, use_container_width=True)
 
     # ==============================================================================
@@ -320,11 +380,13 @@ else:
         
         with c_ind1:
             fig_acwr = go.Figure()
-            fig_acwr.add_trace(go.Scatter(x=df_jugador['Fecha'], y=df_jugador['ACWR'], name="ACWR", line=dict(color='#FFFFFF', width=2.5), mode='lines+markers'))
-            fig_acwr.add_hline(y=1.5, line_color="#B31F24", line_width=1.5)
-            fig_acwr.add_hline(y=1.3, line_dash="dash", line_color="#FFC107")
-            fig_acwr.add_hline(y=0.8, line_dash="dash", line_color="#FFC107")
-            fig_acwr.update_layout(title="<b>ACWR</b>", template="plotly_dark", yaxis_range=[0, 2.2], height=340, margin=dict(t=60, b=30, l=15, r=15))
+            fig_acwr.add_trace(go.Scatter(x=df_jugador['Fecha'], y=df_jugador['ACWR'], name="ACWR", line=dict(color='#3b82f6', width=2.5), mode='lines+markers')) # Blue
+            fig_acwr.add_hline(y=1.5, line_color="#ef4444", line_width=1.5, line_dash="dash") # Red
+            fig_acwr.add_hline(y=1.3, line_color="#f59e0b", line_width=1.5, line_dash="dash") # Amber
+            fig_acwr.add_hline(y=0.8, line_color="#f59e0b", line_width=1.5, line_dash="dash") # Amber
+            
+            fig_acwr = aplicar_estilo_shadcn(fig_acwr)
+            fig_acwr.update_layout(title="<b>ACWR</b>", yaxis_range=[0, 2.2], height=340, margin=dict(t=60, b=30, l=15, r=15))
             st.plotly_chart(fig_acwr, use_container_width=True)
             
         with c_ind2:
@@ -332,27 +394,29 @@ else:
                 mode = "gauge+number+delta",
                 value = ultimo_animo,
                 domain = {'x': [0, 1], 'y': [0, 1]},
-                title = {'text': f"<b>Estado Anímico</b><br><span style='font-size:0.85em;color:gray;'>MM15d: {media_animo_15d:.1f}</span>", 'font': {'size': 15}},
-                delta = {'reference': media_animo_15d, 'increasing': {'color': "#2ECC71"}, 'decreasing': {'color': "#B31F24"}},
+                title = {'text': f"<b>Estado Anímico</b><br><span style='font-size:0.85em;color:gray;'>MM15d: {media_animo_15d:.1f}</span>", 'font': {'size': 15, 'color': '#f8fafc', 'family': 'Inter'}},
+                delta = {'reference': media_animo_15d, 'increasing': {'color': "#10b981"}, 'decreasing': {'color': "#ef4444"}},
                 gauge = {
-                    'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "white"},
-                    'bar': {'color': "#FFFFFF"}, 'bgcolor': "rgba(0,0,0,0)", 'borderwidth': 2, 'bordercolor': "gray",
+                    'axis': {'range': [0, 10], 'tickwidth': 1, 'tickcolor': "rgba(255,255,255,0.2)"},
+                    'bar': {'color': "#3b82f6"}, 'bgcolor': "rgba(0,0,0,0)", 'borderwidth': 0,
                     'steps': [
-                        {'range': [0, 4], 'color': 'rgba(179, 31, 36, 0.25)'},
-                        {'range': [4, 7], 'color': 'rgba(255, 193, 7, 0.15)'},
-                        {'range': [7, 10], 'color': 'rgba(46, 204, 113, 0.15)'}
+                        {'range': [0, 4], 'color': 'rgba(239, 68, 68, 0.15)'}, # Red range
+                        {'range': [4, 7], 'color': 'rgba(245, 158, 11, 0.15)'}, # Amber range
+                        {'range': [7, 10], 'color': 'rgba(16, 185, 129, 0.15)'} # Green range
                     ],
                 }
             ))
-            fig_animo.update_layout(template="plotly_dark", height=340, margin=dict(t=70, b=10, l=10, r=10))
+            fig_animo.update_layout(template="plotly_dark", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", height=340, margin=dict(t=70, b=10, l=10, r=10))
             st.plotly_chart(fig_animo, use_container_width=True)
             
         with c_ind3:
             fig_perfil = go.Figure()
-            fig_perfil.add_trace(go.Bar(x=df_jugador['Fecha'], y=df_jugador['RPE_Muscular'], name="Muscular (Fuerza)", marker_color='#FFC107'))
-            fig_perfil.add_trace(go.Bar(x=df_jugador['Fecha'], y=df_jugador['RPE_Cardio'], name="Cardio (Aeróbico)", marker_color='#00A8E8', text=df_jugador['Tipo_Txt'], textposition='outside', cliponaxis=False))
+            fig_perfil.add_trace(go.Bar(x=df_jugador['Fecha'], y=df_jugador['RPE_Muscular'], name="Muscular (Fuerza)", marker_color='#f59e0b')) # Amber
+            fig_perfil.add_trace(go.Bar(x=df_jugador['Fecha'], y=df_jugador['RPE_Cardio'], name="Cardio (Aeróbico)", marker_color='#3b82f6', text=df_jugador['Tipo_Txt'], textposition='outside', cliponaxis=False)) # Blue
+            
+            fig_perfil = aplicar_estilo_shadcn(fig_perfil)
             fig_perfil.update_layout(
-                title="<b>Tipología de la Fatiga</b>", template="plotly_dark", barmode='stack', yaxis_range=[0, 22], height=340, 
+                title="<b>Tipología de la Fatiga</b>", barmode='stack', yaxis_range=[0, 22], height=340, 
                 margin=dict(t=60, b=70, l=15, r=15), hovermode="x unified", 
                 legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
             )
