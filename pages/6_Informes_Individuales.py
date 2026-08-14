@@ -123,6 +123,9 @@ def inject_v0_css():
             letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem;
         }}
 
+        /* Ocultar flechita de delta en métricas de Streamlit */
+        [data-testid="stMetricDelta"] svg {{ display: none; }}
+
         /* Tabs v0 */
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
         .stTabs [data-baseweb="tab"] {{
@@ -205,7 +208,6 @@ def cargar_todo_informes():
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
-        # FIX A PRUEBA DE BALAS PARA FECHAS VACÍAS O NULAS (NaT)
         if 'Fecha_Nacimiento_Pos' in df_pos.columns:
             def safe_format_date(x):
                 if pd.isna(x): return ""
@@ -497,6 +499,8 @@ with col_filtro:
 st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
 
 jug_norm = norm_nom(jugador_sel)
+nombre_mostrar = str(jugador_sel).replace('_', ' ').upper()
+
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
 
 # BUSCADOR INTELIGENTE (Fuzzy Match) PARA CUESTIONARIO Y POSICIONES
@@ -640,7 +644,7 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE EN RED BADGE, POSICIÓN GIGANTE
+# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE GIGANTE ARRIBA, POSICIÓN EN BADGE DEBAJO
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
@@ -682,13 +686,6 @@ tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "
 # -----------------------------------------------------------------------------
 with tab_tests:
     st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
-    
-    # CSS especial para ocultar la flechita del 'stMetricDelta' para que sólo quede la fecha/ranking en verde
-    st.markdown("""
-        <style>
-        [data-testid="stMetricDelta"] svg { display: none; }
-        </style>
-    """, unsafe_allow_html=True)
     
     # Motor buscador de "Mejor Marca" y "Ranking de Equipo"
     def get_best_and_rank(df, col_jugador, jug_norm_val, col_val, col_fecha, filter_col=None, filter_val=None, ascending=False):
@@ -762,7 +759,6 @@ with tab_tests:
 
     st.divider()
 
-    # --- RESTO DE PESTAÑAS Y GRÁFICOS INTACTOS ---
     left_col, right_col = st.columns([1.3, 1], gap="large")
 
     with left_col:
