@@ -80,16 +80,12 @@ def inject_v0_css():
             padding: 0.2rem 0.7rem; border-radius: 999px;
             font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
         }}
-        .pd-number {{
-            font-size: 3.2rem; font-weight: 900; color: {PRIMARY};
-            line-height: 1; letter-spacing: -0.04em;
-        }}
 
-        /* Fact Grid v0 adaptativo */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 1rem; }}
-        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.65rem 0.85rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
-        .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
+        /* Fact Grid v0 (1 Fila x 4 columnas) */
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; margin-top: 1.2rem; }}
+        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.75rem 1rem; text-align: center; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .v {{ font-size: 1.25rem; font-weight: 800; margin-top: 0.2rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
@@ -155,7 +151,7 @@ if os.path.exists(_ruta_logo):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE
+# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -167,16 +163,31 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
+    # 0. Posiciones.xlsx
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
         c_n = next((c for c in df_pos.columns if 'jugador' in str(c).lower() or 'nombre' in str(c).lower()), df_pos.columns[0])
         c_p = next((c for c in df_pos.columns if 'posic' in str(c).lower()), df_pos.columns[1])
         c_foto = next((c for c in df_pos.columns if 'foto' in str(c).lower() or 'url' in str(c).lower()), None)
-        df_pos = df_pos.rename(columns={c_n: 'Nombre', c_p: 'Posicion'})
-        if c_foto: df_pos = df_pos.rename(columns={c_foto: 'Foto_URL'})
+        
+        # Identificar columna posterior a Posición (Lado / Perfil)
+        cols_list = list(df_pos.columns)
+        c_lado = next((c for c in df_pos.columns if any(k in str(c).lower() for k in ['lado', 'perfil', 'espec', 'sub', 'demarc']) and c not in [c_n, c_p, c_foto]), None)
+        if not c_lado and len(cols_list) > 2:
+            p_idx = cols_list.index(c_p)
+            if p_idx + 1 < len(cols_list):
+                cand = cols_list[p_idx + 1]
+                if cand != c_foto: c_lado = cand
+
+        renomb_dict = {c_n: 'Nombre', c_p: 'Posicion'}
+        if c_foto: renomb_dict[c_foto] = 'Foto_URL'
+        if c_lado: renomb_dict[c_lado] = 'Lado'
+
+        df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
+    # 1. Cuestionario Inicial (Google Sheet)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = df_cuest.columns.str.strip()
@@ -191,6 +202,7 @@ def cargar_todo_informes():
         df_cuest = df_cuest.rename(columns=ren)
         df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
 
+    # 2. Peso
     r_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
     df_peso = pd.read_excel(r_peso) if os.path.exists(r_peso) else pd.DataFrame()
     if not df_peso.empty:
@@ -198,6 +210,7 @@ def cargar_todo_informes():
         df_peso['Fecha_dt'] = pd.to_datetime(df_peso.iloc[:, 1], dayfirst=True, errors='coerce')
         df_peso.rename(columns={df_peso.columns[2]: 'Peso'}, inplace=True)
 
+    # 3. RPE
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     if not df_rpe.empty:
         cols = df_rpe.columns
@@ -212,6 +225,7 @@ def cargar_todo_informes():
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
+    # 4. GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -251,6 +265,7 @@ def cargar_todo_informes():
                 df_gps_all['Dist_18'] *= 1000
                 df_gps_all['Dist_25'] *= 1000
 
+    # 5. Evaluaciones Físicas
     df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo = None, None, None, None, None, None, None
     
     r_mov = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "MOVILIDAD.xlsx")
@@ -355,9 +370,76 @@ def cargar_todo_informes():
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if num_col in df_campo.columns: df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
 
-    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo
+    # CÁLCULO DE RANKING GLOBAL REAL
+    dict_rankings_reales = {}
+    if not df_pos.empty:
+        df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
+        
+        def merge_ult(df_base, df_src, col_src, col_dst):
+            if df_src is not None and not df_src.empty and col_src in df_src.columns:
+                df_u = df_src.sort_values('Fecha_dt').groupby('Nombre_Norm', as_index=False)[col_src].last()
+                df_u.rename(columns={col_src: col_dst}, inplace=True)
+                return pd.merge(df_base, df_u, on='Nombre_Norm', how='left')
+            return df_base
 
-df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo = cargar_todo_informes()
+        if df_mov is not None and not df_mov.empty:
+            df_m_last = df_mov.sort_values('Fecha_dt').copy()
+            df_m_last['Movilidad_Score'] = df_m_last[['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I', 'LUMBAR']].mean(axis=1)
+            df_rank_base = merge_ult(df_rank_base, df_m_last, 'Movilidad_Score', 'Movilidad_Score')
+
+        df_rank_base = merge_ult(df_rank_base, df_vam, 'VAM', 'VAM')
+
+        dict_pesos = {}
+        if df_peso is not None and not df_peso.empty:
+            for nom_n in df_peso['Nombre_Norm'].unique():
+                df_p_j = df_peso[df_peso['Nombre_Norm'] == nom_n].sort_values('Fecha_dt')
+                dict_pesos[nom_n] = float(df_p_j.iloc[-1]['Peso'])
+
+        if df_dina is not None and not df_dina.empty:
+            df_d_last = df_dina.sort_values('Fecha_dt').copy()
+            df_d_last['Peso_Jug'] = df_d_last['Nombre_Norm'].map(dict_pesos).fillna(70.0)
+            df_d_last['Fmax_Rel'] = df_d_last['Fmax_Abs'] / df_d_last['Peso_Jug']
+            df_d_agg = df_d_last.groupby('Nombre_Norm', as_index=False)['Fmax_Rel'].mean()
+            df_rank_base = pd.merge(df_rank_base, df_d_agg[['Nombre_Norm', 'Fmax_Rel']], on='Nombre_Norm', how='left')
+
+        if df_saltos is not None and not df_saltos.empty:
+            df_cmj = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
+            df_rank_base = merge_ult(df_rank_base, df_cmj, 'Altura', 'CMJ_Altura')
+
+        df_rank_base = merge_ult(df_rank_base, df_dri, 'DRI', 'DRI')
+
+        if df_fts is not None and not df_fts.empty:
+            df_ts_l = df_fts.sort_values('Fecha_dt').copy()
+            df_ts_l['Tren_Superior_Reps'] = df_ts_l['Press_Banca'].fillna(0) + df_ts_l['Dominada'].fillna(0)
+            df_rank_base = merge_ult(df_rank_base, df_ts_l, 'Tren_Superior_Reps', 'Tren_Superior_Reps')
+
+        if df_campo is not None and not df_campo.empty:
+            df_rank_base = merge_ult(df_rank_base, df_campo, 'V_MAX', 'V_MAX')
+            df_rank_base = merge_ult(df_rank_base, df_campo, 'AC_MAX', 'AC_MAX')
+
+        columnas_pruebas = {
+            'Movilidad_Score': True, 'VAM': True, 'Fmax_Rel': True,
+            'CMJ_Altura': True, 'DRI': True, 'Tren_Superior_Reps': True,
+            'V_MAX': True, 'AC_MAX': True
+        }
+
+        cols_puntos = []
+        for col_raw, mayor_es_mejor in columnas_pruebas.items():
+            if col_raw in df_rank_base.columns:
+                col_rank_name = f"P_{col_raw}"
+                df_rank_base[col_rank_name] = df_rank_base[col_raw].rank(ascending=not mayor_es_mejor, method='min', na_option='bottom').astype(int)
+                cols_puntos.append(col_rank_name)
+
+        if cols_puntos:
+            df_rank_base['PUNTOS_TOTALES'] = df_rank_base[cols_puntos].sum(axis=1)
+            df_rank_base = df_rank_base.sort_values('PUNTOS_TOTALES', ascending=True).reset_index(drop=True)
+            df_rank_base['POSICION_GLOBAL'] = df_rank_base.index + 1
+            for _, r_rank in df_rank_base.iterrows():
+                dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
+
+    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales
+
+df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
 # =============================================================================
 # 3. SELECCIÓN DE JUGADOR Y MAPEO DE DATOS
@@ -380,11 +462,13 @@ match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empt
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
+# Fecha de Nacimiento (Desde Cuestionario Inicial)
 fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val_fn = match_cuest.iloc[0]['Fecha_Nacimiento']
     if pd.notna(val_fn) and str(val_fn).strip() != "": fecha_nac_str = str(val_fn).strip()
 
+# Posición y Lado
 posicion_str = "Por definir"
 if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
     val_p = match_cuest.iloc[0]['Posicion_Habitual']
@@ -392,18 +476,29 @@ if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
 elif not match_pos.empty:
     posicion_str = str(match_pos.iloc[0].get('Posicion', 'Por definir')).strip()
 
+lado_str = ""
+if not match_pos.empty and 'Lado' in match_pos.columns:
+    val_l = match_pos.iloc[0]['Lado']
+    if pd.notna(val_l) and str(val_l).strip().lower() not in ['nan', 'none', '']:
+        lado_str = str(val_l).strip()
+
+# Pierna Dominante (Desde Cuestionario Inicial)
 pierna_str = "Por definir"
 if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val_pierna = match_cuest.iloc[0]['Pierna_Dominante']
     if pd.notna(val_pierna) and str(val_pierna).strip() != "": pierna_str = str(val_pierna).strip()
 
+# Minutos en Liga Reales (Desde 06/09/2026)
 minutos_oficiales = 0
 if not df_rpe.empty:
     fecha_inicio_liga = pd.to_datetime("2026-09-06")
     df_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_oficiales = int(df_m['Minutos'].sum())
 
-# Valores de KPIs clave
+# Ranking Real
+ranking_real_str = dict_rankings_reales.get(jug_norm, "#--")
+
+# Récords
 cmj_pico = df_saltos[(df_saltos['Nombre_Norm'] == jug_norm) & (df_saltos['Tipo'].str.upper() == 'CMJ')]['Altura'].max() if df_saltos is not None and not df_saltos.empty else 42.5
 vmax_pico = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm]['V_MAX'].max() if df_gps_all is not None and not df_gps_all.empty else 31.8
 dri_pico = df_dri[df_dri['Nombre_Norm'] == jug_norm]['DRI'].max() if df_dri is not None and not df_dri.empty else 2.15
@@ -412,9 +507,9 @@ url_escudo_oficial = "https://cdn.resfu.com/img_data/equipos/2585.png?size=120x&
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 4. CAMPOGRAMA V0
+# 4. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE
 # =============================================================================
-def _campograma_v0(pos_str, pierna_s):
+def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig = go.Figure()
     line = dict(color=BORDER, width=1.5)
     pitch = "#0f1c14"
@@ -426,36 +521,57 @@ def _campograma_v0(pos_str, pierna_s):
     for y0, y1 in [(0, 16), (84, 100)]: fig.add_shape(type="rect", x0=22, y0=y0, x1=78, y1=y1, line=line)
     for y0, y1 in [(0, 6), (94, 100)]: fig.add_shape(type="rect", x0=37, y0=y0, x1=63, y1=y1, line=line)
 
-    pos_low = pos_str.lower()
-    if 'porter' in pos_low: px, py = 50, 8
-    elif 'central' in pos_low: px, py = 50, 22
-    elif 'lateral' in pos_low: px, py = (20, 26) if ('zurdo' in pierna_s.lower() or 'izq' in pos_low) else (80, 26)
-    elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low: px, py = 50, 45
-    elif 'interior' in pos_low or 'mediapunta' in pos_low: px, py = (35, 60) if ('zurdo' in pierna_s.lower() or 'izq' in pos_low) else (65, 60)
-    elif 'extremo' in pos_low or 'carrilero' in pos_low: px, py = (22, 76) if ('zurdo' in pierna_s.lower() or 'izq' in pos_low) else (78, 76)
-    elif 'delantero' in pos_low or 'punta' in pos_low: px, py = 50, 84
-    else: px, py = 50, 50
+    pos_low = (str(pos_str) + " " + str(lado_s)).lower()
+    pierna_low = str(pierna_s).lower()
+
+    es_izq = any(k in pos_low for k in ['izq', 'zurd', 'left']) or ('zurd' in pierna_low)
+    es_der = any(k in pos_low for k in ['der', 'dext', 'right', 'diest']) or ('diest' in pierna_low or 'dext' in pierna_low)
+
+    if 'porter' in pos_low or 'gk' in pos_low:
+        px, py, code_text = 50, 8, "POR"
+    elif 'central' in pos_low or 'cb' in pos_low:
+        if 'izq' in pos_low: px, py, code_text = 38, 22, "CI"
+        elif 'der' in pos_low: px, py, code_text = 62, 22, "CD"
+        else: px, py, code_text = 50, 22, "CEN"
+    elif 'lateral' in pos_low or 'cad' in pos_low or 'carril' in pos_low:
+        if 'izq' in pos_low or (es_izq and not 'der' in pos_low): px, py, code_text = 18, 28, "LI"
+        else: px, py, code_text = 82, 28, "LD"
+    elif 'medio' in pos_low or 'pivote' in pos_low or 'mediocentro' in pos_low or 'cm' in pos_low:
+        if 'izq' in pos_low: px, py, code_text = 35, 45, "MCI"
+        elif 'der' in pos_low: px, py, code_text = 65, 45, "MCD"
+        else: px, py, code_text = 50, 45, "MC"
+    elif 'interior' in pos_low or 'mediapunta' in pos_low or 'cam' in pos_low:
+        if 'izq' in pos_low: px, py, code_text = 32, 62, "INT"
+        elif 'der' in pos_low: px, py, code_text = 68, 62, "INT"
+        else: px, py, code_text = 50, 62, "MP"
+    elif 'extremo' in pos_low or 'banda' in pos_low or 'wing' in pos_low:
+        if 'izq' in pos_low or (es_izq and not 'der' in pos_low): px, py, code_text = 20, 78, "EI"
+        else: px, py, code_text = 80, 78, "ED"
+    elif 'delantero' in pos_low or 'punta' in pos_low or 'atacante' in pos_low or 'st' in pos_low:
+        px, py, code_text = 50, 86, "DC"
+    else:
+        px, py, code_text = 50, 50, "JUG"
 
     fig.add_trace(go.Scatter(
-        x=[px], y=[py], mode="markers+text", text=["11"],
-        textposition="middle center", textfont=dict(color="#ffffff", size=13, family="sans-serif", weight=900),
-        marker=dict(size=34, color=PRIMARY, line=dict(color="#ffffff", width=2)),
-        hovertemplate=f"<b>{nombre_mostrar}</b><br>{posicion_str}<extra></extra>",
+        x=[px], y=[py], mode="markers+text", text=[f"<b>{code_text}</b>"],
+        textposition="middle center", textfont=dict(color="#ffffff", size=10, family="sans-serif"),
+        marker=dict(size=28, color=PRIMARY, line=dict(color="#ffffff", width=2)),
+        hovertemplate=f"<b>{nombre_mostrar}</b><br>{pos_str} {lado_s}<extra></extra>",
         showlegend=False,
     ))
 
     fig.update_xaxes(visible=False, range=[-2, 102])
     fig.update_yaxes(visible=False, range=[-2, 102], scaleanchor="x", scaleratio=1.35)
     fig.update_layout(
-        height=320, margin=dict(l=0, r=0, t=0, b=0),
+        height=240, margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
     )
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (EXPANDIDO 100% ANCHO)
+# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (CON 4 CARDAS KPI Y ESCUDO OFICIAL)
 # =============================================================================
-col_photo, col_info, col_pitch = st.columns([1.0, 2.4, 1.2], gap="large")
+col_photo, col_hero = st.columns([1.0, 3.6], gap="medium")
 
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
@@ -463,40 +579,39 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-with col_info:
+with col_hero:
+    pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
+    
     facts_html = f"""
         <div class="pd-fact"><div class="k">Nacimiento</div><div class="v">{fecha_nac_str}</div></div>
         <div class="pd-fact"><div class="k">Pierna</div><div class="v v-cyan">{pierna_str.upper()}</div></div>
         <div class="pd-fact"><div class="k">Minutos Liga</div><div class="v v-gold">{minutos_oficiales}′</div></div>
-        <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">#4</div></div>
-        <div class="pd-fact"><div class="k">V_MAX Pico</div><div class="v">{vmax_pico:.1f} <small style='font-size:0.7em;'>km/h</small></div></div>
-        <div class="pd-fact"><div class="k">CMJ Pico</div><div class="v">{cmj_pico:.1f} <small style='font-size:0.7em;'>cm</small></div></div>
-        <div class="pd-fact"><div class="k">Índice DRI</div><div class="v">{dri_pico:.2f}</div></div>
-        <div class="pd-fact"><div class="k">Categoría</div><div class="v v-cyan">JUV. DH</div></div>
+        <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
     """
     
-    st.markdown(
-        f"""
-        <div class="pd-hero">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem">
+    # Renderizamos Hero Box Unificado
+    st.markdown('<div class="pd-hero">', unsafe_allow_html=True)
+    c_info, c_pitch = st.columns([2.5, 1.1], gap="medium")
+    
+    with c_info:
+        st.markdown(
+            f"""
             <div>
-              <span class="pd-badge">{posicion_str.upper()}</span>
-              <h1 class="pd-name" style="margin-top:0.5rem">{nombre_mostrar}</h1>
-              <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2025/26</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="pd-badge">{pos_label_full}</span>
+                  <img src="{url_escudo_oficial}" style="width:48px; height:auto;">
+              </div>
+              <h1 class="pd-name" style="margin-top:0.4rem;">{nombre_mostrar}</h1>
+              <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
+              <div class="pd-facts">{facts_html}</div>
             </div>
-            <div style="text-align:right">
-              <div class="pd-number">11</div>
-            </div>
-          </div>
-          <div class="pd-facts">{facts_html}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col_pitch:
-    st.markdown('<div class="pd-section-title">Campograma &middot; Posición Táctica</div>', unsafe_allow_html=True)
-    st.plotly_chart(_campograma_v0(posicion_str, pierna_str), use_container_width=True, config={"displayModeBar": False})
+            """,
+            unsafe_allow_html=True,
+        )
+    with c_pitch:
+        st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
