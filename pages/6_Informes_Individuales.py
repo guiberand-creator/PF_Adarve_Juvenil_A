@@ -53,7 +53,7 @@ def inject_v0_css():
             max-width: 100% !important; 
         }}
 
-        /* RECUADRO UNIFICADO HERO TARGETING STREAMLIT COLUMN */
+        /* RECUADRO UNIFICADO HERO QUE TERMINA EN EL RANKING */
         div[data-testid="stColumn"]:has(.hero-card-marker) {{
             background:
                 radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%),
@@ -562,9 +562,9 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (EXPANDIDO 100% ANCHO CON RECUADRO)
+# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (AJUSTADO AL BORDER DEL RANKING)
 # =============================================================================
-col_photo, col_hero = st.columns([1.0, 3.6], gap="medium")
+col_photo, col_hero, col_pitch = st.columns([1.0, 2.6, 1.0], gap="medium")
 
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
@@ -582,27 +582,25 @@ with col_hero:
         <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
     """
     
-    # Marcador CSS especial + Estructura de columnas dentro del gran contenedor Hero Card
+    # Marcador CSS especial que define el fin exacto del recuadro
     st.markdown('<div class="hero-card-marker"></div>', unsafe_allow_html=True)
-    c_info, c_pitch = st.columns([2.5, 1.1], gap="medium")
-    
-    with c_info:
-        st.markdown(
-            f"""
-            <div>
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span class="pd-badge">{pos_label_full}</span>
-                  <img src="{url_escudo_oficial}" style="width:48px; height:auto;">
-              </div>
-              <h1 class="pd-name" style="margin-top:0.4rem;">{nombre_mostrar}</h1>
-              <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
-              <div class="pd-facts">{facts_html}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c_pitch:
-        st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
+    st.markdown(
+        f"""
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="pd-badge">{pos_label_full}</span>
+              <img src="{url_escudo_oficial}" style="width:44px; height:auto;">
+          </div>
+          <h1 class="pd-name" style="margin-top:0.4rem;">{nombre_mostrar}</h1>
+          <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
+          <div class="pd-facts">{facts_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with col_pitch:
+    st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
 
 st.markdown("<br>", unsafe_allow_html=True)
 
