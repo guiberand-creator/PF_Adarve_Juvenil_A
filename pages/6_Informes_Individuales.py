@@ -102,7 +102,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE
+# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -114,10 +114,12 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
+    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA SEGURO)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
         df_pos.columns = [str(c).strip() for c in df_pos.columns]
+        
         c_n = next((c for c in df_pos.columns if 'jugador' in c.lower() or 'nombre' in c.lower()), df_pos.columns[0])
         c_p = next((c for c in df_pos.columns if 'posic' in c.lower()), None)
         c_lado = next((c for c in df_pos.columns if any(k in c.lower() for k in ['lateralidad', 'lado', 'perfil'])), None)
@@ -131,6 +133,7 @@ def cargar_todo_informes():
         if c_foto: renomb_dict[c_foto] = 'Foto_URL'
         if c_nac: renomb_dict[c_nac] = 'Fecha_Nacimiento_Pos'
         if c_pierna: renomb_dict[c_pierna] = 'Pierna_Pos'
+
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
@@ -141,21 +144,29 @@ def cargar_todo_informes():
                 return str(x).replace('00:00:00', '').strip()
             df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(safe_format_date)
 
+    # 1. Cuestionario Inicial
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
-        c_n = next((col for col in df_cuest.columns if any(k in col for k in ['nombre', 'jugador', 'apellidos'])), None)
-        c_fn = next((col for col in df_cuest.columns if any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple'])), None)
-        c_pos = next((col for col in df_cuest.columns if any(k in col for k in ['posici', 'pos', 'demarc'])), None)
-        c_pierna = next((col for col in df_cuest.columns if any(k in col for k in ['pierna', 'pie', 'habil', 'hábil'])), None)
+
+        c_n, c_fn, c_pos, c_pierna = None, None, None, None
+        for col in df_cuest.columns:
+            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
+            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
+            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
+            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
+
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
         if c_pos: ren[c_pos] = 'Posicion_Habitual'
         if c_pierna: ren[c_pierna] = 'Pierna_Dominante'
-        df_cuest = df_cuest.rename(columns=ren)
-        if 'Nombre' in df_cuest.columns: df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
 
+        df_cuest = df_cuest.rename(columns=ren)
+        if 'Nombre' in df_cuest.columns:
+            df_cuest['Nombre_Norm'] = df_cuest['Nombre'].apply(norm_nom)
+
+    # 2. Peso
     r_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
     df_peso = pd.read_excel(r_peso) if os.path.exists(r_peso) else pd.DataFrame()
     if not df_peso.empty:
@@ -163,6 +174,7 @@ def cargar_todo_informes():
         df_peso['Fecha_dt'] = pd.to_datetime(df_peso.iloc[:, 1], dayfirst=True, errors='coerce')
         df_peso.rename(columns={df_peso.columns[2]: 'Peso'}, inplace=True)
 
+    # 3. RPE
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     if not df_rpe.empty:
         cols = df_rpe.columns
@@ -177,6 +189,7 @@ def cargar_todo_informes():
         df_rpe['Tipo_Sesion'] = df_rpe[c_t].astype(str).str.strip()
         df_rpe['Minutos'] = pd.to_numeric(df_rpe[c_m], errors='coerce').fillna(0)
 
+    # 4. GPS
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
     if os.path.exists(ruta_gps):
@@ -216,7 +229,9 @@ def cargar_todo_informes():
                 df_gps_all['Dist_18'] *= 1000
                 df_gps_all['Dist_25'] *= 1000
 
+    # 5. Evaluaciones Físicas
     df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo = None, None, None, None, None, None, None
+    
     r_mov = os.path.join("data", "EVALUACIONES", "MOVILIDAD", "MOVILIDAD.xlsx")
     if os.path.exists(r_mov):
         df_mov = pd.read_excel(r_mov)
@@ -241,7 +256,9 @@ def cargar_todo_informes():
     elif os.path.exists(os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")): archivo_encontrado = os.path.join(dir_dina, "DINAMOMETRIA_ANALITICO.csv")
     elif os.path.exists(dir_dina):
         for arch in os.listdir(dir_dina):
-            if 'dinamometria' in arch.lower(): archivo_encontrado = os.path.join(dir_dina, arch); break
+            if 'dinamometria' in arch.lower():
+                archivo_encontrado = os.path.join(dir_dina, arch)
+                break
 
     if archivo_encontrado:
         try:
@@ -316,6 +333,7 @@ def cargar_todo_informes():
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if num_col in df_campo.columns: df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
 
+    # CÁLCULO DE RANKING GLOBAL REAL
     dict_rankings_reales = {}
     if not df_pos.empty:
         df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
@@ -329,8 +347,8 @@ def cargar_todo_informes():
 
         if df_mov is not None and not df_mov.empty:
             df_m_last = df_mov.sort_values('Fecha_dt').copy()
-            # EXTRAEMOS SOLO COLUMNAS EXISTENTES PARA EVITAR KEYERROR
-            mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I', 'LUMBAR'] if c in df_m_last.columns]
+            # EXTRAEMOS SOLO COLUMNAS EXISTENTES, IGNORANDO LUMBAR
+            mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I'] if c in df_m_last.columns]
             if mov_cols:
                 df_m_last['Movilidad_Score'] = df_m_last[mov_cols].mean(axis=1)
                 df_rank_base = merge_ult(df_rank_base, df_m_last, 'Movilidad_Score', 'Movilidad_Score')
@@ -380,9 +398,13 @@ def cargar_todo_informes():
             for _, r_rank in df_rank_base.iterrows():
                 dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
 
-    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base
+    # CARGA EXCLUSIVA DEL EXCEL DE REFERENCIAS VAM
+    r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
+    df_ref_vam = pd.read_excel(r_ref_vam) if os.path.exists(r_ref_vam) else pd.DataFrame()
 
-df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base = cargar_todo_informes()
+    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam
+
+df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam = cargar_todo_informes()
 
 # Funciones aux. calculo std
 def calc_mean_std(df, date_col, val_col):
@@ -527,8 +549,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
-                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
+                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
+                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -613,7 +635,7 @@ with tab_tests:
         df_j_campo = df_campo[df_campo['Nombre_Norm'] == jug_norm].copy() if df_campo is not None and not df_campo.empty else pd.DataFrame()
 
         if test_categoria == "🩺 Movilidad":
-            sub_mov = st.radio("Test de Movilidad:", ["Dorsiflexión", "Rotación Interna", "Flexión Cadera", "Lumbar"], horizontal=True)
+            sub_mov = st.radio("Test de Movilidad:", ["Dorsiflexión", "Rotación Interna", "Flexión Cadera"], horizontal=True)
             if not df_j_mov.empty:
                 fig_m = go.Figure()
                 if sub_mov == "Dorsiflexión":
@@ -634,11 +656,6 @@ with tab_tests:
                     agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'FLEX_CAD_I')
                     if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers', name='Izquierda', line=dict(color=TEAM, width=3)))
                     fig_m.add_hline(y=90, line_dash="dash", line_color=GOOD, annotation_text="Ref: 90°")
-                elif sub_mov == "Lumbar":
-                    if 'LUMBAR' in df_j_mov.columns:
-                        agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'LUMBAR')
-                        if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Lumbar', line=dict(color=PRIMARY, width=3)))
-                    else: st.warning("No hay columna LUMBAR en el archivo Excel.")
                 
                 fig_m.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
                 st.plotly_chart(fig_m, use_container_width=True, config={"displayModeBar": False})
@@ -649,7 +666,22 @@ with tab_tests:
                 agg = calc_mean_std(df_j_vam, 'Fecha_dt', 'VAM')
                 fig_v = go.Figure()
                 fig_v.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='VAM', line=dict(color=PRIMARY, width=3)))
-                fig_v.add_hline(y=15.5, line_dash="dash", line_color=GOOD, annotation_text="Ref Posición: 15.5 km/h")
+                
+                ref_vam_val = None
+                if df_ref_vam is not None and not df_ref_vam.empty:
+                    df_ref_vam.columns = [str(c).strip() for c in df_ref_vam.columns]
+                    c_pos_ref = next((c for c in df_ref_vam.columns if 'posicion' in c.lower() or 'posición' in c.lower()), df_ref_vam.columns[0])
+                    c_vam_ref = next((c for c in df_ref_vam.columns if 'vam' in c.lower()), df_ref_vam.columns[1])
+                    for _, row in df_ref_vam.iterrows():
+                        ref_p = str(row[c_pos_ref]).strip().lower()
+                        if ref_p and ref_p in posicion_str.lower():
+                            ref_vam_val = pd.to_numeric(row[c_vam_ref], errors='coerce')
+                            break
+                
+                if ref_vam_val and pd.notna(ref_vam_val):
+                    fig_v.add_shape(type="line", x0=-0.5, x1=len(agg['Fecha'])-0.5, y0=ref_vam_val, y1=ref_vam_val, line=dict(color=GOOD, width=2, dash="dash"))
+                    fig_v.add_annotation(x=len(agg['Fecha'])-1, y=ref_vam_val, text=f"Ref Posición: {ref_vam_val} km/h", showarrow=False, yshift=12, font=dict(color=GOOD, size=10), xanchor="right")
+                
                 fig_v.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
                 st.plotly_chart(fig_v, use_container_width=True, config={"displayModeBar": False})
             else: st.info("No hay datos aeróbicos.")
