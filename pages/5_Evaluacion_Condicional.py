@@ -1093,7 +1093,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
-    st.markdown("### Evolución individual del salto")
+    st.markdown("### Evolución individual del salto por Demarcación")
 
     if df_saltos is None or df_saltos.empty:
         st.warning("⚠️ No se encontraron los datos locales de saltos para desglosar por posición.")
@@ -1110,7 +1110,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
         else:
             col_f_pos, col_sp_pos = st.columns([1, 2])
             with col_f_pos:
-                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos")
+                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos_2")
 
             pos_a_mostrar_s = posiciones_s if pos_sel_saltos == "Todas las Demarcaciones" else [pos_sel_saltos]
 
@@ -1196,52 +1196,110 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
             st.markdown("<br><hr>", unsafe_allow_html=True)
 
-            # --- NUEVA SECCIÓN: EVOLUCIÓN INDIVIDUAL DRI ---
-            st.markdown("### ⚡ Evolución Individual de DRI (Drop Jump)")
+            # --- NUEVA SECCIÓN: EVOLUCIÓN HISTÓRICA INTERACTIVA DE SALTOS Y DRI ---
+            st.markdown("### 📊 Evolución Histórica Interactiva (Plantilla Completa)")
+            st.caption("Selecciona si quieres ver CMJ o DRI. **Haz doble clic en el nombre de un jugador en la leyenda** (a la derecha del gráfico) para aislar su evolución. Haz un clic simple para ocultarlo/mostrarlo.")
             
-            if df_dri_sheet is None or df_dri_sheet.empty:
-                st.warning("⚠️ No hay datos de DRI registrados en la base de datos.")
-            else:
-                jugadores_dri = sorted(df_dri_sheet['Nombre'].dropna().unique())
-                
-                col_f_dri, col_vacio_dri = st.columns([1, 2])
-                with col_f_dri:
-                    jug_sel_dri = st.selectbox("🏃 Filtrar por Jugador:", jugadores_dri, key="sb_jug_dri")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                df_dri_jug = df_dri_sheet[df_dri_sheet['Nombre'] == jug_sel_dri].groupby(['Fecha', 'Fecha_dt'], as_index=False)['DRI'].mean().sort_values('Fecha_dt')
-                
-                if df_dri_jug.empty:
-                    st.info(f"No hay saltos DRI registrados para {jug_sel_dri}.")
-                else:
-                    media_equipo_dri = df_dri_sheet['DRI'].mean()
-                    
-                    df_dri_jug['DRI_Ant'] = df_dri_jug['DRI'].shift(1)
-                    df_dri_jug['Var_Pct'] = ((df_dri_jug['DRI'] - df_dri_jug['DRI_Ant']) / df_dri_jug['DRI_Ant']) * 100
-                    
-                    fig_dri_ind = go.Figure()
-                    
-                    etiquetas_dri = [f"<b>{r['DRI']:.2f}</b>" if pd.isna(r['Var_Pct']) else f"<b>{r['DRI']:.2f}</b><br><i>{'+' if r['Var_Pct']>0 else ''}{r['Var_Pct']:.1f}%</i>" for _, r in df_dri_jug.iterrows()]
+            tipo_grafico_salto = st.radio("Selecciona Métrica a visualizar:", ["Altura CMJ (cm)", "Índice DRI (Drop Jump)"], horizontal=True)
 
-                    fig_dri_ind.add_trace(go.Bar(
-                        x=df_dri_jug['Fecha'], y=df_dri_jug['DRI'],
-                        name=f"DRI - {jug_sel_dri}", marker_color='#00A8E8',
-                        text=etiquetas_dri, textposition='outside'
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if tipo_grafico_salto == "Altura CMJ (cm)":
+                df_cmj_all = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
+                if df_cmj_all.empty:
+                    st.info("No hay datos históricos de CMJ.")
+                else:
+                    df_cmj_agg = df_cmj_all.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean().sort_values('Fecha_dt')
+                    fechas_unicas = sorted(df_cmj_agg['Fecha_dt'].unique())
+                    fechas_str = [pd.to_datetime(f).strftime('%d/%m/%Y') for f in fechas_unicas]
+                    
+                    df_media_equipo = df_cmj_agg.groupby('Fecha_dt', as_index=False)['Altura'].mean().sort_values('Fecha_dt')
+
+                    fig_interactivo = go.Figure()
+
+                    # 1. Trazado de Barras por Jugador
+                    jugadores_lista = sorted(df_cmj_agg['Nombre'].unique())
+                    colores_jugadores = px.colors.qualitative.Plotly * 5
+                    
+                    for idx, j in enumerate(jugadores_lista):
+                        df_j = df_cmj_agg[df_cmj_agg['Nombre'] == j].set_index('Fecha_dt')
+                        val_y = [df_j.loc[f, 'Altura'] if f in df_j.index else None for f in fechas_unicas]
+                        
+                        fig_interactivo.add_trace(go.Bar(
+                            x=fechas_str, y=val_y,
+                            name=j, marker_color=colores_jugadores[idx % len(colores_jugadores)],
+                            text=[f"{v:.1f}" if pd.notna(v) else "" for v in val_y],
+                            textposition='inside',
+                            textfont=dict(color='white')
+                        ))
+
+                    # 2. Línea Secundaria de Media de Equipo
+                    fig_interactivo.add_trace(go.Scatter(
+                        x=fechas_str, y=df_media_equipo['Altura'],
+                        mode='lines+markers', name='Media Equipo (CMJ)',
+                        line=dict(color='#2ECC71', width=4, shape='spline', dash='dot'),
+                        marker=dict(size=12, color='#2ECC71', symbol='diamond', line=dict(color='white', width=2)),
                     ))
-                    
-                    fig_dri_ind.add_shape(type="line", x0=-0.5, x1=len(df_dri_jug)-0.5, y0=media_equipo_dri, y1=media_equipo_dri, line=dict(color="#FFC107", width=2.5, dash="dash"))
-                    fig_dri_ind.add_annotation(x=len(df_dri_jug)-1, y=media_equipo_dri, text=f"Media Equipo ({media_equipo_dri:.2f})", showarrow=False, font=dict(color="#FFC107", size=12), align="right", yshift=12)
-                    
-                    max_y_dri_ind = max(df_dri_jug['DRI'].max(), media_equipo_dri) + 0.4
-                    
-                    fig_dri_ind.update_layout(
-                        title=f"Evolución DRI: {jug_sel_dri}",
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-45), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri_ind]),
-                        height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=False
+
+                    max_y_int = df_cmj_agg['Altura'].max() + 5
+                    fig_interactivo.update_layout(
+                        title="Evolución CMJ (Barras por jugador y Media del Equipo)",
+                        barmode='group', template="plotly_dark",
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)',
+                        xaxis=dict(title="Fecha Sesión", tickangle=-30),
+                        yaxis=dict(title="Altura Salto CMJ (cm)", range=[0, max_y_int]),
+                        height=550, margin=dict(l=20, r=20, t=50, b=50),
+                        legend=dict(title="Jugadores (Doble clic para aislar)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
                     )
-                    st.plotly_chart(fig_dri_ind, use_container_width=True)
+                    st.plotly_chart(fig_interactivo, use_container_width=True)
+
+            else:
+                if df_dri_sheet is None or df_dri_sheet.empty:
+                    st.warning("No hay datos de DRI registrados.")
+                else:
+                    df_dri_agg = df_dri_sheet.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['DRI'].mean().sort_values('Fecha_dt')
+                    fechas_unicas = sorted(df_dri_agg['Fecha_dt'].unique())
+                    fechas_str = [pd.to_datetime(f).strftime('%d/%m/%Y') for f in fechas_unicas]
+                    
+                    df_media_equipo = df_dri_agg.groupby('Fecha_dt', as_index=False)['DRI'].mean().sort_values('Fecha_dt')
+
+                    fig_interactivo = go.Figure()
+
+                    # 1. Trazado de Barras por Jugador
+                    jugadores_lista = sorted(df_dri_agg['Nombre'].unique())
+                    colores_jugadores = px.colors.qualitative.Plotly * 5
+                    
+                    for idx, j in enumerate(jugadores_lista):
+                        df_j = df_dri_agg[df_dri_agg['Nombre'] == j].set_index('Fecha_dt')
+                        val_y = [df_j.loc[f, 'DRI'] if f in df_j.index else None for f in fechas_unicas]
+                        
+                        fig_interactivo.add_trace(go.Bar(
+                            x=fechas_str, y=val_y,
+                            name=j, marker_color=colores_jugadores[idx % len(colores_jugadores)],
+                            text=[f"{v:.2f}" if pd.notna(v) else "" for v in val_y],
+                            textposition='inside',
+                            textfont=dict(color='white')
+                        ))
+
+                    # 2. Línea Secundaria de Media de Equipo
+                    fig_interactivo.add_trace(go.Scatter(
+                        x=fechas_str, y=df_media_equipo['DRI'],
+                        mode='lines+markers', name='Media Equipo (DRI)',
+                        line=dict(color='#FFC107', width=4, shape='spline', dash='dot'),
+                        marker=dict(size=12, color='#FFC107', symbol='diamond', line=dict(color='white', width=2)),
+                    ))
+
+                    max_y_int = df_dri_agg['DRI'].max() + 0.5
+                    fig_interactivo.update_layout(
+                        title="Evolución Índice DRI (Barras por jugador y Media del Equipo)",
+                        barmode='group', template="plotly_dark",
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)',
+                        xaxis=dict(title="Fecha Sesión", tickangle=-30),
+                        yaxis=dict(title="Índice DRI", range=[0, max_y_int]),
+                        height=550, margin=dict(l=20, r=20, t=50, b=50),
+                        legend=dict(title="Jugadores (Doble clic para aislar)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+                    )
+                    st.plotly_chart(fig_interactivo, use_container_width=True)
 
 # =============================================================================
 # ÁREA 6: TREN SUPERIOR
@@ -1451,6 +1509,7 @@ elif pest_sel == "⚡ Velocidad & COD":
             if alertas_j:
                 dict_detalles_campo[nom_j] = alertas_j
 
+        st.markdown(f"### 📋 Informe de Necesidades y Alertas ({ult_f_campo_str})")
         c_c1, c_c2 = st.columns(2)
         with c_c1: st.metric("Jugadores con Prescripción de Trabajo Individual", f"{len(dict_detalles_campo)} / {len(df_c_ult)}")
         with c_c2: 
