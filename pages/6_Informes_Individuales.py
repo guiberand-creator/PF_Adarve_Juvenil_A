@@ -123,9 +123,6 @@ def inject_v0_css():
             letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem;
         }}
 
-        /* Ocultar flechita de delta en métricas de Streamlit */
-        [data-testid="stMetricDelta"] svg {{ display: none; }}
-
         /* Tabs v0 */
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
         .stTabs [data-baseweb="tab"] {{
@@ -208,6 +205,7 @@ def cargar_todo_informes():
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
+        # FIX A PRUEBA DE BALAS PARA FECHAS VACÍAS O NULAS (NaT)
         if 'Fecha_Nacimiento_Pos' in df_pos.columns:
             def safe_format_date(x):
                 if pd.isna(x): return ""
@@ -487,7 +485,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Selector en una fila superior exclusiva, coincidiendo en anchura (proporción 1.0) con la columna de la foto
+# Selector en una fila superior exclusiva, coincidiendo en anchura con la foto
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
     jugador_sel = st.selectbox(
@@ -499,8 +497,6 @@ with col_filtro:
 st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
 
 jug_norm = norm_nom(jugador_sel)
-nombre_mostrar = str(jugador_sel).replace('_', ' ').upper()
-
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
 
 # BUSCADOR INTELIGENTE (Fuzzy Match) PARA CUESTIONARIO Y POSICIONES
@@ -568,6 +564,8 @@ if not df_rpe.empty:
 
 # Ranking Real
 ranking_real_str = dict_rankings_reales.get(jug_norm, "#--")
+
+nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
 # 4. CAMPOGRAMA CON PROPORCIONES OFICIALES (GEOMETRÍA RÍGIDA A 330PX)
@@ -644,7 +642,7 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE GIGANTE ARRIBA, POSICIÓN EN BADGE DEBAJO
+# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE EN RED BADGE, POSICIÓN GIGANTE
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
@@ -688,74 +686,64 @@ with tab_tests:
     st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
     
     # Motor buscador de "Mejor Marca" y "Ranking de Equipo"
-    def get_best_and_rank(df, col_jugador, jug_norm_val, col_val, col_fecha, filter_col=None, filter_val=None, ascending=False):
+    def get_best_and_rank(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None, ascending=False):
         if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns:
-            return None, None, None
+            return None
         
         dff = df.copy()
         if filter_col and filter_col in dff.columns and filter_val:
             dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
         
         dff = dff.dropna(subset=[col_val])
-        if dff.empty: return None, None, None
+        if dff.empty: return None
         
         dff[col_val] = pd.to_numeric(dff[col_val], errors='coerce')
         dff = dff.dropna(subset=[col_val])
-        if dff.empty: return None, None, None
+        if dff.empty: return None
         
         idx_max = dff.groupby(col_jugador)[col_val].idxmax()
         best_per_player = dff.loc[idx_max].copy()
         
-        best_per_player['Rank'] = best_per_player[col_val].rank(ascending=ascending, method='min')
-        
         jug_data = best_per_player[best_per_player[col_jugador] == jug_norm_val]
-        if jug_data.empty: return None, None, None
+        if jug_data.empty: return None
         
-        val = jug_data.iloc[0][col_val]
-        fecha = jug_data.iloc[0][col_fecha]
-        rank = int(jug_data.iloc[0]['Rank'])
-        total = len(best_per_player)
-        
-        return val, fecha, f"#{rank}/{total}"
+        return jug_data.iloc[0][col_val]
 
     # Extracción de las 9 Métricas demandadas
-    v_cmj, f_cmj, r_cmj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'CMJ')
-    v_vam, f_vam, r_vam = get_best_and_rank(df_vam, 'Nombre_Norm', jug_norm, 'VAM', 'Fecha')
+    v_cmj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo', 'CMJ')
+    v_vam = get_best_and_rank(df_vam, 'Nombre_Norm', jug_norm, 'VAM')
     
-    # Búsqueda de Drop Jump 50cm (Filtra '50', si no lo halla prueba con 'Drop' o 'DJ')
-    v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', '50')
-    if v_dj is None: v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'DJ')
-    if v_dj is None: v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'Drop')
-
-    v_dri, f_dri, r_dri = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'DRI', 'Fecha')
-    v_pb, f_pb, r_pb = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Press_Banca', 'Fecha')
-    v_dom, f_dom, r_dom = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Dominada', 'Fecha')
-    v_vmax, f_vmax, r_vmax = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'V_MAX', 'Fecha')
-    v_ac, f_ac, r_ac = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'AC_MAX', 'Fecha')
-    v_dec, f_dec, r_dec = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'DEC_MAX', 'Fecha')
+    # Búsqueda de Drop Jump 50cm (Filtra de df_dri directamente)
+    v_dj = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'Altura')
+    v_dri = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'DRI')
+    v_pb = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Press_Banca')
+    v_dom = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Dominada')
+    v_vmax = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'V_MAX')
+    v_ac = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'AC_MAX')
+    v_dec = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'DEC_MAX')
 
     # Grid de KPIs en 2 filas
     r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
     r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
 
-    def render_kpi(col, title, val, unit, fecha, rank, decimals=1):
+    def render_kpi(col, title, val, unit, decimals=1):
         if val is not None and not pd.isna(val):
             fmt_val = f"{val:.{decimals}f} {unit}".strip()
             if unit == "reps": fmt_val = f"{int(val)} {unit}"
-            col.metric(title, fmt_val, f"{fecha}  •  {rank}", delta_color="normal")
+            col.metric(title, fmt_val)
         else:
             col.metric(title, "-")
 
-    render_kpi(r1c1, "Salto CMJ", v_cmj, "cm", f_cmj, r_cmj)
-    render_kpi(r1c2, "Prueba 5 min", v_vam, "km/h", f_vam, r_vam)
-    render_kpi(r1c3, "Drop Jump (50cm)", v_dj, "cm", f_dj, r_dj)
-    render_kpi(r1c4, "Índice DRI DJ", v_dri, "", f_dri, r_dri, decimals=2)
-    render_kpi(r1c5, "Press Banca", v_pb, "reps", f_pb, r_pb)
+    render_kpi(r1c1, "Salto CMJ", v_cmj, "cm")
+    render_kpi(r1c2, "Prueba 5 min", v_vam, "km/h")
+    render_kpi(r1c3, "Drop Jump (50cm)", v_dj, "cm")
+    render_kpi(r1c4, "Índice DRI DJ", v_dri, "", decimals=2)
+    render_kpi(r1c5, "Press Banca", v_pb, "reps")
 
-    render_kpi(r2c1, "Dominadas", v_dom, "reps", f_dom, r_dom)
-    render_kpi(r2c2, "V. Máx", v_vmax, "km/h", f_vmax, r_vmax)
-    render_kpi(r2c3, "Acel. Máx", v_ac, "m/s²", f_ac, r_ac, decimals=2)
-    render_kpi(r2c4, "Decel. Máx", v_dec, "m/s²", f_dec, r_dec, decimals=2)
+    render_kpi(r2c1, "Dominadas", v_dom, "reps")
+    render_kpi(r2c2, "V. Máx", v_vmax, "km/h")
+    render_kpi(r2c3, "Acel. Máx", v_ac, "m/s²", decimals=2)
+    render_kpi(r2c4, "Decel. Máx", v_dec, "m/s²", decimals=2)
 
     st.divider()
 
