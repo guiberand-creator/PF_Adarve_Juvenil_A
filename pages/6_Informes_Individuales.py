@@ -46,14 +46,14 @@ def inject_v0_css():
         
         /* 100% ANCHO REAL DE PANTALLA */
         .block-container {{ 
-            padding-top: 1.5rem !important; 
+            padding-top: 1.2rem !important; 
             padding-bottom: 3rem !important; 
             padding-left: 2rem !important;
             padding-right: 2rem !important;
             max-width: 100% !important; 
         }}
 
-        /* RECUADRO HERO V0 EXCLUSIVO */
+        /* RECUADRO HERO V0 EXCLUSIVO DEL JUGADOR */
         .pd-hero {{
             background:
                 radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%),
@@ -127,7 +127,7 @@ def norm_nom(texto):
     if pd.isna(texto): return ""
     return " ".join(str(texto).replace('_', ' ').strip().lower().split())
 
-# SELLO Y LOGO BLANCO OFICIAL (Imagen2.png)
+# CARGA DE ESCUDO OFICIAL EN BLANCO (Imagen2.png)
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
 _ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen2.png"))
 if not os.path.exists(_ruta_escudo_oficial):
@@ -190,7 +190,7 @@ def cargar_todo_informes():
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
-    # 1. Cuestionario Inicial (Google Sheet) con Búsqueda Exhaustiva de Columnas
+    # 1. Cuestionario Inicial (Google Sheet)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
         df_cuest.columns = [str(c).strip() for c in df_cuest.columns]
@@ -203,9 +203,9 @@ def cargar_todo_informes():
             return None
 
         c_n = find_col(df_cuest, ['nombre', 'jugador', 'apellidos', 'atleta', 'player']) or df_cuest.columns[0]
-        c_fn = find_col(df_cuest, ['nacimiento', 'nacim', 'fecha_nac', 'dob', 'cumple', 'f_nac', 'f.nac'])
+        c_fn = find_col(df_cuest, ['nacimiento', 'nacim', 'fecha_nac', 'dob', 'cumple', 'f_nac', 'f.nac', 'edad', 'fecha'])
         c_pos = find_col(df_cuest, ['posición', 'posicion', 'pos', 'demarcación', 'demarcacion'])
-        c_pierna = find_col(df_cuest, ['pierna', 'pie', 'habil', 'hábil', 'dominante', 'foot'])
+        c_pierna = find_col(df_cuest, ['pierna', 'pie', 'habil', 'hábil', 'dominante', 'foot', 'perfil'])
 
         ren = {c_n: 'Nombre'}
         if c_fn: ren[c_fn] = 'Fecha_Nacimiento'
@@ -455,7 +455,7 @@ def cargar_todo_informes():
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
 # =============================================================================
-# 3. LISTA DE JUGADORES DISPONIBLES
+# 3. LISTA DE JUGADORES DISPONIBLES Y SELECTOR EN BARRA SUPERIOR
 # =============================================================================
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
@@ -465,19 +465,16 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# =============================================================================
-# 4. ENCABEZADO Y SELECTOR TOTALMENTE ALINEADOS ARRIBA
-# =============================================================================
-col_photo, col_hero, col_pitch = st.columns([1.0, 2.8, 1.1], gap="medium")
-
-# COLUMNA CENTRO: SELECTOR DE JUGADOR ALINEADO JUSTO SOBRE EL CUADRO HERO
-with col_hero:
+# 🔴 SELECTOR DE JUGADOR SITUADO EN SU PROPIA FILA SUPERIOR (A UNA ALTURA MAYOR)
+c_top_sel, _ = st.columns([2.8, 7.2])
+with c_top_sel:
     jugador_sel = st.selectbox(
         "⚽ Selecciona Jugador:",
         lista_jugadores,
-        label_visibility="collapsed",
-        key="select_jugador_hero"
+        key="select_jugador_top_bar"
     )
+
+st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
 jug_norm = norm_nom(jugador_sel)
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
@@ -485,27 +482,39 @@ match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empt
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Fecha de Nacimiento
-fecha_nac_str = "Por definir"
-if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
-    val_fn = match_cuest['Fecha_Nacimiento'].dropna()
-    val_fn = val_fn[~val_fn.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
-    if not val_fn.empty: fecha_nac_str = str(val_fn.iloc[-1]).strip()
-elif not match_pos.empty:
-    col_fn_pos = next((c for c in match_pos.columns if 'nacim' in str(c).lower()), None)
-    if col_fn_pos:
-        val_fn = match_pos[col_fn_pos].dropna()
-        val_fn = val_fn[~val_fn.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
-        if not val_fn.empty: fecha_nac_str = str(val_fn.iloc[-1]).strip()
+# Helper inteligente para buscar campos con coincidencia difusa (Token overlap)
+def extraer_valor_jugador(df_src, jug_norm_target, keywords_col):
+    if df_src is None or df_src.empty: return None
+    cols_candidatas = [c for c in df_src.columns if any(kw in str(c).lower() for kw in keywords_col)]
+    if not cols_candidatas: return None
+    
+    m = pd.DataFrame()
+    if 'Nombre_Norm' in df_src.columns:
+        m = df_src[df_src['Nombre_Norm'] == jug_norm_target]
+        if m.empty:
+            tokens_target = set(jug_norm_target.split())
+            def match_tokens(n_norm):
+                src_tokens = set(str(n_norm).split())
+                if not src_tokens or not tokens_target: return False
+                if str(n_norm) in jug_norm_target or jug_norm_target in str(n_norm): return True
+                return len(src_tokens & tokens_target) >= 2
+            m = df_src[df_src['Nombre_Norm'].apply(match_tokens)]
+    
+    if m.empty: return None
+    for col in cols_candidatas:
+        vals = m[col].dropna()
+        vals = vals[~vals.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', '', 'null', 'undefined'])]
+        if not vals.empty:
+            return str(vals.iloc[-1]).strip()
+    return None
+
+# Fecha de Nacimiento (Búsqueda Blindada)
+fecha_nac_str = extraer_valor_jugador(df_cuest, jug_norm, ['nacim', 'fecha', 'dob', 'cumple', 'f_nac']) or \
+                extraer_valor_jugador(df_pos, jug_norm, ['nacim', 'fecha', 'dob', 'cumple', 'f_nac']) or "Por definir"
 
 # Posición y Lado
-posicion_str = "Por definir"
-if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
-    val_p = match_cuest['Posicion_Habitual'].dropna()
-    val_p = val_p[~val_p.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
-    if not val_p.empty: posicion_str = str(val_p.iloc[-1]).strip()
-elif not match_pos.empty:
-    posicion_str = str(match_pos.iloc[0].get('Posicion', 'Por definir')).strip()
+posicion_str = extraer_valor_jugador(df_cuest, jug_norm, ['posición', 'posicion', 'pos', 'demarcación']) or \
+               extraer_valor_jugador(df_pos, jug_norm, ['posicion', 'posic', 'pos']) or "Por definir"
 
 lado_str = ""
 if not match_pos.empty and 'Lado' in match_pos.columns:
@@ -513,18 +522,9 @@ if not match_pos.empty and 'Lado' in match_pos.columns:
     if pd.notna(val_l) and str(val_l).strip().lower() not in ['nan', 'none', '']:
         lado_str = str(val_l).strip()
 
-# Pierna Dominante
-pierna_str = "Por definir"
-if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
-    val_pierna = match_cuest['Pierna_Dominante'].dropna()
-    val_pierna = val_pierna[~val_pierna.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
-    if not val_pierna.empty: pierna_str = str(val_pierna.iloc[-1]).strip()
-elif not match_pos.empty:
-    col_p_pos = next((c for c in match_pos.columns if 'pierna' in str(c).lower()), None)
-    if col_p_pos:
-        val_pierna = match_pos[col_p_pos].dropna()
-        val_pierna = val_pierna[~val_pierna.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
-        if not val_pierna.empty: pierna_str = str(val_pierna.iloc[-1]).strip()
+# Pierna Dominante (Búsqueda Blindada)
+pierna_str = extraer_valor_jugador(df_cuest, jug_norm, ['pierna', 'pie', 'habil', 'hábil', 'dominante', 'foot']) or \
+             extraer_valor_jugador(df_pos, jug_norm, ['pierna', 'pie', 'habil', 'hábil', 'dominante', 'foot']) or "Por definir"
 
 # Minutos en Liga Reales
 minutos_oficiales = 0
@@ -544,7 +544,7 @@ dri_pico = df_dri[df_dri['Nombre_Norm'] == jug_norm]['DRI'].max() if df_dri is n
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 5. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE (ALTURA DENTRO DEL RECUADRO: 330PX)
+# 4. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE (ALTURA PERFECTA 330PX)
 # =============================================================================
 def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig = go.Figure()
@@ -606,17 +606,18 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 6. RENDERIZADO DE COLUMNAS (FOTO | HERO CARD | CAMPOGRAMA) CON ALINEACIÓN PERFECTA
+# 5. RENDERIZADO DE LA CABECERA CON ALINEACIÓN HORIZONTAL PERFECTA
 # =============================================================================
+col_photo, col_hero, col_pitch = st.columns([1.0, 2.8, 1.1], gap="medium")
 
-# COLUMNA IZQUIERDA: FOTO DE CUERPO ENTERO
+# COLUMNA IZQUIERDA: FOTO DE CUERPO ENTERO (MARCO RÍGIDO 330PX)
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
         st.markdown(f'<img src="{url_foto_jugador}" class="photo-v0">', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA CENTRO: RECUADRO HERO CARD (BADGE, NOMBRE, DATOS Y ESCUDO IMAGEN2)
+# COLUMNA CENTRO: RECUADRO HERO CARD DEL JUGADOR
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
@@ -642,14 +643,14 @@ with col_hero:
         unsafe_allow_html=True,
     )
 
-# COLUMNA DERECHA: CAMPOGRAMA DENTRO DEL PITCH
+# COLUMNA DERECHA: CAMPOGRAMA DENTRO DEL PITCH (ALINEADO 330PX)
 with col_pitch:
     st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
-# 7. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
+# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
