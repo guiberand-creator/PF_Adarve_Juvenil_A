@@ -329,8 +329,11 @@ def cargar_todo_informes():
 
         if df_mov is not None and not df_mov.empty:
             df_m_last = df_mov.sort_values('Fecha_dt').copy()
-            df_m_last['Movilidad_Score'] = df_m_last[['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I', 'LUMBAR']].mean(axis=1)
-            df_rank_base = merge_ult(df_rank_base, df_m_last, 'Movilidad_Score', 'Movilidad_Score')
+            # EXTRAEMOS SOLO COLUMNAS EXISTENTES PARA EVITAR KEYERROR
+            mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I', 'LUMBAR'] if c in df_m_last.columns]
+            if mov_cols:
+                df_m_last['Movilidad_Score'] = df_m_last[mov_cols].mean(axis=1)
+                df_rank_base = merge_ult(df_rank_base, df_m_last, 'Movilidad_Score', 'Movilidad_Score')
 
         df_rank_base = merge_ult(df_rank_base, df_vam, 'VAM', 'VAM')
 
@@ -377,9 +380,9 @@ def cargar_todo_informes():
             for _, r_rank in df_rank_base.iterrows():
                 dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
 
-    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales
+    return df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base
 
-df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
+df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base = cargar_todo_informes()
 
 # Funciones aux. calculo std
 def calc_mean_std(df, date_col, val_col):
@@ -561,7 +564,7 @@ with tab_tests:
         dff = dff.dropna(subset=[col_val])
         jug_data = dff[dff[col_jugador] == jug_norm_val]
         if jug_data.empty: return None
-        if 'DEC_MAX' in col_val: return jug_data[col_val].min() # Para Dec max buscamos el minimo (mas negativo)
+        if 'DEC_MAX' in col_val: return jug_data[col_val].min()
         return jug_data[col_val].max()
 
     v_cmj = get_best(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo', 'CMJ')
@@ -632,8 +635,10 @@ with tab_tests:
                     if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers', name='Izquierda', line=dict(color=TEAM, width=3)))
                     fig_m.add_hline(y=90, line_dash="dash", line_color=GOOD, annotation_text="Ref: 90°")
                 elif sub_mov == "Lumbar":
-                    agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'LUMBAR')
-                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Lumbar', line=dict(color=PRIMARY, width=3)))
+                    if 'LUMBAR' in df_j_mov.columns:
+                        agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'LUMBAR')
+                        if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name='Lumbar', line=dict(color=PRIMARY, width=3)))
+                    else: st.warning("No hay columna LUMBAR en el archivo Excel.")
                 
                 fig_m.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT))
                 st.plotly_chart(fig_m, use_container_width=True, config={"displayModeBar": False})
@@ -686,7 +691,6 @@ with tab_tests:
                 agg_pb = calc_mean_std(df_j_ts, 'Fecha_dt', 'Press_Banca')
                 agg_dom = calc_mean_std(df_j_ts, 'Fecha_dt', 'Dominada')
                 
-                # Media Equipo Referencia
                 mean_eq_pb = df_fts['Press_Banca'].mean() if df_fts is not None and not df_fts.empty else 0
                 mean_eq_dom = df_fts['Dominada'].mean() if df_fts is not None and not df_fts.empty else 0
 
@@ -718,7 +722,6 @@ with tab_tests:
     with right_col:
         st.markdown('<div class="pd-section-title">Perfil Percentil &middot; Radar</div>', unsafe_allow_html=True)
         
-        # Filtro de fecha para Radar
         if df_rank_base is not None and not df_rank_base.empty and 'Fecha_dt' in df_rank_base.columns:
             min_d, max_d = df_rank_base['Fecha_dt'].min(), df_rank_base['Fecha_dt'].max()
             if pd.notna(min_d) and pd.notna(max_d) and min_d != max_d:
@@ -753,7 +756,6 @@ with tab_tests:
             v_p = [df_pos_r['pct_vam'].mean(), df_pos_r['pct_cmj'].mean(), df_pos_r['pct_dri'].mean(), df_pos_r['pct_ts'].mean(), df_pos_r['pct_vmax'].mean()]
             v_eq = [df_radar['pct_vam'].mean(), df_radar['pct_cmj'].mean(), df_radar['pct_dri'].mean(), df_radar['pct_ts'].mean(), df_radar['pct_vmax'].mean()]
 
-            # Cerrar poligono
             v_j = [(x if pd.notna(x) else 0) for x in v_j]; v_j.append(v_j[0])
             v_p = [(x if pd.notna(x) else 0) for x in v_p]; v_p.append(v_p[0])
             v_eq = [(x if pd.notna(x) else 0) for x in v_eq]; v_eq.append(v_eq[0])
