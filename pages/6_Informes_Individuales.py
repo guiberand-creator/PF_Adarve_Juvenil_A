@@ -63,7 +63,7 @@ def inject_v0_css():
             padding: 1.25rem 1.5rem;
             width: 100%;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-            margin-top: 0.2rem;
+            margin-top: 0px !important;
         }}
 
         .pd-name {{ font-size: 2.2rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
@@ -85,21 +85,25 @@ def inject_v0_css():
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
 
+        /* DIMENSIONES FIJAS Y RÍGIDAS PARA LA FOTO (330px DE ALTURA) */
         .photo-v0 {{
-            max-height: 340px;
-            width: auto;
-            object-fit: contain;
+            height: 330px !important;
+            width: 100% !important;
+            max-width: 250px !important;
+            object-fit: contain !important;
             display: block;
             margin: 0 auto;
             filter: drop-shadow(0px 10px 20px rgba(225, 29, 72, 0.25));
         }}
         .photo-placeholder-v0 {{
-            height: 320px;
-            width: 100%;
+            height: 330px !important;
+            width: 100% !important;
+            max-width: 250px !important;
             border-radius: 16px;
             background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
             display: flex; align-items: center; justify-content: center;
             border: 1px solid {BORDER};
+            margin: 0 auto;
         }}
 
         .pd-section-title {{
@@ -451,7 +455,7 @@ def cargar_todo_informes():
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
 # =============================================================================
-# 3. NAVEGACIÓN Y SELECCIÓN DE JUGADOR (INTEGRADO Y ALINEADO CON EL HERO BOX)
+# 3. LISTA DE JUGADORES DISPONIBLES
 # =============================================================================
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
@@ -461,9 +465,12 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Layout del Header Superior: Foto | Hero Box (Con Selector Alineado) | Pitch
+# =============================================================================
+# 4. ENCABEZADO Y SELECTOR TOTALMENTE ALINEADOS ARRIBA
+# =============================================================================
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.8, 1.1], gap="medium")
 
+# COLUMNA CENTRO: SELECTOR DE JUGADOR ALINEADO JUSTO SOBRE EL CUADRO HERO
 with col_hero:
     jugador_sel = st.selectbox(
         "⚽ Selecciona Jugador:",
@@ -478,7 +485,7 @@ match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empt
 
 url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empty and 'Foto_URL' in match_pos.columns else None
 
-# Fecha de Nacimiento (Google Sheets Cuestionario Inicial o Posiciones)
+# Fecha de Nacimiento
 fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
     val_fn = match_cuest['Fecha_Nacimiento'].dropna()
@@ -506,7 +513,7 @@ if not match_pos.empty and 'Lado' in match_pos.columns:
     if pd.notna(val_l) and str(val_l).strip().lower() not in ['nan', 'none', '']:
         lado_str = str(val_l).strip()
 
-# Pierna Dominante (Google Sheets Cuestionario Inicial o Posiciones)
+# Pierna Dominante
 pierna_str = "Por definir"
 if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val_pierna = match_cuest['Pierna_Dominante'].dropna()
@@ -519,7 +526,7 @@ elif not match_pos.empty:
         val_pierna = val_pierna[~val_pierna.astype(str).str.strip().str.lower().isin(['nan', 'none', 'por definir', '0', ''])]
         if not val_pierna.empty: pierna_str = str(val_pierna.iloc[-1]).strip()
 
-# Minutos en Liga Reales (Desde 06/09/2026)
+# Minutos en Liga Reales
 minutos_oficiales = 0
 if not df_rpe.empty:
     fecha_inicio_liga = pd.to_datetime("2026-09-06")
@@ -537,7 +544,7 @@ dri_pico = df_dri[df_dri['Nombre_Norm'] == jug_norm]['DRI'].max() if df_dri is n
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 
 # =============================================================================
-# 4. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE (ALTURA DENTRO DEL RECUADRO: 340PX)
+# 5. CAMPOGRAMA CON MAPEO SUB-POSICIONAL INTELIGENTE (ALTURA DENTRO DEL RECUADRO: 330PX)
 # =============================================================================
 def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig = go.Figure()
@@ -593,20 +600,23 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     fig.update_xaxes(visible=False, range=[-2, 102])
     fig.update_yaxes(visible=False, range=[-2, 102], scaleanchor="x", scaleratio=1.35)
     fig.update_layout(
-        height=340, margin=dict(l=0, r=0, t=0, b=0),
+        height=330, margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
     )
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO RENDERIZADO (FOTO | HERO CARD | CAMPOGRAMA)
+# 6. RENDERIZADO DE COLUMNAS (FOTO | HERO CARD | CAMPOGRAMA) CON ALINEACIÓN PERFECTA
 # =============================================================================
+
+# COLUMNA IZQUIERDA: FOTO DE CUERPO ENTERO
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
         st.markdown(f'<img src="{url_foto_jugador}" class="photo-v0">', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
+# COLUMNA CENTRO: RECUADRO HERO CARD (BADGE, NOMBRE, DATOS Y ESCUDO IMAGEN2)
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
@@ -622,7 +632,7 @@ with col_hero:
         <div class="pd-hero">
           <div style="display:flex; justify-content:space-between; align-items:center;">
               <span class="pd-badge">{pos_label_full}</span>
-              <img src="{url_escudo_oficial}" style="width:48px; height:auto;">
+              <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
           </div>
           <h1 class="pd-name" style="margin-top:0.4rem;">{nombre_mostrar}</h1>
           <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
@@ -632,13 +642,14 @@ with col_hero:
         unsafe_allow_html=True,
     )
 
+# COLUMNA DERECHA: CAMPOGRAMA DENTRO DEL PITCH
 with col_pitch:
     st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
-# 6. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
+# 7. PESTAÑAS DE SUB-PÁGINAS ESTILO V0 (CONDITIONING TESTS / GPS DATA)
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
