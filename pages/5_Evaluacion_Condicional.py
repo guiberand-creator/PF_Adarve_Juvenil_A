@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 import os
 from utils import aplicar_diseno_responsive
 
@@ -77,6 +76,50 @@ st.markdown("""
     .podium-3 { color: #CD7F32; font-weight: bold; font-size: 18px; }
     </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# FUNCIÓN DE ESTILO SHADCN UI PARA PLOTLY
+# -----------------------------------------------------------------------------
+def aplicar_estilo_shadcn(fig):
+    """Inyecta la estética de Shadcn UI en los gráficos de barras de Plotly"""
+    fig.update_layout(
+        font=dict(family="Inter, sans-serif", color="#94a3b8", size=12),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+            tickfont=dict(color="#64748b", size=11)
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.05)",
+            griddash="solid",
+            zeroline=False,
+            showline=False,
+            tickfont=dict(color="#64748b", size=11)
+        ),
+        hoverlabel=dict(
+            bgcolor="#0f172a",
+            bordercolor="#1e293b",
+            font_size=13,
+            font_family="Inter, sans-serif",
+            font_color="#f8fafc"
+        ),
+        bargap=0.25,
+        bargroupgap=0.1
+    )
+    # Limpiamos el borde de la barra para que quede plana
+    fig.update_traces(marker=dict(line=dict(width=0)), selector=dict(type='bar'))
+    # Aplicamos el borde redondeado (si la versión de Plotly lo soporta, si no, lo omite limpiamente)
+    try:
+        fig.update_traces(marker_cornerradius=4, selector=dict(type='bar'))
+    except: pass
+    return fig
+
+# Paleta de colores oficial de Shadcn UI para los gráficos
+SHADCN_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#0ea5e9']
 
 # -----------------------------------------------------------------------------
 # 2. CONTROL DE ACCESO
@@ -425,10 +468,10 @@ if pest_sel == "🩺 Movilidad":
             mitad = (len(items) + 1) // 2
             with col_a1:
                 for nom, defs in items[:mitad]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_a2:
                 for nom, defs in items[mitad:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else: st.success("✅ ¡Excelente! Todo el vestuario se encuentra en rangos óptimos.")
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
@@ -441,15 +484,17 @@ if pest_sel == "🩺 Movilidad":
 
         fig_barras = go.Figure()
         if col_i is not None:
-            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Derecha (D)', marker_color='#00A8E8', text=df_fecha_mov[col_d], textposition='outside'))
-            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_i], name='Izquierda (I)', marker_color='#FF9F1C', text=df_fecha_mov[col_i], textposition='outside'))
+            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Derecha (D)', marker_color='#3b82f6', text=df_fecha_mov[col_d], textposition='outside', textfont=dict(color='white', size=11)))
+            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_i], name='Izquierda (I)', marker_color='#10b981', text=df_fecha_mov[col_i], textposition='outside', textfont=dict(color='white', size=11)))
             max_y = max(df_fecha_mov[col_d].max(), df_fecha_mov[col_i].max())
         else:
-            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Lumbar', marker_color='#2ECC71', text=df_fecha_mov[col_d], textposition='outside'))
+            fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Lumbar', marker_color='#10b981', text=df_fecha_mov[col_d], textposition='outside', textfont=dict(color='white', size=11)))
             max_y = df_fecha_mov[col_d].max()
 
-        fig_barras.add_shape(type="line", x0=-0.5, x1=len(df_fecha_mov)-0.5, y0=val_verde, y1=val_verde, line=dict(color="#2ECC71", width=3, dash="dash"))
-        fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max(max_y + 5, val_verde + 5)]), height=460, margin=dict(l=20, r=20, t=50, b=100))
+        fig_barras.add_shape(type="line", x0=-0.5, x1=len(df_fecha_mov)-0.5, y0=val_verde, y1=val_verde, line=dict(color="#22c55e", width=2, dash="dash"))
+        
+        fig_barras = aplicar_estilo_shadcn(fig_barras)
+        fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max(max_y + 5, val_verde + 5)]), height=460, margin=dict(l=20, r=20, t=50, b=100))
         st.plotly_chart(fig_barras, use_container_width=True)
 
 # =============================================================================
@@ -463,15 +508,15 @@ elif pest_sel == "⚖️ Peso":
         df_p_equipo['Peso_Ant'] = df_p_equipo.groupby('Nombre')['Peso'].shift(1)
         df_p_equipo['Var_Pct'] = ((df_p_equipo['Peso'] - df_p_equipo['Peso_Ant']) / df_p_equipo['Peso_Ant']) * 100
         fechas_ordenadas = sorted(list(df_p_equipo['Fecha'].unique()))
-        colores_fechas = ['#FF9F1C', '#00A8E8', '#2ECC71', '#9B59B6', '#E74C3C', '#F1C40F']
         
         fig_p_equipo = go.Figure()
         for i, f in enumerate(fechas_ordenadas):
             df_f = df_p_equipo[df_p_equipo['Fecha'] == f]
             etiquetas_equipo = [f"<b>{row['Peso']:.1f} kg</b>" if pd.isna(row['Var_Pct']) else f"<b>{row['Peso']:.1f} kg</b><br><i>{'+' if row['Var_Pct']>0 else ''}{row['Var_Pct']:.1f}%</i>" for _, row in df_f.iterrows()]
-            fig_p_equipo.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['Peso'], name=f"Fecha {f}", text=etiquetas_equipo, textposition='outside', marker_color=colores_fechas[i % len(colores_fechas)]))
+            fig_p_equipo.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['Peso'], name=f"Fecha {f}", text=etiquetas_equipo, textposition='outside', marker_color=SHADCN_COLORS[i % len(SHADCN_COLORS)], textfont=dict(color='white', size=11)))
 
-        fig_p_equipo.update_layout(title="Evolución del Peso por Jugador en Todas las Fechas Registradas", barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(tickangle=-45), yaxis=dict(title="Peso (kg)", range=[max(0, df_p_equipo['Peso'].min() - 5), df_p_equipo['Peso'].max() + 7]), height=500, margin=dict(l=20, r=20, t=50, b=110))
+        fig_p_equipo = aplicar_estilo_shadcn(fig_p_equipo)
+        fig_p_equipo.update_layout(title="Evolución del Peso por Jugador en Todas las Fechas Registradas", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Peso (kg)", range=[max(0, df_p_equipo['Peso'].min() - 5), df_p_equipo['Peso'].max() + 7]), height=500, margin=dict(l=20, r=20, t=50, b=110))
         st.plotly_chart(fig_p_equipo, use_container_width=True)
 
 # =============================================================================
@@ -514,17 +559,16 @@ elif pest_sel == "🫁 VAM / Aeróbico":
             
             with col_va1:
                 for nom, defs in items_v[:mitad_v]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_va2:
                 for nom, defs in items_v[mitad_v:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple o supera la VAM de referencia para su posición.")
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
         posiciones_unicas = sorted([p for p in df_v_valid['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']]) if 'Posicion' in df_v_valid.columns else []
-        colores_fechas = ['#2ECC71', '#00A8E8', '#FF9F1C', '#9B59B6', '#E74C3C']
 
         opciones_pos = ["Todas las Demarcaciones"] + posiciones_unicas
         col_filtro, col_vacio = st.columns([1, 2])
@@ -558,7 +602,8 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                                 name=f"Fecha {f}", 
                                 text=etiquetas, 
                                 textposition='outside', 
-                                marker_color=colores_fechas[idx_f % len(colores_fechas)]
+                                marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)],
+                                textfont=dict(color='white', size=11)
                             ))
 
                         ref_val = None
@@ -567,25 +612,16 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                             if not row_r.empty:
                                 ref_val = row_r.iloc[0]['VAM_Ref']
                                 fig_p.add_shape(
-                                    type="line", 
-                                    x0=-0.5, 
-                                    x1=len(df_p['Nombre'].unique())-0.5, 
-                                    y0=ref_val, 
-                                    y1=ref_val, 
-                                    line=dict(color="#E74C3C", width=3, dash="dash")
+                                    type="line", x0=-0.5, x1=len(df_p['Nombre'].unique())-0.5, y0=ref_val, y1=ref_val, 
+                                    line=dict(color="#ef4444", width=2, dash="dash")
                                 )
 
+                        fig_p = aplicar_estilo_shadcn(fig_p)
                         fig_p.update_layout(
                             title=f"⚽ Demarcación: {pos_curr}", 
-                            barmode='group', 
-                            template="plotly_dark", 
-                            paper_bgcolor='rgba(0,0,0,0)', 
-                            plot_bgcolor='rgba(0,0,0,0)', 
-                            xaxis=dict(tickangle=-45), 
+                            barmode='group', xaxis=dict(tickangle=-45), 
                             yaxis=dict(title="VAM (km/h)", range=[0, max(df_p['VAM'].max() if not df_p.empty else 20, (ref_val or 0)) + 3]), 
-                            height=420, 
-                            margin=dict(l=20, r=20, t=50, b=90), 
-                            showlegend=True
+                            height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=True
                         )
                         st.plotly_chart(fig_p, use_container_width=True)
 
@@ -706,11 +742,11 @@ elif pest_sel == "⚙️ Dinamometría":
                         if det['asim']:
                             st.markdown("##### ⚖️ Asimetrías a Corregir (>10%):")
                             for d in det['asim']:
-                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='color: #ef4444; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
                         if det['descomp']:
                             st.markdown("##### ⚡ Descompensaciones (Ratios):")
                             for d in det['descomp']:
-                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='color: #f59e0b; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
 
             with col_da2:
                 for nom, det in items_d[mitad_d:]:
@@ -728,11 +764,11 @@ elif pest_sel == "⚙️ Dinamometría":
                         if det['asim']:
                             st.markdown("##### ⚖️ Asimetrías a Corregir (>10%):")
                             for d in det['asim']:
-                                st.markdown(f"<p style='color: #E74C3C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='color: #ef4444; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
                         if det['descomp']:
                             st.markdown("##### ⚡ Descompensaciones (Ratios):")
                             for d in det['descomp']:
-                                st.markdown(f"<p style='color: #FF9F1C; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                                st.markdown(f"<p style='color: #f59e0b; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Formidable! Todo el vestuario cumple los umbrales óptimos.")
 
@@ -755,35 +791,36 @@ elif pest_sel == "⚙️ Dinamometría":
 
             fig_frel = go.Figure()
             fig_frel.add_trace(go.Bar(
-                x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#00A8E8',
-                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='inside'
+                x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#3b82f6',
+                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='inside', textfont=dict(color='white')
             ))
             fig_frel.add_trace(go.Bar(
-                x=df_g_frel['Nombre'], y=df_g_frel[ej_i], name='Izquierda (I)', marker_color='#FF9F1C',
-                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_i]], textposition='inside'
+                x=df_g_frel['Nombre'], y=df_g_frel[ej_i], name='Izquierda (I)', marker_color='#10b981',
+                text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_i]], textposition='inside', textfont=dict(color='white')
             ))
 
             max_alturas_f = df_g_frel[[ej_d, ej_i]].max(axis=1)
             for idx_f, row_f in df_g_frel.iterrows():
                 asim_val = row_f['Asimetria_Pct']
-                color_texto = "#E74C3C" if asim_val > 10 else "#2ECC71"
+                color_texto = "#ef4444" if asim_val > 10 else "#10b981"
                 pos_y = max_alturas_f.iloc[idx_f] + 0.25
 
                 fig_frel.add_annotation(
                     x=row_f['Nombre'], y=pos_y,
                     text=f"<b>{asim_val:.1f}%</b>",
                     showarrow=False,
-                    font=dict(color=color_texto, size=14)
+                    font=dict(color=color_texto, size=13)
                 )
 
-            fig_frel.add_shape(type="line", x0=-0.5, x1=len(df_g_frel)-0.5, y0=umbral_frel, y1=umbral_frel, line=dict(color="#2ECC71", width=3, dash="dash"))
-            fig_frel.add_annotation(x=len(df_g_frel)-1, y=umbral_frel, text=f"Ref. Óptima (>{umbral_frel} N/kg)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
+            fig_frel.add_shape(type="line", x0=-0.5, x1=len(df_g_frel)-0.5, y0=umbral_frel, y1=umbral_frel, line=dict(color="#10b981", width=2, dash="dash"))
+            fig_frel.add_annotation(x=len(df_g_frel)-1, y=umbral_frel, text=f"Ref. Óptima (>{umbral_frel} N/kg)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
 
             max_y_val = max(df_g_frel[ej_d].max(), df_g_frel[ej_i].max()) + 1.2
+            
+            fig_frel = aplicar_estilo_shadcn(fig_frel)
             fig_frel.update_layout(
                 title=f"💪 Pico de Fuerza Relativo (N/kg) y % Asimetría - {bloque_ejercicio}",
-                barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max_y_val]),
+                barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max_y_val]),
                 height=460, margin=dict(l=20, r=20, t=50, b=90), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_frel, use_container_width=True)
@@ -805,18 +842,16 @@ elif pest_sel == "⚙️ Dinamometría":
                 fig_r_fe = go.Figure()
                 fig_r_fe.add_trace(go.Bar(
                     x=nombres_fe, y=ratios_fe,
-                    marker_color=['#2ECC71' if v >= 0.60 else '#E74C3C' for v in ratios_fe],
-                    text=[f"<b>{v:.2f}</b>" for v in ratios_fe], textposition='outside'
+                    marker_color=['#10b981' if v >= 0.60 else '#ef4444' for v in ratios_fe],
+                    text=[f"<b>{v:.2f}</b>" for v in ratios_fe], textposition='outside', textfont=dict(color='white')
                 ))
-                fig_r_fe.add_shape(type="line", x0=-0.5, x1=len(nombres_fe)-0.5, y0=0.60, y1=0.60, line=dict(color="#2ECC71", width=3, dash="dash"))
-                fig_r_fe.add_annotation(x=len(nombres_fe)-1, y=0.60, text="Ref. (>0.60)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
+                fig_r_fe.add_shape(type="line", x0=-0.5, x1=len(nombres_fe)-0.5, y0=0.60, y1=0.60, line=dict(color="#10b981", width=2, dash="dash"))
+                fig_r_fe.add_annotation(x=len(nombres_fe)-1, y=0.60, text="Ref. (>0.60)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
                 
                 max_r_y = max(max(ratios_fe) + 0.2, 1.0)
+                fig_r_fe = aplicar_estilo_shadcn(fig_r_fe)
                 fig_r_fe.update_layout(
-                    title="⚖️ Ratio Flexión / Extensión Rodilla (Índice)",
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_r_y]),
-                    height=450, margin=dict(l=20, r=20, t=50, b=90)
+                    title="⚖️ Ratio Flexión / Extensión Rodilla (Índice)", xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_r_y]), height=450, margin=dict(l=20, r=20, t=50, b=90)
                 )
                 st.plotly_chart(fig_r_fe, use_container_width=True)
 
@@ -837,21 +872,19 @@ elif pest_sel == "⚙️ Dinamometría":
                 fig_r_aa = go.Figure()
                 fig_r_aa.add_trace(go.Bar(
                     x=nombres_aa, y=ratios_aa,
-                    marker_color=['#2ECC71' if 1.05 <= v <= 1.20 else '#E74C3C' for v in ratios_aa],
-                    text=[f"<b>{v:.2f}</b>" for v in ratios_aa], textposition='outside'
+                    marker_color=['#10b981' if 1.05 <= v <= 1.20 else '#ef4444' for v in ratios_aa],
+                    text=[f"<b>{v:.2f}</b>" for v in ratios_aa], textposition='outside', textfont=dict(color='white')
                 ))
-                fig_r_aa.add_shape(type="rect", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.20, fillcolor="rgba(46, 204, 113, 0.15)", line=dict(width=0), layer="below")
-                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.05, line=dict(color="#2ECC71", width=2, dash="dash"))
-                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.20, y1=1.20, line=dict(color="#2ECC71", width=2, dash="dash"))
-                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.20, text="Ref. Max (1.20)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=12)
-                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.05, text="Ref. Min (1.05)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=-12)
+                fig_r_aa.add_shape(type="rect", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.20, fillcolor="rgba(16, 185, 129, 0.1)", line=dict(width=0), layer="below")
+                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.05, y1=1.05, line=dict(color="#10b981", width=2, dash="dash"))
+                fig_r_aa.add_shape(type="line", x0=-0.5, x1=len(nombres_aa)-0.5, y0=1.20, y1=1.20, line=dict(color="#10b981", width=2, dash="dash"))
+                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.20, text="Ref. Max (1.20)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
+                fig_r_aa.add_annotation(x=len(nombres_aa)-1, y=1.05, text="Ref. Min (1.05)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=-10)
                 
                 max_raa_y = max(max(ratios_aa) + 0.25, 1.4)
+                fig_r_aa = aplicar_estilo_shadcn(fig_r_aa)
                 fig_r_aa.update_layout(
-                    title="⚖️ Ratio ADD / ABD Cadera (Índice)",
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_raa_y]),
-                    height=450, margin=dict(l=20, r=20, t=50, b=90)
+                    title="⚖️ Ratio ADD / ABD Cadera (Índice)", xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_raa_y]), height=450, margin=dict(l=20, r=20, t=50, b=90)
                 )
                 st.plotly_chart(fig_r_aa, use_container_width=True)
 
@@ -919,10 +952,10 @@ elif pest_sel == "🚀 Saltos (CMJ)":
             
             with col_sa1:
                 for nom, defs in items_s[:mitad_s]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_sa2:
                 for nom, defs in items_s[mitad_s:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple las referencias de saltabilidad y simetría.")
 
@@ -969,17 +1002,11 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_cmj_str = df_cmj_eq['Fecha'].tolist()
                     fig_cmj = go.Figure()
 
-                    # Transformación a gráfico de LÍNEAS
                     fig_cmj.add_trace(go.Scatter(
-                        x=fechas_cmj_str, 
-                        y=df_cmj_eq['Media_Equipo'],
-                        mode='lines+markers',
-                        line=dict(color=COLOR_ADARVE_BORDER, width=3),
-                        marker=dict(size=10, color=COLOR_ADARVE_GRANATE, line=dict(color='#FFFFFF', width=1.5)),
-                        error_y=dict(type='data', array=df_cmj_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
-                        name='Media Equipo CMJ',
-                        text=[f"<b>{v:.1f} cm</b>" for v in df_cmj_eq['Media_Equipo']],
-                        textposition='top center'
+                        x=fechas_cmj_str, y=df_cmj_eq['Media_Equipo'], mode='lines+markers',
+                        line=dict(color='#3b82f6', width=3), marker=dict(size=10, color='#3b82f6', line=dict(color='#FFFFFF', width=1.5)),
+                        error_y=dict(type='data', array=df_cmj_eq['SD_Equipo'], visible=True, color='rgba(255,255,255,0.3)', thickness=1.5, width=6),
+                        name='Media Equipo CMJ', text=[f"<b>{v:.1f} cm</b>" for v in df_cmj_eq['Media_Equipo']], textposition='top center'
                     ))
 
                     for k in range(len(df_cmj_eq)):
@@ -989,31 +1016,18 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         pos_y = val_curr + sd_curr + 2.5
 
                         if k == 0:
-                            fig_cmj.add_annotation(
-                                x=f_curr, y=pos_y,
-                                text=f"<b>{val_curr:.1f} cm</b>",
-                                showarrow=False, font=dict(color="white", size=13)
-                            )
+                            fig_cmj.add_annotation(x=f_curr, y=pos_y, text=f"<b>{val_curr:.1f} cm</b>", showarrow=False, font=dict(color="white", size=13))
                         else:
                             m_prev = df_cmj_eq['Media_Equipo'].iloc[k-1]
                             pct_v = ((val_curr - m_prev) / m_prev) * 100
-                            col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
+                            col_v = "#10b981" if pct_v >= 0 else "#ef4444"
                             signo = "+" if pct_v > 0 else ""
-
-                            fig_cmj.add_annotation(
-                                x=f_curr, y=pos_y,
-                                text=f"<b>{signo}{pct_v:.1f}%</b>",
-                                showarrow=False, font=dict(color=col_v, size=15)
-                            )
+                            fig_cmj.add_annotation(x=f_curr, y=pos_y, text=f"<b>{signo}{pct_v:.1f}%</b>", showarrow=False, font=dict(color=col_v, size=14))
 
                     max_y_cmj = (df_cmj_eq['Media_Equipo'] + df_cmj_eq['SD_Equipo']).max() + 7
-                    fig_cmj.update_layout(
-                        title="Evolución CMJ (cm) - Media ± SD Granate",
-                        template="plotly_dark",
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_cmj]),
-                        height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
-                    )
+                    
+                    fig_cmj = aplicar_estilo_shadcn(fig_cmj)
+                    fig_cmj.update_layout(title="Evolución CMJ (cm) - Media ± SD Granate", xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_cmj]), height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False)
                     st.plotly_chart(fig_cmj, use_container_width=True)
 
     # --- GRÁFICO 2: EVOLUCIÓN DRI (LÍNEAS) ---
@@ -1044,17 +1058,11 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_dri_str = df_dri_eq['Fecha'].tolist()
                     fig_dri = go.Figure()
 
-                    # Transformación a gráfico de LÍNEAS
                     fig_dri.add_trace(go.Scatter(
-                        x=fechas_dri_str, 
-                        y=df_dri_eq['Media_Equipo'],
-                        mode='lines+markers',
-                        line=dict(color=COLOR_ADARVE_BORDER, width=3),
-                        marker=dict(size=10, color=COLOR_ADARVE_GRANATE, line=dict(color='#FFFFFF', width=1.5)),
-                        error_y=dict(type='data', array=df_dri_eq['SD_Equipo'], visible=True, color='#FFFFFF', thickness=1.5, width=6),
-                        name='Media Equipo DRI',
-                        text=[f"<b>{v:.2f}</b>" for v in df_dri_eq['Media_Equipo']],
-                        textposition='top center'
+                        x=fechas_dri_str, y=df_dri_eq['Media_Equipo'], mode='lines+markers',
+                        line=dict(color='#f59e0b', width=3), marker=dict(size=10, color='#f59e0b', line=dict(color='#FFFFFF', width=1.5)),
+                        error_y=dict(type='data', array=df_dri_eq['SD_Equipo'], visible=True, color='rgba(255,255,255,0.3)', thickness=1.5, width=6),
+                        name='Media Equipo DRI', text=[f"<b>{v:.2f}</b>" for v in df_dri_eq['Media_Equipo']], textposition='top center'
                     ))
 
                     for k in range(len(df_dri_eq)):
@@ -1064,31 +1072,18 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         pos_y = val_curr + sd_curr + 0.15
 
                         if k == 0:
-                            fig_dri.add_annotation(
-                                x=f_curr, y=pos_y,
-                                text=f"<b>{val_curr:.2f}</b>",
-                                showarrow=False, font=dict(color="white", size=13)
-                            )
+                            fig_dri.add_annotation(x=f_curr, y=pos_y, text=f"<b>{val_curr:.2f}</b>", showarrow=False, font=dict(color="white", size=13))
                         else:
                             m_prev = df_dri_eq['Media_Equipo'].iloc[k-1]
                             pct_v = ((val_curr - m_prev) / m_prev) * 100
-                            col_v = "#2ECC71" if pct_v >= 0 else "#E74C3C"
+                            col_v = "#10b981" if pct_v >= 0 else "#ef4444"
                             signo = "+" if pct_v > 0 else ""
-
-                            fig_dri.add_annotation(
-                                x=f_curr, y=pos_y,
-                                text=f"<b>{signo}{pct_v:.1f}%</b>",
-                                showarrow=False, font=dict(color=col_v, size=15)
-                            )
+                            fig_dri.add_annotation(x=f_curr, y=pos_y, text=f"<b>{signo}{pct_v:.1f}%</b>", showarrow=False, font=dict(color=col_v, size=14))
 
                     max_y_dri = (df_dri_eq['Media_Equipo'] + df_dri_eq['SD_Equipo']).max() + 0.45
-                    fig_dri.update_layout(
-                        title="Evolución DRI Exacto - Media ± SD Granate",
-                        template="plotly_dark",
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        xaxis=dict(tickangle=-30), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri]),
-                        height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False
-                    )
+                    
+                    fig_dri = aplicar_estilo_shadcn(fig_dri)
+                    fig_dri.update_layout(title="Evolución DRI Exacto - Media ± SD Granate", xaxis=dict(tickangle=-30), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri]), height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False)
                     st.plotly_chart(fig_dri, use_container_width=True)
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
@@ -1135,33 +1130,29 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                             fig_pos = go.Figure()
 
                             fig_pos.add_trace(go.Bar(
-                                x=piv_j['Nombre'], y=piv_j['CMJ'], name='CMJ', marker_color='#00A8E8',
-                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['CMJ']], textposition='outside'
+                                x=piv_j['Nombre'], y=piv_j['CMJ'], name='CMJ', marker_color='#3b82f6',
+                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['CMJ']], textposition='outside', textfont=dict(color='white')
                             ))
 
                             fig_pos.add_trace(go.Bar(
-                                x=piv_j['Nombre'], y=piv_j['slCMJright'], name='slCMJ Right', marker_color='#FF9F1C',
-                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['slCMJright']], textposition='outside'
+                                x=piv_j['Nombre'], y=piv_j['slCMJright'], name='slCMJ Right', marker_color='#10b981',
+                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['slCMJright']], textposition='outside', textfont=dict(color='white')
                             ))
 
                             fig_pos.add_trace(go.Bar(
-                                x=piv_j['Nombre'], y=piv_j['slCMJleft'], name='slCMJ Left', marker_color='#2ECC71',
-                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['slCMJleft']], textposition='outside'
+                                x=piv_j['Nombre'], y=piv_j['slCMJleft'], name='slCMJ Left', marker_color='#14b8a6',
+                                text=[f"<b>{v:.1f}</b>" if pd.notna(v) else "" for v in piv_j['slCMJleft']], textposition='outside', textfont=dict(color='white')
                             ))
 
                             for idx_r, row_j in piv_j.iterrows():
                                 vr, vl = row_j['slCMJright'], row_j['slCMJleft']
                                 if pd.notna(vr) and pd.notna(vl) and max(vr, vl) > 0:
                                     asim_s = (abs(vr - vl) / max(vr, vl)) * 100
-                                    color_as = "#E74C3C" if asim_s > 10 else "#2ECC71"
+                                    color_as = "#ef4444" if asim_s > 10 else "#10b981"
                                     pos_y_s = max(vr, vl) + 3.8
 
                                     fig_pos.add_annotation(
-                                        x=idx_r + 0.16,
-                                        y=pos_y_s,
-                                        text=f"<b>{asim_s:.1f}%</b>",
-                                        showarrow=False,
-                                        font=dict(color=color_as, size=15)
+                                        x=idx_r + 0.16, y=pos_y_s, text=f"<b>{asim_s:.1f}%</b>", showarrow=False, font=dict(color=color_as, size=13)
                                     )
 
                             ref_cmj_val, ref_sl_val = None, None
@@ -1171,25 +1162,24 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                                     ref_cmj_val = row_ref.iloc[0].get('CMJ_Ref', None)
                                     sr = row_ref.iloc[0].get('slCMJright_Ref', None)
                                     sl = row_ref.iloc[0].get('slCMJleft_Ref', None)
-                                    if pd.notna(sr) and pd.notna(sl):
-                                        ref_sl_val = (float(sr) + float(sl)) / 2
+                                    if pd.notna(sr) and pd.notna(sl): ref_sl_val = (float(sr) + float(sl)) / 2
                                     elif pd.notna(sr): ref_sl_val = float(sr)
                                     elif pd.notna(sl): ref_sl_val = float(sl)
 
                             if ref_cmj_val and pd.notna(ref_cmj_val):
-                                fig_pos.add_shape(type="line", x0=-0.5, x1=len(piv_j)-0.5, y0=ref_cmj_val, y1=ref_cmj_val, line=dict(color="#2ECC71", width=2.5, dash="dash"))
-                                fig_pos.add_annotation(x=len(piv_j)-1, y=ref_cmj_val, text=f"Ref CMJ ({ref_cmj_val:.1f} cm)", showarrow=False, font=dict(color="#2ECC71", size=11), align="right", yshift=10)
+                                fig_pos.add_shape(type="line", x0=-0.5, x1=len(piv_j)-0.5, y0=ref_cmj_val, y1=ref_cmj_val, line=dict(color="#10b981", width=2, dash="dash"))
+                                fig_pos.add_annotation(x=len(piv_j)-1, y=ref_cmj_val, text=f"Ref CMJ ({ref_cmj_val:.1f} cm)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
 
                             if ref_sl_val and pd.notna(ref_sl_val):
-                                fig_pos.add_shape(type="line", x0=-0.5, x1=len(piv_j)-0.5, y0=ref_sl_val, y1=ref_sl_val, line=dict(color="#F1C40F", width=2.5, dash="dash"))
-                                fig_pos.add_annotation(x=len(piv_j)-1, y=ref_sl_val, text=f"Ref slCMJ ({ref_sl_val:.1f} cm)", showarrow=False, font=dict(color="#F1C40F", size=11), align="right", yshift=-12)
+                                fig_pos.add_shape(type="line", x0=-0.5, x1=len(piv_j)-0.5, y0=ref_sl_val, y1=ref_sl_val, line=dict(color="#f59e0b", width=2, dash="dash"))
+                                fig_pos.add_annotation(x=len(piv_j)-1, y=ref_sl_val, text=f"Ref slCMJ ({ref_sl_val:.1f} cm)", showarrow=False, font=dict(color="#f59e0b", size=11), align="right", yshift=-10)
 
                             max_y_p = max(piv_j[['CMJ', 'slCMJright', 'slCMJleft']].max().max(), (ref_cmj_val or 0)) + 7
 
+                            fig_pos = aplicar_estilo_shadcn(fig_pos)
                             fig_pos.update_layout(
                                 title=f"⚽ Demarcación: {pos_curr} ({ult_f_saltos_str})",
-                                barmode='group', template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                xaxis=dict(tickangle=-45), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_p]),
+                                barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_p]),
                                 height=460, margin=dict(l=20, r=20, t=50, b=90),
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
@@ -1220,7 +1210,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
                     # 1. Trazado de Barras por Jugador
                     jugadores_lista = sorted(df_cmj_agg['Nombre'].unique())
-                    colores_jugadores = px.colors.qualitative.Plotly * 5
+                    colores_jugadores = SHADCN_COLORS * 5
                     
                     for idx, j in enumerate(jugadores_lista):
                         df_j = df_cmj_agg[df_cmj_agg['Nombre'] == j].set_index('Fecha_dt')
@@ -1230,32 +1220,25 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                             x=fechas_str, y=val_y,
                             name=j, marker_color=colores_jugadores[idx % len(colores_jugadores)],
                             text=[f"{v:.1f}" if pd.notna(v) else "" for v in val_y],
-                            textposition='inside',
-                            textfont=dict(color='white')
+                            textposition='inside', textfont=dict(color='white')
                         ))
 
                     # 2. Línea Secundaria de Media de Equipo
                     fig_interactivo.add_trace(go.Scatter(
                         x=fechas_str, y=df_media_equipo['Altura'],
                         mode='lines+markers', name='Media Equipo (CMJ)',
-                        line=dict(color='#2ECC71', width=4, shape='spline', dash='dot'),
-                        marker=dict(size=12, color='#2ECC71', symbol='diamond', line=dict(color='white', width=2)),
+                        line=dict(color='#22c55e', width=3, shape='spline', dash='dot'),
+                        marker=dict(size=10, color='#22c55e', symbol='diamond', line=dict(color='white', width=1.5)),
                     ))
 
                     max_y_int = df_cmj_agg['Altura'].max() + 5
+                    fig_interactivo = aplicar_estilo_shadcn(fig_interactivo)
                     fig_interactivo.update_layout(
                         title="Evolución CMJ (Barras por jugador y Media del Equipo)",
-                        barmode='group', template="plotly_dark",
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)',
-                        xaxis=dict(title="Fecha Sesión", tickangle=-30),
+                        barmode='group', xaxis=dict(title="Fecha Sesión", tickangle=-30),
                         yaxis=dict(title="Altura Salto CMJ (cm)", range=[0, max_y_int]),
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
-                        legend=dict(
-                            title="Jugadores (Un clic aisla)", 
-                            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
-                            itemclick="toggleothers",
-                            itemdoubleclick="toggle"
-                        )
+                        legend=dict(title="Jugadores (Un clic aisla)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, itemclick="toggleothers", itemdoubleclick="toggle")
                     )
                     st.plotly_chart(fig_interactivo, use_container_width=True)
 
@@ -1271,9 +1254,8 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
                     fig_interactivo = go.Figure()
 
-                    # 1. Trazado de Barras por Jugador
                     jugadores_lista = sorted(df_dri_agg['Nombre'].unique())
-                    colores_jugadores = px.colors.qualitative.Plotly * 5
+                    colores_jugadores = SHADCN_COLORS * 5
                     
                     for idx, j in enumerate(jugadores_lista):
                         df_j = df_dri_agg[df_dri_agg['Nombre'] == j].set_index('Fecha_dt')
@@ -1283,32 +1265,24 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                             x=fechas_str, y=val_y,
                             name=j, marker_color=colores_jugadores[idx % len(colores_jugadores)],
                             text=[f"{v:.2f}" if pd.notna(v) else "" for v in val_y],
-                            textposition='inside',
-                            textfont=dict(color='white')
+                            textposition='inside', textfont=dict(color='white')
                         ))
 
-                    # 2. Línea Secundaria de Media de Equipo
                     fig_interactivo.add_trace(go.Scatter(
                         x=fechas_str, y=df_media_equipo['DRI'],
                         mode='lines+markers', name='Media Equipo (DRI)',
-                        line=dict(color='#FFC107', width=4, shape='spline', dash='dot'),
-                        marker=dict(size=12, color='#FFC107', symbol='diamond', line=dict(color='white', width=2)),
+                        line=dict(color='#f59e0b', width=3, shape='spline', dash='dot'),
+                        marker=dict(size=10, color='#f59e0b', symbol='diamond', line=dict(color='white', width=1.5)),
                     ))
 
                     max_y_int = df_dri_agg['DRI'].max() + 0.5
+                    fig_interactivo = aplicar_estilo_shadcn(fig_interactivo)
                     fig_interactivo.update_layout(
                         title="Evolución Índice DRI (Barras por jugador y Media del Equipo)",
-                        barmode='group', template="plotly_dark",
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(15,23,42,0.6)',
-                        xaxis=dict(title="Fecha Sesión", tickangle=-30),
+                        barmode='group', xaxis=dict(title="Fecha Sesión", tickangle=-30),
                         yaxis=dict(title="Índice DRI", range=[0, max_y_int]),
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
-                        legend=dict(
-                            title="Jugadores (Un clic aisla)", 
-                            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
-                            itemclick="toggleothers",
-                            itemdoubleclick="toggle"
-                        )
+                        legend=dict(title="Jugadores (Un clic aisla)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, itemclick="toggleothers", itemdoubleclick="toggle")
                     )
                     st.plotly_chart(fig_interactivo, use_container_width=True)
 
@@ -1359,10 +1333,10 @@ elif pest_sel == "🏋️ Tren Superior":
             
             with col_tsa1:
                 for nom, defs in items_ts[:mitad_ts]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_tsa2:
                 for nom, defs in items_ts[mitad_ts:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #E74C3C;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple los umbrales mínimos de fuerza de tren superior.")
 
@@ -1392,7 +1366,6 @@ elif pest_sel == "🏋️ Tren Superior":
 
                 fig_pb = go.Figure()
                 fechas_pb_ord = sorted(df_pb['Fecha_dt'].unique())
-                colores_pb = ['#00A8E8', '#FF9F1C', '#2ECC71', '#9B59B6', '#E74C3C', '#F1C40F']
 
                 for idx_f, f_dt in enumerate(fechas_pb_ord):
                     f_str = df_pb[df_pb['Fecha_dt'] == f_dt]['Fecha'].iloc[0]
@@ -1401,24 +1374,15 @@ elif pest_sel == "🏋️ Tren Superior":
                     val_y = [df_f_data.loc[j, 'Press_Banca'] if j in df_f_data.index else None for j in jugadores_ord_pb]
 
                     fig_pb.add_trace(go.Bar(
-                        x=jugadores_ord_pb, y=val_y,
-                        name=f"Fecha {f_str}",
-                        marker_color=colores_pb[idx_f % len(colores_pb)],
-                        text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y],
-                        textposition='outside'
+                        x=jugadores_ord_pb, y=val_y, name=f"Fecha {f_str}",
+                        marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
                     ))
 
-                fig_pb.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_pb)-0.5, y0=REF_PRESS_BANCA, y1=REF_PRESS_BANCA, line=dict(color="#2ECC71", width=3, dash="dash"))
-                fig_pb.add_annotation(x=len(jugadores_ord_pb)-1, y=REF_PRESS_BANCA, text=f"Ref. Óptima (≥{REF_PRESS_BANCA:.0f} reps)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
+                fig_pb.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_pb)-0.5, y0=REF_PRESS_BANCA, y1=REF_PRESS_BANCA, line=dict(color="#3b82f6", width=2, dash="dash"))
+                fig_pb.add_annotation(x=len(jugadores_ord_pb)-1, y=REF_PRESS_BANCA, text=f"Ref. Óptima (≥{REF_PRESS_BANCA:.0f} reps)", showarrow=False, font=dict(color="#3b82f6", size=11), align="right", yshift=10)
 
-                fig_pb.update_layout(
-                    title=f"Ranking Press Banca (Ordenado por última sesión: {ult_fecha_ts_str})",
-                    barmode='group', template="plotly_dark",
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_pb_val, REF_PRESS_BANCA) + 5]),
-                    height=520, margin=dict(l=10, r=10, t=50, b=100),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
+                fig_pb = aplicar_estilo_shadcn(fig_pb)
+                fig_pb.update_layout(title=f"Ranking Press Banca (Última sesión: {ult_fecha_ts_str})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_pb_val, REF_PRESS_BANCA) + 5]), height=520, margin=dict(l=10, r=10, t=50, b=100))
                 st.plotly_chart(fig_pb, use_container_width=True)
 
         with col_dom:
@@ -1443,7 +1407,6 @@ elif pest_sel == "🏋️ Tren Superior":
 
                 fig_dom = go.Figure()
                 fechas_dom_ord = sorted(df_dom['Fecha_dt'].unique())
-                colores_dom = ['#2ECC71', '#00A8E8', '#FF9F1C', '#9B59B6', '#E74C3C', '#F1C40F']
 
                 for idx_f, f_dt in enumerate(fechas_dom_ord):
                     f_str = df_dom[df_dom['Fecha_dt'] == f_dt]['Fecha'].iloc[0]
@@ -1452,24 +1415,15 @@ elif pest_sel == "🏋️ Tren Superior":
                     val_y = [df_f_data.loc[j, 'Dominada'] if j in df_f_data.index else None for j in jugadores_ord_dom]
 
                     fig_dom.add_trace(go.Bar(
-                        x=jugadores_ord_dom, y=val_y,
-                        name=f"Fecha {f_str}",
-                        marker_color=colores_dom[idx_f % len(colores_dom)],
-                        text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y],
-                        textposition='outside'
+                        x=jugadores_ord_dom, y=val_y, name=f"Fecha {f_str}",
+                        marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
                     ))
 
-                fig_dom.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_dom)-0.5, y0=REF_DOMINADAS, y1=REF_DOMINADAS, line=dict(color="#2ECC71", width=3, dash="dash"))
-                fig_dom.add_annotation(x=len(jugadores_ord_dom)-1, y=REF_DOMINADAS, text=f"Ref. Óptima (≥{REF_DOMINADAS:.0f} reps)", showarrow=False, font=dict(color="#2ECC71", size=12), align="right", yshift=12)
+                fig_dom.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_dom)-0.5, y0=REF_DOMINADAS, y1=REF_DOMINADAS, line=dict(color="#10b981", width=2, dash="dash"))
+                fig_dom.add_annotation(x=len(jugadores_ord_dom)-1, y=REF_DOMINADAS, text=f"Ref. Óptima (≥{REF_DOMINADAS:.0f} reps)", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
 
-                fig_dom.update_layout(
-                    title=f"Ranking Dominadas (Ordenado por última sesión: {ult_fecha_ts_str})",
-                    barmode='group', template="plotly_dark",
-                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_dom_val, REF_DOMINADAS) + 5]),
-                    height=520, margin=dict(l=10, r=10, t=50, b=100),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
+                fig_dom = aplicar_estilo_shadcn(fig_dom)
+                fig_dom.update_layout(title=f"Ranking Dominadas (Última sesión: {ult_fecha_ts_str})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_dom_val, REF_DOMINADAS) + 5]), height=520, margin=dict(l=10, r=10, t=50, b=100))
                 st.plotly_chart(fig_dom, use_container_width=True)
 
 # =============================================================================
@@ -1609,8 +1563,6 @@ elif pest_sel == "⚡ Velocidad & COD":
         if not pos_a_mostrar_campo:
             st.info("No se hallaron demarcaciones asociadas en Posiciones.xlsx para las pruebas de campo.")
         else:
-            colores_fechas = ['#00A8E8', '#FF9F1C', '#2ECC71', '#9B59B6', '#E74C3C', '#F1C40F']
-
             for pos_curr in pos_a_mostrar_campo:
                 df_p_c = df_campo[df_campo['Posicion'] == pos_curr].sort_values(['Nombre', 'Fecha_dt']).copy()
 
@@ -1642,11 +1594,8 @@ elif pest_sel == "⚡ Velocidad & COD":
                                     etiquetas.append(f"<b>{v:.1f}</b><br><i>{signo}{vp:.1f}%</i>")
 
                             fig_campo.add_trace(go.Bar(
-                                x=jugadores_p_c, y=vals_y,
-                                name=f"Fecha {f_str}",
-                                marker_color=colores_fechas[idx_f % len(colores_fechas)],
-                                text=etiquetas,
-                                textposition='outside'
+                                x=jugadores_p_c, y=vals_y, name=f"Fecha {f_str}",
+                                marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=etiquetas, textposition='outside', textfont=dict(color='white', size=11)
                             ))
 
                         # --- LÍNEA DE REFERENCIA POR POSICIÓN ---
@@ -1657,36 +1606,14 @@ elif pest_sel == "⚡ Velocidad & COD":
                                 ref_val_c = row_rc.iloc[0][col_ref]
 
                         if ref_val_c and pd.notna(ref_val_c):
-                            fig_campo.add_shape(
-                                type="line", 
-                                x0=-0.5, 
-                                x1=len(jugadores_p_c)-0.5, 
-                                y0=ref_val_c, 
-                                y1=ref_val_c, 
-                                line=dict(color="#2ECC71", width=3, dash="dash")
-                            )
-                            fig_campo.add_annotation(
-                                x=len(jugadores_p_c)-1, 
-                                y=ref_val_c, 
-                                text=f"Ref. {pos_curr} ({ref_val_c:.1f} {unidad_m})", 
-                                showarrow=False, 
-                                font=dict(color="#2ECC71", size=11), 
-                                align="right", 
-                                yshift=12
-                            )
+                            fig_campo.add_shape(type="line", x0=-0.5, x1=len(jugadores_p_c)-0.5, y0=ref_val_c, y1=ref_val_c, line=dict(color="#10b981", width=2, dash="dash"))
+                            fig_campo.add_annotation(x=len(jugadores_p_c)-1, y=ref_val_c, text=f"Ref. {pos_curr} ({ref_val_c:.1f} {unidad_m})", showarrow=False, font=dict(color="#10b981", size=11), align="right", yshift=10)
 
                         val_min = min(df_p_c[col_metrica].min(), (ref_val_c or 0))
                         val_max = max(df_p_c[col_metrica].max(), (ref_val_c or 0))
 
-                        fig_campo.update_layout(
-                            title=f"⚽ Demarcación: {pos_curr} - {titulo_m}",
-                            barmode='group', template="plotly_dark",
-                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                            xaxis=dict(tickangle=-45), 
-                            yaxis=dict(title=f"Valor ({unidad_m})", range=[min(0, val_min - 2), val_max + 4]),
-                            height=440, margin=dict(l=10, r=10, t=50, b=90),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                        )
+                        fig_campo = aplicar_estilo_shadcn(fig_campo)
+                        fig_campo.update_layout(title=f"⚽ Demarcación: {pos_curr} - {titulo_m}", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad_m})", range=[min(0, val_min - 2), val_max + 4]), height=440, margin=dict(l=10, r=10, t=50, b=90))
                         st.plotly_chart(fig_campo, use_container_width=True)
 
                     with col_der_c:
@@ -1695,9 +1622,9 @@ elif pest_sel == "⚡ Velocidad & COD":
 
                         def format_cualitativo(val):
                             if pd.isna(val): return "Sin Datos"
-                            elif val == 1: return "<span style='color: #E74C3C; font-weight: bold;'>🔴 Malo</span>"
-                            elif val == 2: return "<span style='color: #F1C40F; font-weight: bold;'>🟡 Aceptable</span>"
-                            elif val == 3: return "<span style='color: #2ECC71; font-weight: bold;'>🟢 Bueno</span>"
+                            elif val == 1: return "<span style='color: #ef4444; font-weight: bold;'>🔴 Malo</span>"
+                            elif val == 2: return "<span style='color: #f59e0b; font-weight: bold;'>🟡 Aceptable</span>"
+                            elif val == 3: return "<span style='color: #10b981; font-weight: bold;'>🟢 Bueno</span>"
                             return str(val)
 
                         df_p_c_ult['Val_Cualitativa'] = df_p_c_ult[col_tec].apply(format_cualitativo)
