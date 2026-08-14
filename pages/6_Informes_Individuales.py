@@ -12,7 +12,7 @@ from datetime import datetime
 from utils import aplicar_diseno_responsive
 
 # =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA Y TEMAS V0 (DARK HIGH-PERFORMANCE THEME)
+# 1. CONFIGURACIÓN DE PÁGINA Y TEMAS V0 (FULL WIDTH SHADCN THEME)
 # =============================================================================
 aplicar_diseno_responsive()
 
@@ -43,7 +43,15 @@ def inject_v0_css():
     st.markdown(f"""
         <style>
         .stApp {{ background: {BG}; }}
-        .block-container {{ padding-top: 1.5rem; padding-bottom: 3rem; max-width: 1300px; }}
+        
+        /* 100% ANCHO REAL DE PANTALLA */
+        .block-container {{ 
+            padding-top: 1.5rem !important; 
+            padding-bottom: 3rem !important; 
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+            max-width: 100% !important; 
+        }}
 
         /* Card Primitive v0 */
         .pd-card {{
@@ -61,8 +69,9 @@ def inject_v0_css():
             border: 1px solid {BORDER};
             border-radius: 18px;
             padding: 1.25rem 1.5rem;
+            width: 100%;
         }}
-        .pd-name {{ font-size: 2.1rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
+        .pd-name {{ font-size: 2.2rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
         .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.35rem; }}
         .pd-badge {{
             display: inline-flex; align-items: center; gap: 0.4rem;
@@ -76,11 +85,11 @@ def inject_v0_css():
             line-height: 1; letter-spacing: -0.04em;
         }}
 
-        /* Fact Grid v0 */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-top: 1rem; }}
-        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.55rem 0.75rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
-        .pd-fact .v {{ font-size: 1.05rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
+        /* Fact Grid v0 adaptativo */
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 1rem; }}
+        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.65rem 0.85rem; text-align: center; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
@@ -103,7 +112,7 @@ def inject_v0_css():
         }}
 
         .pd-section-title {{
-            font-size: 0.82rem; font-weight: 800; text-transform: uppercase;
+            font-size: 0.85rem; font-weight: 800; text-transform: uppercase;
             letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem;
         }}
 
@@ -111,7 +120,7 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
         .stTabs [data-baseweb="tab"] {{
             background: {SURFACE}; border: 1px solid {BORDER};
-            border-radius: 10px 10px 0 0; padding: 0.6rem 1.2rem; font-weight: 700; color: {MUTED};
+            border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED};
         }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         </style>
@@ -361,7 +370,7 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-c_sel, _ = st.columns([1.8, 2.2])
+c_sel, _ = st.columns([2.5, 7.5])
 with c_sel:
     jugador_sel = st.selectbox("⚽ Selecciona Jugador:", lista_jugadores)
 
@@ -444,9 +453,9 @@ def _campograma_v0(pos_str, pierna_s):
     return fig
 
 # =============================================================================
-# 5. HEADER ENCABEZADO ESTILO HERO CARD V0
+# 5. HEADER ENCABEZADO ESTILO HERO CARD V0 (EXPANDIDO 100% ANCHO)
 # =============================================================================
-col_photo, col_info, col_pitch = st.columns([1.0, 2.0, 1.3], gap="medium")
+col_photo, col_info, col_pitch = st.columns([1.0, 2.4, 1.2], gap="large")
 
 with col_photo:
     if url_foto_jugador and pd.notna(url_foto_jugador):
@@ -512,7 +521,7 @@ with tab_tests:
 
     st.divider()
 
-    left_col, right_col = st.columns([1.15, 1], gap="large")
+    left_col, right_col = st.columns([1.3, 1], gap="large")
 
     with left_col:
         st.markdown('<div class="pd-section-title">Evolución de tests en el tiempo</div>', unsafe_allow_html=True)
@@ -523,7 +532,6 @@ with tab_tests:
         )
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Gráfico evolutivo en función del test
         if test_categoria == "🩺 Movilidad":
             if df_mov is not None and not df_mov.empty:
                 df_j_mov = df_mov[df_mov['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt')
