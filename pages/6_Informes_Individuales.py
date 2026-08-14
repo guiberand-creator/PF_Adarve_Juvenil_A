@@ -78,21 +78,21 @@ def inject_v0_css():
             margin-top: 0px !important;
         }}
 
-        .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
-        .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; }}
+        .pd-name {{ font-size: 2.1rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
+        .pd-club {{ color: {MUTED}; font-size: 0.9rem; margin-top: 0.2rem; }}
         .pd-badge {{
             display: inline-flex; align-items: center; gap: 0.4rem;
             background: {PRIMARY_SOFT}; color: {PRIMARY};
             border: 1px solid rgba(225,29,72,0.35);
-            padding: 0.25rem 0.8rem; border-radius: 999px;
-            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+            padding: 0.15rem 0.6rem; border-radius: 999px;
+            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
         }}
 
         /* Fact Grid v0 (1 Fila x 4 columnas) */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
-        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
-        .pd-fact .v {{ font-size: 1.3rem; font-weight: 800; margin-top: 0.25rem; color: {TEXT}; }}
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-top: 0.5rem; }}
+        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.6rem 0.8rem; text-align: center; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
@@ -101,7 +101,7 @@ def inject_v0_css():
         .photo-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 260px !important;
+            max-width: 250px !important;
             object-fit: contain !important;
             display: block;
             margin: 0 auto;
@@ -110,7 +110,7 @@ def inject_v0_css():
         .photo-placeholder-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 260px !important;
+            max-width: 250px !important;
             border-radius: 16px;
             background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
             display: flex; align-items: center; justify-content: center;
@@ -202,17 +202,23 @@ def cargar_todo_informes():
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
-    # 1. Cuestionario Inicial (Búsqueda Limpia y Robusta)
+    # 1. Cuestionario Inicial (Búsqueda Láser de Nombres Exactos de Columna)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
-        df_cuest.columns = [str(c).strip().lower() for c in df_cuest.columns]
+        df_cuest.columns = [str(c).strip() for c in df_cuest.columns]
 
-        c_n, c_fn, c_pos, c_pierna = None, None, None, None
-        for col in df_cuest.columns:
-            if any(k in col for k in ['nombre', 'jugador', 'apellidos']): c_n = col
-            elif any(k in col for k in ['nacimiento', 'nacim', 'dob', 'cumple']): c_fn = col
-            elif any(k in col for k in ['posici', 'pos', 'demarc']): c_pos = col
-            elif any(k in col for k in ['pierna', 'pie', 'habil', 'hábil']): c_pierna = col
+        def find_exact_or_partial(cols, exact, partials):
+            for c in cols:
+                if exact.lower() in c.lower(): return c
+            for c in cols:
+                for p in partials:
+                    if p.lower() in c.lower(): return c
+            return None
+
+        c_n = find_exact_or_partial(df_cuest.columns, 'nombre y apellidos', ['nombre', 'jugador']) or df_cuest.columns[0]
+        c_fn = find_exact_or_partial(df_cuest.columns, 'fecha de nacimiento', ['nacimiento', 'nacim', 'dob'])
+        c_pos = find_exact_or_partial(df_cuest.columns, 'posición en el campo', ['posición', 'posicion', 'demarc'])
+        c_pierna = find_exact_or_partial(df_cuest.columns, 'pierna dominante', ['pierna', 'pie', 'hábil'])
 
         ren = {}
         if c_n: ren[c_n] = 'Nombre'
@@ -464,7 +470,7 @@ def cargar_todo_informes():
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales = cargar_todo_informes()
 
 # =============================================================================
-# 3. SELECTOR DE JUGADOR (FILA SUPERIOR INDEPENDIENTE Y DEL ANCHO DE LA FOTO)
+# 3. SELECTOR DE JUGADOR EN FILA SUPERIOR (MISMAS DIMENSIONES QUE LA FOTO)
 # =============================================================================
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
@@ -474,11 +480,11 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
-# Selector en una fila superior exclusiva, coincidiendo exactamente con la proporción visual de la foto (1.0)
+# Selector en una fila superior exclusiva, coincidiendo en anchura (proporción 1.0) con la columna de la foto
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
     jugador_sel = st.selectbox(
-        "⚽", 
+        "Selector oculto:", 
         lista_jugadores, 
         label_visibility="collapsed"
     )
@@ -493,7 +499,7 @@ match_cuest = pd.DataFrame()
 if not df_cuest.empty and 'Nombre_Norm' in df_cuest.columns:
     m = df_cuest[df_cuest['Nombre_Norm'] == jug_norm]
     if m.empty:
-        # Búsqueda difusa si no coincide el nombre exacto
+        # Búsqueda difusa si falta un apellido
         def fuzzy_match(n):
             if not n: return False
             n_str = str(n).lower()
@@ -510,18 +516,13 @@ url_foto_jugador = match_pos.iloc[0].get('Foto_URL', None) if not match_pos.empt
 # Extracción de Nacimiento Blindada
 fecha_nac_str = "Por definir"
 if not match_cuest.empty and 'Fecha_Nacimiento' in match_cuest.columns:
-    val = str(match_cuest.iloc[0]['Fecha_Nacimiento']).strip()
+    val = str(match_cuest.iloc[-1]['Fecha_Nacimiento']).strip()
     if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
-elif not match_pos.empty:
-    col_fn_pos = next((c for c in match_pos.columns if 'nacim' in str(c).lower()), None)
-    if col_fn_pos:
-        val = str(match_pos.iloc[0][col_fn_pos]).strip()
-        if val.lower() not in ['nan', 'none', 'por definir', '0', '']: fecha_nac_str = val
 
 # Posición y Lado
 posicion_str = "Por definir"
 if not match_cuest.empty and 'Posicion_Habitual' in match_cuest.columns:
-    val_p = str(match_cuest.iloc[0]['Posicion_Habitual']).strip()
+    val_p = str(match_cuest.iloc[-1]['Posicion_Habitual']).strip()
     if val_p.lower() not in ['nan', 'none', 'por definir', '0', '']: posicion_str = val_p
 elif not match_pos.empty:
     posicion_str = str(match_pos.iloc[0].get('Posicion', 'Por definir')).strip()
@@ -535,13 +536,8 @@ if not match_pos.empty and 'Lado' in match_pos.columns:
 # Extracción Pierna Dominante Blindada
 pierna_str = "Por definir"
 if not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
-    val = str(match_cuest.iloc[0]['Pierna_Dominante']).strip()
+    val = str(match_cuest.iloc[-1]['Pierna_Dominante']).strip()
     if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
-elif not match_pos.empty:
-    col_p_pos = next((c for c in match_pos.columns if 'pierna' in str(c).lower()), None)
-    if col_p_pos:
-        val = str(match_pos.iloc[0][col_p_pos]).strip()
-        if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
 
 # Minutos en Liga Reales (Desde 06/09/2026)
 minutos_oficiales = 0
@@ -624,7 +620,7 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA)
+# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA SUPERIOR)
 # =============================================================================
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.7, 1.1], gap="medium")
 
@@ -635,7 +631,7 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px)
+# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE GIGANTE ARRIBA, POSICIÓN EN BADGE DEBAJO
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
