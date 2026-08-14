@@ -9,6 +9,7 @@ import glob
 import requests
 import io
 import base64
+import re
 from datetime import datetime
 from utils import aplicar_diseno_responsive
 
@@ -333,7 +334,6 @@ def cargar_todo_informes():
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if num_col in df_campo.columns: df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
 
-    # CÁLCULO DE RANKING GLOBAL REAL
     dict_rankings_reales = {}
     if not df_pos.empty:
         df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
@@ -347,7 +347,6 @@ def cargar_todo_informes():
 
         if df_mov is not None and not df_mov.empty:
             df_m_last = df_mov.sort_values('Fecha_dt').copy()
-            # EXTRAEMOS SOLO COLUMNAS EXISTENTES, IGNORANDO LUMBAR
             mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I'] if c in df_m_last.columns]
             if mov_cols:
                 df_m_last['Movilidad_Score'] = df_m_last[mov_cols].mean(axis=1)
@@ -398,7 +397,6 @@ def cargar_todo_informes():
             for _, r_rank in df_rank_base.iterrows():
                 dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
 
-    # CARGA EXCLUSIVA DEL EXCEL DE REFERENCIAS VAM
     r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
     df_ref_vam = pd.read_excel(r_ref_vam) if os.path.exists(r_ref_vam) else pd.DataFrame()
 
@@ -406,17 +404,12 @@ def cargar_todo_informes():
 
 df_pos, df_cuest, df_peso, df_rpe, df_gps_all, df_mov, df_vam, df_dina, df_saltos, df_dri, df_fts, df_campo, dict_rankings_reales, df_rank_base, df_ref_vam = cargar_todo_informes()
 
-# Funciones aux. calculo std
 def calc_mean_std(df, date_col, val_col):
     if df is None or df.empty: return pd.DataFrame()
     dff = df.dropna(subset=[val_col]).copy()
     if dff.empty: return pd.DataFrame()
     dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
-    agg = dff.groupby(date_col).agg(
-        Fecha=('Fecha', 'first'),
-        Mean=(val_col, 'mean'),
-        Std=(val_col, 'std')
-    ).reset_index().sort_values(date_col)
+    agg = dff.groupby(date_col).agg(Fecha=('Fecha', 'first'), Mean=(val_col, 'mean'), Std=(val_col, 'std')).reset_index().sort_values(date_col)
     agg['Std'] = agg['Std'].fillna(0)
     return agg
 
@@ -549,8 +542,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
-                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
+                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
+                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -689,9 +682,33 @@ with tab_tests:
         elif test_categoria == "⚙️ Dinamometría":
             if not df_j_dina.empty:
                 df_j_dina['Fmax_Abs'] = pd.to_numeric(df_j_dina['Fmax_Abs'], errors='coerce')
-                agg = df_j_dina.groupby(['Fecha', 'Fecha_dt', 'Exercise'], as_index=False)['Fmax_Abs'].mean().sort_values('Fecha_dt')
-                fig_d = px.bar(agg, x='Fecha', y='Fmax_Abs', color='Exercise', barmode='group', color_discrete_sequence=[PRIMARY, TEAM, GOOD, WARNING, "#8b5cf6"])
-                fig_d.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
+                agg = df_j_dina.groupby(['Fecha', 'Fecha_dt', 'Exercise'], as_index=False)['Fmax_Abs'].mean()
+                
+                def get_lado_base(ex):
+                    ex_str = str(ex)
+                    ex_low = ex_str.lower()
+                    if "derecha" in ex_low or "_der" in ex_low or " der" in ex_low: lado = "Derecha"
+                    elif "izquierda" in ex_low or "_izq" in ex_low or " izq" in ex_low: lado = "Izquierda"
+                    else: lado = "Bilateral"
+                    
+                    base = re.sub(r'(?i)[_-]?derecha', '', ex_str)
+                    base = re.sub(r'(?i)[_-]?izquierda', '', base)
+                    base = re.sub(r'(?i)[_-]?der\b', '', base)
+                    base = re.sub(r'(?i)[_-]?izq\b', '', base)
+                    base = base.replace('_', ' ').strip()
+                    return pd.Series([lado, base])
+                    
+                agg[['Lado', 'Base_Exercise']] = agg['Exercise'].apply(get_lado_base)
+                agg = agg.sort_values(['Fecha_dt', 'Base_Exercise', 'Lado'])
+                
+                fig_d = px.bar(
+                    agg, x=['Fecha', 'Base_Exercise'], y='Fmax_Abs', color='Lado', barmode='group', 
+                    color_discrete_map={'Derecha': PRIMARY, 'Izquierda': TEAM, 'Bilateral': GOOD}
+                )
+                fig_d.update_layout(
+                    height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), 
+                    legend=dict(orientation="h", y=-0.3, title=""), xaxis_title="", yaxis_title="Fuerza Máx Absoluta", margin=dict(b=40)
+                )
                 st.plotly_chart(fig_d, use_container_width=True, config={"displayModeBar": False})
             else: st.info("No hay datos de dinamometría.")
 
