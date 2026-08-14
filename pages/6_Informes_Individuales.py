@@ -546,8 +546,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
-                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
+                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
+                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -736,11 +736,11 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ", "Evolución DRI y DJ"], horizontal=True)
-            if sub_s == "Evolución CMJ":
+            sub_s = st.radio("Vista:", ["Evolución CMJ, slCMJright, slCMJleft", "Evolución DRI y DJ"], horizontal=True)
+            if "CMJ" in sub_s:
                 if not df_j_s.empty:
                     fig_s = go.Figure()
-                    for t_norm, col_name, c_color in [('CMJ', 'CMJ', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: 
@@ -827,8 +827,8 @@ with tab_tests:
                 if ref_decmax and pd.notna(ref_decmax):
                     fig_vel.add_hline(y=ref_decmax, line_dash="dash", line_color=WARNING, annotation_text=f"Ref DEC.Máx: {ref_decmax:.2f}", yref="y2")
 
-                fig_vel.update_yaxes(showgrid=True, gridcolor=BORDER, zeroline=False, secondary_y=False)
-                fig_vel.update_yaxes(showgrid=False, zeroline=False, secondary_y=True)
+                fig_vel.update_yaxes(title_text="V_MAX (km/h)", range=[20, 40], showgrid=True, gridcolor=BORDER, zeroline=False, secondary_y=False)
+                fig_vel.update_yaxes(title_text="Acel / Decel (m/s²)", range=[-8, 8], showgrid=False, zeroline=False, secondary_y=True)
                 fig_vel.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
                 st.plotly_chart(fig_vel, use_container_width=True, config={"displayModeBar": False})
             else: st.info("No hay datos de Velocidad en Campo.")
