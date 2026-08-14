@@ -103,7 +103,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
+# 2. CARGA DE DATOS MULTIFUENTE
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -267,9 +267,25 @@ def cargar_todo_informes():
         ren_s.update({c: 'Altura' for c in df_saltos.columns if 'altura' in str(c).lower()})
         ren_s.update({c: 'Fecha_Hora' for c in df_saltos.columns if 'fecha' in str(c).lower()})
         df_saltos.rename(columns=ren_s, inplace=True)
-        df_saltos['Fecha_dt'] = pd.to_datetime(df_saltos['Fecha_Hora'].astype(str).str.split('_').str[0], errors='coerce')
+        
+        # Filtro infalible para parsear la fecha separando posibles horas adjuntas
+        df_saltos['Fecha_dt'] = pd.to_datetime(df_saltos['Fecha_Hora'].astype(str).str.split(' ').str[0], dayfirst=True, errors='coerce')
         df_saltos['Fecha'] = df_saltos['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_saltos['Nombre_Norm'] = df_saltos['Nombre'].apply(norm_nom)
+        
+        # MAPEO BILINGÜE PARA RECONOCER RIGHT/LEFT Y DER/IZQ
+        def map_salto_type(t):
+            t_up = str(t).upper()
+            if 'CMJ' in t_up:
+                if any(x in t_up for x in ['DER', 'RIGHT', ' D', '_D']): return 'CMJ_D'
+                if any(x in t_up for x in ['IZQ', 'LEFT', ' I', '_I']): return 'CMJ_I'
+                return 'CMJ'
+            return t_up
+            
+        if 'Tipo' in df_saltos.columns:
+            df_saltos['Tipo_Norm'] = df_saltos['Tipo'].apply(map_salto_type)
+        else:
+            df_saltos['Tipo_Norm'] = 'CMJ'
 
     try:
         url_dri = "https://docs.google.com/spreadsheets/d/1r7nUPbRWDjKpZW-Jwex1HFNpDcHiCTKTwLPF7YfHL2Y/export?format=csv"
@@ -354,7 +370,7 @@ def cargar_todo_informes():
             df_rank_base = pd.merge(df_rank_base, df_d_agg[['Nombre_Norm', 'Fmax_Rel']], on='Nombre_Norm', how='left')
 
         if df_saltos is not None and not df_saltos.empty:
-            df_cmj = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
+            df_cmj = df_saltos[df_saltos['Tipo_Norm'] == 'CMJ'].copy()
             df_rank_base = merge_ult(df_rank_base, df_cmj, 'Altura', 'CMJ_Altura')
 
         df_rank_base = merge_ult(df_rank_base, df_dri, 'DRI', 'DRI')
@@ -528,8 +544,8 @@ with col_hero:
         <div class="pd-hero">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <h1 class="pd-name" style="margin-top:0;">{nombre_mostrar}</h1>
-                    <div style="margin-top: 0.6rem;"><span class="pd-badge">{pos_label_full}</span></div>
+                    <div style="margin-bottom: 0.6rem;"><span class="pd-badge">{nombre_mostrar}</span></div>
+                    <h1 class="pd-name" style="margin-top:0;">{pos_label_full}</h1>
                     <div class="pd-club">ADARVE JUVENIL DH &middot; Temporada 2026/27</div>
                 </div>
                 <img src="{url_escudo_oficial}" style="width:46px; height:auto;">
@@ -557,10 +573,14 @@ tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "
 with tab_tests:
     st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
     
-    def get_best(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None):
+    def get_best(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None, exact=False):
         if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns: return None
         dff = df.copy()
-        if filter_col and filter_col in dff.columns and filter_val: dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
+        if filter_col and filter_col in dff.columns and filter_val: 
+            if exact:
+                dff = dff[dff[filter_col].astype(str).str.upper() == str(filter_val).upper()]
+            else:
+                dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
         dff[col_val] = pd.to_numeric(dff[col_val], errors='coerce')
         dff = dff.dropna(subset=[col_val])
         jug_data = dff[dff[col_jugador] == jug_norm_val]
@@ -568,7 +588,7 @@ with tab_tests:
         if 'DEC_MAX' in col_val: return jug_data[col_val].min()
         return jug_data[col_val].max()
 
-    v_cmj = get_best(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo', 'CMJ')
+    v_cmj = get_best(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Tipo_Norm', 'CMJ', exact=True)
     v_vam = get_best(df_vam, 'Nombre_Norm', jug_norm, 'VAM')
     v_dj = get_best(df_dri, 'Nombre_Norm', jug_norm, 'Altura')
     v_dri = get_best(df_dri, 'Nombre_Norm', jug_norm, 'DRI')
@@ -717,22 +737,12 @@ with tab_tests:
             sub_s = st.radio("Vista:", ["Evolución CMJ (Der/Izq)", "Evolución DRI y DJ"], horizontal=True)
             if sub_s == "Evolución CMJ (Der/Izq)":
                 if not df_j_s.empty:
-                    # Traductor de nombres para saltos CMJ unipedales y bilaterales
-                    def map_salto_type(t):
-                        t_up = str(t).upper()
-                        if 'CMJ' in t_up:
-                            if 'DER' in t_up or ' D' in t_up or '_D' in t_up: return 'CMJ_D'
-                            if 'IZQ' in t_up or ' I' in t_up or '_I' in t_up: return 'CMJ_I'
-                            return 'CMJ'
-                        return t_up
-                    
-                    df_j_s['Tipo_Norm'] = df_j_s['Tipo'].apply(map_salto_type)
-                    
                     fig_s = go.Figure()
-                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'CMJ Derecha', TEAM), ('CMJ_I', 'CMJ Izquierda', WARNING)]:
+                    for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
-                        if not agg.empty: fig_s.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name=col_name, line=dict(color=c_color, width=3), marker=dict(size=8)))
+                        if not agg.empty: 
+                            fig_s.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers', name=col_name, line=dict(color=c_color, width=3), marker=dict(size=8)))
                     
                     fig_s.add_hline(y=38.5, line_dash="dash", line_color=PRIMARY, annotation_text="Ref CMJ")
                     fig_s.add_hline(y=21.0, line_dash="dash", line_color=WARNING, annotation_text="Ref slCMJ")
@@ -752,8 +762,8 @@ with tab_tests:
                     if not agg_dj.empty: 
                         fig_dri.add_trace(go.Scatter(x=agg_dj['Fecha'], y=agg_dj['Mean'], error_y=dict(type='data', array=agg_dj['Std'], visible=True), mode='lines+markers', name='Altura DJ (cm)', line=dict(color=TEAM, width=3, dash='dot'), marker=dict(size=8)), secondary_y=True)
                     
-                    fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, showgrid=True, gridcolor=BORDER)
-                    fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, showgrid=False)
+                    fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, showgrid=True, gridcolor=BORDER, rangemode='tozero')
+                    fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, showgrid=False, rangemode='tozero')
                     
                     fig_dri.update_layout(height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2), barmode='group')
                     st.plotly_chart(fig_dri, use_container_width=True, config={"displayModeBar": False})
