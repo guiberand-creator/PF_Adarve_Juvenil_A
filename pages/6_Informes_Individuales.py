@@ -78,21 +78,21 @@ def inject_v0_css():
             margin-top: 0px !important;
         }}
 
-        .pd-name {{ font-size: 2.1rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
-        .pd-club {{ color: {MUTED}; font-size: 0.9rem; margin-top: 0.2rem; }}
+        .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
+        .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; margin-bottom: 1.5rem; }}
         .pd-badge {{
             display: inline-flex; align-items: center; gap: 0.4rem;
             background: {PRIMARY_SOFT}; color: {PRIMARY};
             border: 1px solid rgba(225,29,72,0.35);
-            padding: 0.15rem 0.6rem; border-radius: 999px;
-            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 0.25rem 0.8rem; border-radius: 999px;
+            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
         }}
 
         /* Fact Grid v0 (1 Fila x 4 columnas) */
-        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-top: 0.5rem; }}
-        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.6rem 0.8rem; text-align: center; }}
-        .pd-fact .k {{ color: {MUTED}; font-size: 0.70rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
-        .pd-fact .v {{ font-size: 1.15rem; font-weight: 800; margin-top: 0.15rem; color: {TEXT}; }}
+        .pd-facts {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }}
+        .pd-fact {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px; padding: 0.85rem 1rem; text-align: center; }}
+        .pd-fact .k {{ color: {MUTED}; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }}
+        .pd-fact .v {{ font-size: 1.3rem; font-weight: 800; margin-top: 0.25rem; color: {TEXT}; }}
         .pd-fact .v-cyan {{ color: #38bdf8 !important; }}
         .pd-fact .v-gold {{ color: #f59e0b !important; }}
         .pd-fact .v-green {{ color: #22c55e !important; }}
@@ -101,7 +101,7 @@ def inject_v0_css():
         .photo-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 250px !important;
+            max-width: 260px !important;
             object-fit: contain !important;
             display: block;
             margin: 0 auto;
@@ -110,7 +110,7 @@ def inject_v0_css():
         .photo-placeholder-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 250px !important;
+            max-width: 260px !important;
             border-radius: 16px;
             background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
             display: flex; align-items: center; justify-content: center;
@@ -565,13 +565,6 @@ if not df_rpe.empty:
 # Ranking Real
 ranking_real_str = dict_rankings_reales.get(jug_norm, "#--")
 
-# Récords
-cmj_pico = df_saltos[(df_saltos['Nombre_Norm'] == jug_norm) & (df_saltos['Tipo'].str.upper() == 'CMJ')]['Altura'].max() if df_saltos is not None and not df_saltos.empty else 42.5
-vmax_pico = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm]['V_MAX'].max() if df_gps_all is not None and not df_gps_all.empty else 31.8
-dri_pico = df_dri[df_dri['Nombre_Norm'] == jug_norm]['DRI'].max() if df_dri is not None and not df_dri.empty else 2.15
-
-nombre_mostrar = jugador_sel.replace('_', ' ').upper()
-
 # =============================================================================
 # 4. CAMPOGRAMA CON PROPORCIONES OFICIALES (GEOMETRÍA RÍGIDA A 330PX)
 # =============================================================================
@@ -685,21 +678,91 @@ st.markdown("<br>", unsafe_allow_html=True)
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
 # -----------------------------------------------------------------------------
-# SUB-PAGE 1: CONDITIONING TESTS
+# SUB-PAGE 1: CONDITIONING TESTS (MEJORES REGISTROS HISTÓRICOS Y RANKING)
 # -----------------------------------------------------------------------------
 with tab_tests:
-    st.markdown('<div class="pd-section-title">Season summary &middot; KPI Progresión</div>', unsafe_allow_html=True)
+    st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
     
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
-    k1.metric("Salto CMJ", f"{cmj_pico:.1f} cm", "▲ 3.2 cm", delta_color="normal")
-    k2.metric("VAM Aeróbico", "15.8 km/h", "▲ 0.6 km/h", delta_color="normal")
-    k3.metric("Ext. Rodilla", "6.4 N/kg", "▲ 0.5 N/kg", delta_color="normal")
-    k4.metric("Índice DRI", f"{dri_pico:.2f}", "▲ 0.18", delta_color="normal")
-    k5.metric("Press Banca", "22 reps", "▲ 4 reps", delta_color="normal")
-    k6.metric("V_MAX Campo", f"{vmax_pico:.1f} km/h", "▲ 1.2 km/h", delta_color="normal")
+    # CSS especial para ocultar la flechita del 'stMetricDelta' para que sólo quede la fecha/ranking en verde
+    st.markdown("""
+        <style>
+        [data-testid="stMetricDelta"] svg { display: none; }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Motor buscador de "Mejor Marca" y "Ranking de Equipo"
+    def get_best_and_rank(df, col_jugador, jug_norm_val, col_val, col_fecha, filter_col=None, filter_val=None, ascending=False):
+        if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns:
+            return None, None, None
+        
+        dff = df.copy()
+        if filter_col and filter_col in dff.columns and filter_val:
+            dff = dff[dff[filter_col].astype(str).str.contains(filter_val, case=False, na=False)]
+        
+        dff = dff.dropna(subset=[col_val])
+        if dff.empty: return None, None, None
+        
+        dff[col_val] = pd.to_numeric(dff[col_val], errors='coerce')
+        dff = dff.dropna(subset=[col_val])
+        if dff.empty: return None, None, None
+        
+        idx_max = dff.groupby(col_jugador)[col_val].idxmax()
+        best_per_player = dff.loc[idx_max].copy()
+        
+        best_per_player['Rank'] = best_per_player[col_val].rank(ascending=ascending, method='min')
+        
+        jug_data = best_per_player[best_per_player[col_jugador] == jug_norm_val]
+        if jug_data.empty: return None, None, None
+        
+        val = jug_data.iloc[0][col_val]
+        fecha = jug_data.iloc[0][col_fecha]
+        rank = int(jug_data.iloc[0]['Rank'])
+        total = len(best_per_player)
+        
+        return val, fecha, f"#{rank}/{total}"
+
+    # Extracción de las 9 Métricas demandadas
+    v_cmj, f_cmj, r_cmj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'CMJ')
+    v_vam, f_vam, r_vam = get_best_and_rank(df_vam, 'Nombre_Norm', jug_norm, 'VAM', 'Fecha')
+    
+    # Búsqueda de Drop Jump 50cm (Filtra '50', si no lo halla prueba con 'Drop' o 'DJ')
+    v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', '50')
+    if v_dj is None: v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'DJ')
+    if v_dj is None: v_dj, f_dj, r_dj = get_best_and_rank(df_saltos, 'Nombre_Norm', jug_norm, 'Altura', 'Fecha', 'Tipo', 'Drop')
+
+    v_dri, f_dri, r_dri = get_best_and_rank(df_dri, 'Nombre_Norm', jug_norm, 'DRI', 'Fecha')
+    v_pb, f_pb, r_pb = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Press_Banca', 'Fecha')
+    v_dom, f_dom, r_dom = get_best_and_rank(df_fts, 'Nombre_Norm', jug_norm, 'Dominada', 'Fecha')
+    v_vmax, f_vmax, r_vmax = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'V_MAX', 'Fecha')
+    v_ac, f_ac, r_ac = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'AC_MAX', 'Fecha')
+    v_dec, f_dec, r_dec = get_best_and_rank(df_campo, 'Nombre_Norm', jug_norm, 'DEC_MAX', 'Fecha')
+
+    # Grid de KPIs en 2 filas
+    r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
+    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
+
+    def render_kpi(col, title, val, unit, fecha, rank, decimals=1):
+        if val is not None and not pd.isna(val):
+            fmt_val = f"{val:.{decimals}f} {unit}".strip()
+            if unit == "reps": fmt_val = f"{int(val)} {unit}"
+            col.metric(title, fmt_val, f"{fecha}  •  {rank}", delta_color="normal")
+        else:
+            col.metric(title, "-")
+
+    render_kpi(r1c1, "Salto CMJ", v_cmj, "cm", f_cmj, r_cmj)
+    render_kpi(r1c2, "Prueba 5 min", v_vam, "km/h", f_vam, r_vam)
+    render_kpi(r1c3, "Drop Jump (50cm)", v_dj, "cm", f_dj, r_dj)
+    render_kpi(r1c4, "Índice DRI DJ", v_dri, "", f_dri, r_dri, decimals=2)
+    render_kpi(r1c5, "Press Banca", v_pb, "reps", f_pb, r_pb)
+
+    render_kpi(r2c1, "Dominadas", v_dom, "reps", f_dom, r_dom)
+    render_kpi(r2c2, "V. Máx", v_vmax, "km/h", f_vmax, r_vmax)
+    render_kpi(r2c3, "Acel. Máx", v_ac, "m/s²", f_ac, r_ac, decimals=2)
+    render_kpi(r2c4, "Decel. Máx", v_dec, "m/s²", f_dec, r_dec, decimals=2)
 
     st.divider()
 
+    # --- RESTO DE PESTAÑAS Y GRÁFICOS INTACTOS ---
     left_col, right_col = st.columns([1.3, 1], gap="large")
 
     with left_col:
