@@ -1094,7 +1094,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # 2. FILTRO Y SECCIÓN: PERFIL POR DEMARCACIONES
-    st.markdown("### Evolución individual del salto")
+    st.markdown("### Evolución individual del salto por Demarcación")
 
     if df_saltos is None or df_saltos.empty:
         st.warning("⚠️ No se encontraron los datos locales de saltos para desglosar por posición.")
@@ -1111,7 +1111,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
         else:
             col_f_pos, col_sp_pos = st.columns([1, 2])
             with col_f_pos:
-                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos")
+                pos_sel_saltos = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_s, key="sb_pos_saltos_2")
 
             pos_a_mostrar_s = posiciones_s if pos_sel_saltos == "Todas las Demarcaciones" else [pos_sel_saltos]
 
@@ -1199,7 +1199,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
 
             # --- NUEVA SECCIÓN: EVOLUCIÓN HISTÓRICA INTERACTIVA DE SALTOS Y DRI ---
             st.markdown("### 📊 Evolución Histórica Interactiva (Plantilla Completa)")
-            st.caption("Selecciona si quieres ver CMJ o DRI. **Haz doble clic en el nombre de un jugador en la leyenda** (a la derecha del gráfico) para aislar su evolución. Haz un clic simple para ocultarlo/mostrarlo.")
+            st.caption("Selecciona si quieres ver CMJ o DRI. **Haz un clic simple en el nombre de un jugador en la leyenda** (a la derecha del gráfico) para aislar su evolución. Haz doble clic para ocultarlo/mostrarlo.")
             
             tipo_grafico_salto = st.radio("Selecciona Métrica a visualizar:", ["Altura CMJ (cm)", "Índice DRI (Drop Jump)"], horizontal=True)
 
@@ -1250,7 +1250,12 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         xaxis=dict(title="Fecha Sesión", tickangle=-30),
                         yaxis=dict(title="Altura Salto CMJ (cm)", range=[0, max_y_int]),
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
-                        legend=dict(title="Jugadores (Doble clic para aislar)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+                        legend=dict(
+                            title="Jugadores (Un clic aisla)", 
+                            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
+                            itemclick="toggleothers",
+                            itemdoubleclick="toggle"
+                        )
                     )
                     st.plotly_chart(fig_interactivo, use_container_width=True)
 
@@ -1298,7 +1303,12 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         xaxis=dict(title="Fecha Sesión", tickangle=-30),
                         yaxis=dict(title="Índice DRI", range=[0, max_y_int]),
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
-                        legend=dict(title="Jugadores (Doble clic para aislar)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+                        legend=dict(
+                            title="Jugadores (Un clic aisla)", 
+                            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
+                            itemclick="toggleothers",
+                            itemdoubleclick="toggle"
+                        )
                     )
                     st.plotly_chart(fig_interactivo, use_container_width=True)
 
