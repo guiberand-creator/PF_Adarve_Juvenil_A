@@ -101,7 +101,7 @@ def inject_v0_css():
         .photo-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 260px !important;
+            max-width: 250px !important;
             object-fit: contain !important;
             display: block;
             margin: 0 auto;
@@ -110,7 +110,7 @@ def inject_v0_css():
         .photo-placeholder-v0 {{
             height: 330px !important;
             width: 100% !important;
-            max-width: 260px !important;
+            max-width: 250px !important;
             border-radius: 16px;
             background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE});
             display: flex; align-items: center; justify-content: center;
@@ -179,7 +179,7 @@ def descargar_csv_drive(sheet_id, gid="0"):
 
 @st.cache_data(ttl=30)
 def cargar_todo_informes():
-    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA)
+    # 0. Posiciones.xlsx (CON MAPEADO DE NACIMIENTO Y PIERNA SEGURO)
     r_pos = os.path.join("data", "Posiciones.xlsx")
     df_pos = pd.read_excel(r_pos) if os.path.exists(r_pos) else pd.DataFrame()
     if not df_pos.empty:
@@ -202,10 +202,13 @@ def cargar_todo_informes():
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
 
+        # FIX A PRUEBA DE BALAS PARA FECHAS VACÍAS O NULAS (NaT)
         if 'Fecha_Nacimiento_Pos' in df_pos.columns:
-            df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(
-                lambda x: x.strftime('%d/%m/%Y') if isinstance(x, pd.Timestamp) or isinstance(x, datetime) else str(x).replace('00:00:00', '').strip()
-            )
+            def safe_format_date(x):
+                if pd.isna(x): return ""
+                if hasattr(x, 'strftime'): return x.strftime('%d/%m/%Y')
+                return str(x).replace('00:00:00', '').strip()
+            df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(safe_format_date)
 
     # 1. Cuestionario Inicial (Búsqueda Limpia y Robusta)
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
@@ -630,7 +633,7 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
     return fig
 
 # =============================================================================
-# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA SUPERIOR)
+# 5. RENDERIZADO DEL ENCABEZADO (ALINEACIÓN PERFECTA)
 # =============================================================================
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.7, 1.1], gap="medium")
 
@@ -641,7 +644,7 @@ with col_photo:
     else:
         st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
 
-# COLUMNA 2: RECUADRO HTML PURO (330px) - NOMBRE GIGANTE ARRIBA, POSICIÓN EN BADGE DEBAJO
+# COLUMNA 2: RECUADRO HTML PURO (330px)
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
     
