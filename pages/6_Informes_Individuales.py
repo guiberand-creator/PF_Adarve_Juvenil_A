@@ -73,13 +73,6 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         
-        div.stButton > button {{
-            width: 100%; border-radius: 10px; border: 1px solid {BORDER}; background-color: {SURFACE_2};
-            color: {TEXT}; padding: 0.35rem 0.2rem; transition: all 0.2s; font-size: 0.75rem; font-weight: 700;
-        }}
-        div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE}; }}
-        div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
-
         .metric-row {{
             display: flex; justify-content: space-between; align-items: center;
             padding: 0.45rem 0.75rem; border-bottom: 1px solid {BORDER}; font-size: 0.85rem;
@@ -87,6 +80,17 @@ def inject_v0_css():
         .metric-label {{ color: {MUTED}; font-weight: 600; }}
         .metric-val {{ color: {TEXT}; font-weight: 800; }}
         .metric-opt {{ color: {WARNING}; font-weight: 800; }}
+
+        .radar-match-header {{
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            background: {SURFACE_2};
+            border: 1px solid {BORDER};
+            border-radius: 14px;
+            padding: 0.85rem 1.25rem;
+            margin-bottom: 1rem;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -1071,28 +1075,30 @@ with tab_gps:
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             
-            if 'sel_match_dt' not in st.session_state or st.session_state['sel_match_dt'] not in df_matches_jug['Fecha_dt'].values:
-                st.session_state['sel_match_dt'] = df_matches_jug.iloc[-1]['Fecha_dt']
-
-            st.markdown("<p style='font-size:0.85rem; color:#8b949e; margin-bottom:0.75rem; font-weight:700;'>FILTRO DE PARTIDO (FIXTURE GRID):</p>", unsafe_allow_html=True)
+            options_match = []
+            dict_match_lookup = {}
             
-            # PARRILLA CRONOLÓGICA DE ESCUDOS
-            cols_per_row = 6
-            for i in range(0, len(df_matches_jug), cols_per_row):
-                row_cols = st.columns(cols_per_row)
-                for j, (idx, row) in enumerate(df_matches_jug.iloc[i:i+cols_per_row].iterrows()):
-                    with row_cols[j]:
-                        l_url = get_logo(row['Rival'])
-                        st.markdown(f'<div style="text-align:center;"><img src="{l_url}" style="width:38px; height:38px; object-fit:contain; margin-bottom:2px;"></div>', unsafe_allow_html=True)
-                        
-                        loc_txt = str(row.get('Localizacion', '')).strip().upper()
-                        loc_code = f" ({loc_txt[0]})" if loc_txt else ""
-                        btn_label = f"J{idx+1} · {pd.to_datetime(row['Fecha_dt']).strftime('%d/%m')}{loc_code}"
-                        
-                        if st.button(btn_label, key=f"btn_fixture_{idx}"):
-                            st.session_state['sel_match_dt'] = row['Fecha_dt']
+            for idx, r_m in df_matches_jug.iterrows():
+                r_name_m = str(r_m['Rival']).upper() if r_m['Rival'] else "PARTIDO"
+                r_loc_m = str(r_m.get('Localizacion', '')).strip().upper()
+                r_loc_code = f" ({r_loc_m})" if r_loc_m else ""
+                r_date_m = pd.to_datetime(r_m['Fecha_dt']).strftime('%d/%m/%Y')
+                
+                label_opt = f"J{idx+1} · {r_name_m}{r_loc_code} - {r_date_m}"
+                options_match.append(label_opt)
+                dict_match_lookup[label_opt] = r_m
 
+            col_sel, _ = st.columns([1.5, 2.5])
+            with col_sel:
+                selected_match_label = st.selectbox(
+                    "Selecciona Partido:",
+                    options_match,
+                    index=len(options_match) - 1
+                )
+                
+            row_selected = dict_match_lookup[selected_match_label]
             st.markdown("<br>", unsafe_allow_html=True)
+
             col_radar_match, col_metrics_panel = st.columns([1.8, 1.2], gap="large")
 
             cols_all_gps = [
@@ -1116,9 +1122,6 @@ with tab_gps:
                 if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
                 mean_opt = df_opt_base[cols_all_gps].mean()
                 
-                match_data = df_matches_jug[df_matches_jug['Fecha_dt'] == st.session_state['sel_match_dt']]
-                if match_data.empty: match_data = df_matches_jug.iloc[[-1]]
-                row_selected = match_data.iloc[0]
                 vals_match = row_selected[cols_all_gps]
 
                 z_pos = [0] * len(cols_all_gps)
@@ -1133,6 +1136,20 @@ with tab_gps:
 
                 with col_radar_match:
                     r_name = str(row_selected['Rival']).upper() if row_selected['Rival'] else "PARTIDO"
+                    r_logo = get_logo(row_selected['Rival'])
+                    r_date = pd.to_datetime(row_selected['Fecha_dt']).strftime('%d/%m/%Y')
+                    r_loc = str(row_selected.get('Localizacion', '')).upper()
+                    r_loc_str = f"({r_loc})" if r_loc else ""
+
+                    st.markdown(f"""
+                        <div class="radar-match-header">
+                            <img src="{r_logo}" style="width:52px; height:52px; object-fit:contain;">
+                            <div>
+                                <div style="font-size:1.15rem; font-weight:800; color:{TEXT};">vs {r_name} {r_loc_str}</div>
+                                <div style="font-size:0.85rem; color:{TEAM}; font-weight:700;">Fecha: {r_date}</div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
                     
                     fig_mr = go.Figure()
                     fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta_labels, fill="none", name="Media Posición (0)", line=dict(color=TEAM, width=2, dash='dash')))
@@ -1143,7 +1160,7 @@ with tab_gps:
                     ))
                     
                     fig_mr.update_layout(
-                        height=520, margin=dict(l=80, r=80, t=50, b=50), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        height=520, margin=dict(l=80, r=80, t=30, b=50), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         polar=dict(
                             bgcolor=SURFACE_2, 
                             radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER, range=[-2.5, 3.5]), 
