@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly.express as px
 import os
 import glob
 import requests
@@ -72,14 +71,6 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
-        
-        /* Botonera Partidos */
-        div.stButton > button {{
-            width: 100%; border-radius: 8px; border: 1px solid {BORDER}; background-color: {SURFACE};
-            color: {TEXT}; padding: 0.5rem; transition: all 0.2s;
-        }}
-        div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE_2}; }}
-        div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -141,6 +132,13 @@ def cargar_todo_informes():
         if c_pierna: renomb_dict[c_pierna] = 'Pierna_Pos'
         df_pos = df_pos.rename(columns=renomb_dict)
         df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(norm_nom)
+
+        if 'Fecha_Nacimiento_Pos' in df_pos.columns:
+            def safe_format_date(x):
+                if pd.isna(x): return ""
+                if hasattr(x, 'strftime'): return x.strftime('%d/%m/%Y')
+                return str(x).replace('00:00:00', '').strip()
+            df_pos['Fecha_Nacimiento_Pos'] = df_pos['Fecha_Nacimiento_Pos'].apply(safe_format_date)
 
     df_cuest = descargar_csv_drive("1cOh6eOiCTySipJhZUlYwTrYTpBr6NVn4D-KCoWXlxeI", "0")
     if not df_cuest.empty:
@@ -206,20 +204,18 @@ def cargar_todo_informes():
                 dl['Nombre'] = dt[cn].astype(str).str.strip()
                 dl['Nombre_Norm'] = dl['Nombre'].apply(norm_nom)
                 
-                # Extracción Completa de métricas GPS
+                # Nuevas métricas extraídas al milímetro
                 dl['Duracion'] = dt[b_c(['duracion', 'duración', 'time', 'tiempo'])].apply(fn) if b_c(['duracion', 'duración', 'time', 'tiempo']) else 0.0
                 dl['Dist_Total'] = dt[b_c(['distancia total', 'distance'])].apply(fn) if b_c(['distancia total', 'distance']) else 0.0
                 dl['Dist_18'] = dt[b_c(['> 18', '>18'])].apply(fn) if b_c(['> 18', '>18']) else 0.0
                 dl['Dist_25'] = dt[b_c(['> 25', '>25'])].apply(fn) if b_c(['> 25', '>25']) else 0.0
-                dl['Dist_28'] = dt[b_c(['> 28', '>28', '28.8', '28,8'])].apply(fn) if b_c(['> 28', '>28', '28.8', '28,8']) else 0.0
-                dl['N_Sprints'] = dt[b_c(['sprints', 'nº sprints'])].apply(fn) if b_c(['sprints', 'nº sprints']) else 0.0
-                
+                dl['Dist_28'] = dt[b_c(['> 28', '>28'])].apply(fn) if b_c(['> 28', '>28']) else 0.0
+                dl['N_Sprints'] = dt[b_c(['sprints'])].apply(fn) if b_c(['sprints']) else 0.0
                 accs = dt[b_c(['nº aceleraciones', 'nº acel', 'aceleraciones', 'accel'])].apply(fn) if b_c(['nº aceleraciones', 'nº acel', 'aceleraciones', 'accel']) else 0.0
                 decs = dt[b_c(['nº desaceleraciones', 'nº decel', 'desaceleraciones', 'decel'])].apply(fn) if b_c(['nº desaceleraciones', 'nº decel', 'desaceleraciones', 'decel']) else 0.0
                 dl['N_Acc'] = accs
                 dl['N_Dec'] = decs
                 dl['Acc_Dec'] = accs + decs
-                
                 dl['V_MAX'] = dt[b_c(['v. max', 'v.max', 'top speed'])].apply(fn) if b_c(['v. max', 'v.max', 'top speed']) else 0.0
                 dl['AC_MAX'] = dt[b_c(['ac. max', 'acc. max', 'ac maxima', 'ac. maxima'])].apply(fn) if b_c(['ac. max', 'acc. max', 'ac maxima', 'ac. maxima']) else 0.0
                 dl['DEC_MAX'] = dt[b_c(['dec. max', 'desac. max', 'dec maxima', 'dec. maxima'])].apply(fn) if b_c(['dec. max', 'desac. max', 'dec maxima', 'dec. maxima']) else 0.0
@@ -419,7 +415,7 @@ def cargar_todo_informes():
     if r_ref_campo_files:
         df_ref_campo = pd.read_excel(r_ref_campo_files[0])
 
-    # CALENDARIO OFICIAL Y ESCUDOS
+    # CARGA NUEVA BASE ESCUDOS/CALENDARIO OFICIAL
     df_calendario = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
     dict_escudos = {}
     dict_calendario = {}
@@ -535,7 +531,7 @@ nombre_mostrar = jugador_sel.replace('_', ' ').upper()
 # =============================================================================
 # 4. PREPARACIÓN DE DATOS GPS Y MATCH OUTPUT
 # =============================================================================
-df_p_jug = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm].copy() if not df_gps_all.empty else pd.DataFrame()
+df_p_jug = df_gps_all[df_gps_all['Nombre_Norm'] == jug_norm].sort_values('Fecha_dt', ascending=False) if not df_gps_all.empty else pd.DataFrame()
 
 if not df_p_jug.empty:
     df_p_jug['Fecha_Date'] = df_p_jug['Fecha_dt'].dt.date
@@ -543,7 +539,7 @@ if not df_p_jug.empty:
     if not df_rpe.empty:
         df_rpe_jug = df_rpe[df_rpe['Nombre_Norm'] == jug_norm].copy()
         df_rpe_jug['Fecha_Date'] = df_rpe_jug['Fecha_dt'].dt.date
-        df_rpe_jug = df_rpe_jug.sort_values('Fecha_dt', ascending=False).drop_duplicates(subset=['Fecha_Date'])
+        df_rpe_jug = df_rpe_jug.drop_duplicates(subset=['Fecha_Date'])
         rpe_cols = ['Fecha_Date', 'Tipo_Sesion', 'Minutos', 'RPE_Score']
         df_p_jug = pd.merge(df_p_jug, df_rpe_jug[[c for c in rpe_cols if c in df_rpe_jug.columns]], on='Fecha_Date', how='left')
     
@@ -570,11 +566,10 @@ if not df_p_jug.empty:
             loc = str(r['Localizacion']).strip()
             l_str = f"{riv} ({loc})" if loc else riv
             labels.append(l_str)
-            if ts == '' or str(ts).lower() == 'nan' or 'entrenamiento' in ts.lower(): 
-                df_p_jug.at[idx, 'Tipo_Sesion'] = 'Partido'
+            if ts == '' or ts.lower() == 'nan': df_p_jug.at[idx, 'Tipo_Sesion'] = 'Partido'
         else:
-            labels.append(ts if ts and str(ts).lower() != 'nan' else 'Entrenamiento')
-            if ts == '' or str(ts).lower() == 'nan': df_p_jug.at[idx, 'Tipo_Sesion'] = 'Entrenamiento'
+            labels.append(ts if ts and ts.lower() != 'nan' else 'Entrenamiento')
+            if ts == '' or ts.lower() == 'nan': df_p_jug.at[idx, 'Tipo_Sesion'] = 'Entrenamiento'
             
     df_p_jug['Label'] = labels
 
@@ -932,126 +927,180 @@ with tab_tests:
                 st.plotly_chart(fig_vel, use_container_width=True, config={"displayModeBar": False})
             else: st.info("No hay datos de Velocidad en Campo.")
 
-# -----------------------------------------------------------------------------
-# MATCH OUTPUT RADAR Y BOTONERA
-# -----------------------------------------------------------------------------
     with right_col:
-        st.markdown('<div class="pd-section-title">Perfil Competitivo en Partido &middot; Radar Z-Score</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Perfil Z-Score &middot; Radar</div>', unsafe_allow_html=True)
         
-        df_matches_all = df_gps_all.copy() if not df_gps_all.empty else pd.DataFrame()
-        if not df_matches_all.empty:
-            df_matches_all['Fecha_Date'] = df_matches_all['Fecha_dt'].dt.date
-            df_matches_all['Is_Partido'] = df_matches_all['Fecha_Date'].isin(dict_calendario.keys())
-            df_matches_all = df_matches_all[df_matches_all['Is_Partido']].copy()
-            df_matches_all = pd.merge(df_matches_all, df_pos[['Nombre_Norm', 'Posicion']], on='Nombre_Norm', how='left')
-        
-        df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=False) if not df_p_jug.empty else pd.DataFrame()
-        
-        if not df_matches_jug.empty and not df_matches_all.empty:
+        all_dates = pd.Series(dtype='datetime64[ns]')
+        if df_vam is not None and not df_vam.empty: all_dates = pd.concat([all_dates, df_vam['Fecha_dt']])
+        if df_saltos is not None and not df_saltos.empty: all_dates = pd.concat([all_dates, df_saltos['Fecha_dt']])
+        if df_dri is not None and not df_dri.empty: all_dates = pd.concat([all_dates, df_dri['Fecha_dt']])
+        if df_fts is not None and not df_fts.empty: all_dates = pd.concat([all_dates, df_fts['Fecha_dt']])
+        if df_campo is not None and not df_campo.empty: all_dates = pd.concat([all_dates, df_campo['Fecha_dt']])
+        all_dates = all_dates.dropna()
+
+        if not all_dates.empty:
+            unique_dates = np.sort(all_dates.dt.date.unique())[::-1]
+            filtro_radar = st.selectbox("Fecha de Evaluación (Z-Score):", unique_dates, format_func=lambda x: x.strftime('%d/%m/%Y'))
+
+            def get_metric_zscore(df, val_col, target_date):
+                if df is None or df.empty or val_col not in df.columns: return pd.DataFrame()
+                dff = df[df['Fecha_dt'].dt.date == target_date].copy()
+                if dff.empty: return pd.DataFrame()
+                dff[val_col] = pd.to_numeric(dff[val_col], errors='coerce')
+                agg = dff.groupby('Nombre_Norm')[val_col].max().reset_index()
+                mean_v = agg[val_col].mean()
+                std_v = agg[val_col].std()
+                if pd.isna(std_v) or std_v == 0: std_v = 1
+                agg[f'Z_{val_col}'] = (agg[val_col] - mean_v) / std_v
+                return agg
+
+            df_radar = df_pos[['Nombre_Norm', 'Posicion']].copy() if not df_pos.empty else pd.DataFrame(columns=['Nombre_Norm', 'Posicion'])
+
+            df_vam_z = get_metric_zscore(df_vam, 'VAM', filtro_radar)
+            if not df_vam_z.empty: df_radar = pd.merge(df_radar, df_vam_z[['Nombre_Norm', 'Z_VAM']], on='Nombre_Norm', how='left')
+
+            df_cmj = df_saltos[df_saltos['Tipo_Norm'] == 'CMJ'] if df_saltos is not None and not df_saltos.empty else pd.DataFrame()
+            df_cmj_z = get_metric_zscore(df_cmj, 'Altura', filtro_radar)
+            if not df_cmj_z.empty: 
+                df_cmj_z.rename(columns={'Z_Altura': 'Z_CMJ'}, inplace=True)
+                df_radar = pd.merge(df_radar, df_cmj_z[['Nombre_Norm', 'Z_CMJ']], on='Nombre_Norm', how='left')
+
+            df_dri_z = get_metric_zscore(df_dri, 'DRI', filtro_radar)
+            if not df_dri_z.empty: df_radar = pd.merge(df_radar, df_dri_z[['Nombre_Norm', 'Z_DRI']], on='Nombre_Norm', how='left')
+
+            if df_fts is not None and not df_fts.empty:
+                df_fts_t = df_fts.copy()
+                df_fts_t['Tren_Sup'] = pd.to_numeric(df_fts_t['Press_Banca'], errors='coerce').fillna(0) + pd.to_numeric(df_fts_t['Dominada'], errors='coerce').fillna(0)
+                df_ts_z = get_metric_zscore(df_fts_t, 'Tren_Sup', filtro_radar)
+                if not df_ts_z.empty: df_radar = pd.merge(df_radar, df_ts_z[['Nombre_Norm', 'Z_Tren_Sup']], on='Nombre_Norm', how='left')
+
+            df_vmax_z = get_metric_zscore(df_campo, 'V_MAX', filtro_radar)
+            if not df_vmax_z.empty: df_radar = pd.merge(df_radar, df_vmax_z[['Nombre_Norm', 'Z_V_MAX']], on='Nombre_Norm', how='left')
+
+            categories = ['VAM', 'CMJ', 'DRI', 'Tren Sup.', 'V_MAX']
+            cols = ['Z_VAM', 'Z_CMJ', 'Z_DRI', 'Z_Tren_Sup', 'Z_V_MAX']
             
-            if 'sel_match_dt' not in st.session_state:
-                st.session_state['sel_match_dt'] = df_matches_jug.iloc[0]['Fecha_dt']
+            for c in cols:
+                if c not in df_radar.columns: df_radar[c] = np.nan
 
-            st.markdown("<p style='font-size:0.8rem; color:#8b949e; margin-bottom:0.5rem;'>Selecciona un partido para analizar su perfil:</p>", unsafe_allow_html=True)
+            df_jug_r = df_radar[df_radar['Nombre_Norm'] == jug_norm]
+            df_pos_r = df_radar[df_radar['Posicion'].astype(str).str.contains(posicion_str.split()[0], case=False, na=False)] if posicion_str != "Por definir" else df_radar
+
+            v_j = [df_jug_r[c].mean() for c in cols]
+            v_p = [df_pos_r[c].mean() for c in cols]
+            v_eq = [0, 0, 0, 0, 0]
+
+            v_j = [(x if pd.notna(x) else 0) for x in v_j]; v_j.append(v_j[0])
+            v_p = [(x if pd.notna(x) else 0) for x in v_p]; v_p.append(v_p[0])
+            v_eq.append(v_eq[0])
+            cat_cl = categories + [categories[0]]
+
+            fig_radar = go.Figure()
+            fig_radar.add_trace(go.Scatterpolar(r=v_eq, theta=cat_cl, fill="none", name="Media Equipo (0)", line=dict(color=MUTED, width=1.5, dash='dash')))
+            fig_radar.add_trace(go.Scatterpolar(r=v_p, theta=cat_cl, fill="toself", name="Media Demarcación", line=dict(color=TEAM, width=2), fillcolor="rgba(56,189,248,0.15)"))
+            fig_radar.add_trace(go.Scatterpolar(r=v_j, theta=cat_cl, fill="toself", name=nombre_mostrar, line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)"))
             
-            # Botonera 
-            cols_per_row = 6
-            for i in range(0, len(df_matches_jug), cols_per_row):
-                row_cols = st.columns(cols_per_row)
-                for j, (idx, row) in enumerate(df_matches_jug.iloc[i:i+cols_per_row].iterrows()):
-                    with row_cols[j]:
-                        l_url = get_logo(row['Rival'])
-                        st.markdown(f'<div style="text-align:center;"><img src="{l_url}" style="width:30px; height:30px; object-fit:contain; margin-bottom:4px;"></div>', unsafe_allow_html=True)
-                        btn_txt = f"{pd.to_datetime(row['Fecha_dt']).strftime('%d/%m')}"
-                        if row.get('Localizacion'):
-                            btn_txt += f"\n({str(row['Localizacion'])[:1].upper()})"
-                        
-                        if st.button(btn_txt, key=f"btn_m_{idx}"):
-                            st.session_state['sel_match_dt'] = row['Fecha_dt']
-
-            cols_radar = ['Dist_Total', 'Dist_18', 'Dist_25', 'Acc_Dec', 'V_MAX']
-            units_radar = ['km', 'm', 'm', 'acciones', 'km/h']
-            divs_radar = [1000, 1, 1, 1, 1]
-
-            pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
-            df_matches_pos = df_matches_all[df_matches_all['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)]
-            
-            if not df_matches_pos.empty:
-                mean_pos = df_matches_pos[cols_radar].mean()
-                std_pos = df_matches_pos[cols_radar].std().replace({0: 1, np.nan: 1})
-                
-                df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
-                if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
-                mean_opt = df_opt_base[cols_radar].mean()
-                
-                match_data = df_matches_jug[df_matches_jug['Fecha_dt'] == st.session_state['sel_match_dt']]
-                if match_data.empty: match_data = df_matches_jug.iloc[[0]]
-                vals_match = match_data.iloc[0][cols_radar]
-
-                z_pos = [0, 0, 0, 0, 0]
-                z_opt = [(mean_opt[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
-                z_match = [(vals_match[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
-
-                def fmt_v(v, d, u):
-                    if pd.isna(v): return "-"
-                    if d == 1000 or 'km/h' in u: return f"{v/d:.1f} {u}"
-                    return f"{v/d:.0f} {u}"
-                    
-                labels_match = [f"<b>{fmt_v(vals_match[c], divs_radar[i], units_radar[i])}</b>" for i,c in enumerate(cols_radar)]
-                
-                z_pos += [z_pos[0]]
-                z_opt += [z_opt[0]]
-                z_match += [z_match[0]]
-                labels_match += [labels_match[0]]
-                
-                theta = ['Dist. Total', 'Dist. >18 km/h', 'Sprint >25 km/h', 'Acc + Dec', 'Vel. Máxima']
-                theta += [theta[0]]
-
-                fig_mr = go.Figure()
-                fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta, fill="none", name="Media Posición (0)", line=dict(color=TEAM, width=2, dash='dash')))
-                fig_mr.add_trace(go.Scatterpolar(r=z_opt, theta=theta, fill="toself", name="Perfil Óptimo", line=dict(color=WARNING, width=2), fillcolor="rgba(245, 158, 11, 0.15)"))
-                fig_mr.add_trace(go.Scatterpolar(
-                    r=z_match, theta=theta, fill="toself", mode="lines+markers+text", name="Partido Seleccionado", 
-                    line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)",
-                    text=labels_match, textposition="top center", textfont=dict(color="white", size=13)
-                ))
-                
-                fig_mr.update_layout(
-                    height=450, margin=dict(l=60, r=60, t=60, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    polar=dict(
-                        bgcolor=SURFACE_2, 
-                        radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER), 
-                        angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
-                    ),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
-                )
-                st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
-            else:
-                st.info("No hay datos suficientes de posición para calcular el radar.")
+            fig_radar.update_layout(
+                height=550, margin=dict(l=60, r=60, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                polar=dict(
+                    bgcolor=SURFACE_2, 
+                    radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=10)), 
+                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
+                ),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
+            )
+            st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
         else:
-            st.info("Aún no hay registros de partidos oficiales para construir el perfil.")
+            st.info("No hay fechas registradas para calcular el Z-Score.")
 
 # -----------------------------------------------------------------------------
-# GRÁFICO PANORÁMICO GPS Y RAW DATA TABLE
+# SUB-PAGE 2: GPS DATA Y MATCH OUTPUT
 # -----------------------------------------------------------------------------
+with tab_gps:
     if not df_p_jug.empty:
-        st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">GPS Totals (Season)</div>', unsafe_allow_html=True)
         
-        df_p_jug_chart = df_p_jug.sort_values('Fecha_dt', ascending=True)
+        g1, g2, g3, g4, g5 = st.columns(5)
+        g1.metric("Sesiones GPS", f"{len(df_p_jug)}")
+        g2.metric("Distancia Total", f"{df_p_jug['Dist_Total'].sum()/1000:.1f} km" if not df_p_jug.empty else "0.0 km")
+        g3.metric("Velocidad Máxima", f"{df_p_jug['V_MAX'].max():.1f} km/h" if not df_p_jug.empty else "0.0 km/h")
+        g4.metric("Media Dist/Sesión", f"{df_p_jug['Dist_Total'].mean():.0f} m" if not df_p_jug.empty else "0 m")
+        g5.metric("Acc + Dec Totales", f"{df_p_jug['Acc_Dec'].sum():.0f}" if not df_p_jug.empty else "0")
+
+        st.divider()
+
+        df_partidos = df_p_jug[df_p_jug['Is_Partido'] == True]
+        
+        st.markdown('<div class="pd-section-title">Rendimiento en Partido Oficial y Amistoso (Match Output)</div>', unsafe_allow_html=True)
+        if not df_partidos.empty:
+            html_matches = '<div style="display:flex; flex-direction:column; gap:1rem; margin-bottom: 2rem;">'
+            for _, r in df_partidos.iterrows():
+                rival = r['Rival'] if r['Rival'] else 'Rival por definir'
+                loc_str = r.get('Localizacion', '')
+                if loc_str and loc_str.lower() not in ['nan', 'none', '']:
+                    rival_display = f"{rival.upper()} ({loc_str.upper()})"
+                else:
+                    rival_display = rival.upper()
+                    
+                fecha = r['Fecha']
+                fecha_dt_partido = pd.to_datetime(r['Fecha_dt'], errors='coerce')
+                tipo_partido_str = "Partido Oficial" if pd.notna(fecha_dt_partido) and fecha_dt_partido >= pd.to_datetime("2026-09-06") else "Partido Amistoso"
+                
+                mins = int(r['Minutos'])
+                dist = r['Dist_Total'] / 1000
+                sprint = r['Dist_25']
+                vmax = r['V_MAX']
+                logo_url = get_logo(rival)
+                
+                html_matches += f"""
+                <div style="background:{SURFACE}; border:1px solid {BORDER}; border-radius:12px; padding:1.2rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
+                    <div style="display:flex; align-items:center; gap:1.2rem; min-width:250px;">
+                        <img src="{logo_url}" style="width:60px; height:60px; object-fit:contain;">
+                        <div>
+                            <div style="font-size:1.2rem; font-weight:800; color:{TEXT}; line-height:1.2;">vs {rival_display}</div>
+                            <div style="font-size:0.85rem; color:{MUTED};">{fecha} &middot; {tipo_partido_str}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:2rem; text-align:center; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-size:0.75rem; color:{MUTED}; font-weight:700; text-transform:uppercase;">Minutos</div>
+                            <div style="font-size:1.2rem; font-weight:800; color:{WARNING};">{mins}′</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.75rem; color:{MUTED}; font-weight:700; text-transform:uppercase;">Distancia</div>
+                            <div style="font-size:1.2rem; font-weight:800; color:{TEXT};">{dist:.1f} km</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.75rem; color:{MUTED}; font-weight:700; text-transform:uppercase;">Sprint (>25)</div>
+                            <div style="font-size:1.2rem; font-weight:800; color:{TEAM};">{sprint:.0f} m</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.75rem; color:{MUTED}; font-weight:700; text-transform:uppercase;">V. Máx</div>
+                            <div style="font-size:1.2rem; font-weight:800; color:{PRIMARY};">{vmax:.1f} km/h</div>
+                        </div>
+                    </div>
+                </div>
+                """
+            html_matches += '</div>'
+            st.markdown(html_matches, unsafe_allow_html=True)
+        else:
+            st.info("No hay registros de partidos para este jugador.")
+
+        st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
         
         fig_gps_combined = make_subplots(specs=[[{"secondary_y": True}]])
         
-        fig_gps_combined.add_trace(go.Bar(x=df_p_jug_chart['Fecha'], y=df_p_jug_chart['Dist_18'], name="Dist >18 km/h", marker_color=PRIMARY), secondary_y=False)
-        fig_gps_combined.add_trace(go.Bar(x=df_p_jug_chart['Fecha'], y=df_p_jug_chart['Dist_25'], name="Sprint >25 km/h", marker_color=TEAM), secondary_y=False)
+        fig_gps_combined.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_18'], name="Dist >18 km/h", marker_color=PRIMARY), secondary_y=False)
+        fig_gps_combined.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_25'], name="Sprint >25 km/h", marker_color=TEAM), secondary_y=False)
         
         fig_gps_combined.add_trace(go.Scatter(
-            x=df_p_jug_chart['Fecha'], y=df_p_jug_chart['Acc_Dec'], mode="lines+markers+text", name="Nº Acel + Decel", 
+            x=df_p_jug['Fecha'], y=df_p_jug['Acc_Dec'], mode="lines+markers+text", name="Nº Acel + Decel", 
             line=dict(color=GOOD, width=3), marker=dict(size=8),
-            text=df_p_jug_chart['Label'], textposition='top center', textfont=dict(color=TEXT, size=11)
+            text=df_p_jug['Label'], textposition='top center', textfont=dict(color=TEXT, size=11)
         ), secondary_y=True)
 
-        max_dist = (df_p_jug_chart['Dist_18'] + df_p_jug_chart['Dist_25']).max()
-        max_acc_dec = df_p_jug_chart['Acc_Dec'].max()
+        max_dist = (df_p_jug['Dist_18'] + df_p_jug['Dist_25']).max()
+        max_acc_dec = df_p_jug['Acc_Dec'].max()
 
         fig_gps_combined.update_layout(
             barmode="stack", height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
@@ -1064,15 +1113,17 @@ with tab_tests:
         st.plotly_chart(fig_gps_combined, use_container_width=True, config={"displayModeBar": False})
 
         st.markdown('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>', unsafe_allow_html=True)
-        cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
+        cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
         cols_present = [c for c in cols_table if c in df_p_jug.columns]
         
-        df_display = df_p_jug_chart[cols_present].sort_values('Fecha', ascending=False).copy()
+        df_display = df_p_jug[cols_present].copy()
         
         format_dict = {}
-        for col in ['Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'Player_Load']:
+        for col in ['Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'Acc_Dec', 'Player_Load']:
             if col in df_display.columns: format_dict[col] = "{:.0f}"
         for col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if col in df_display.columns: format_dict[col] = "{:.2f}"
             
         st.dataframe(df_display.style.format(format_dict), use_container_width=True, hide_index=True)
+    else:
+         st.info("No hay datos GPS disponibles para este jugador.")
