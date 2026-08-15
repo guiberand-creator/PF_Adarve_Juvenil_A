@@ -73,6 +73,13 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         
+        div.stButton > button {{
+            width: 100%; border-radius: 10px; border: 1px solid {BORDER}; background-color: {SURFACE_2};
+            color: {TEXT}; padding: 0.35rem 0.2rem; transition: all 0.2s; font-size: 0.75rem; font-weight: 700;
+        }}
+        div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE}; }}
+        div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
+
         .metric-row {{
             display: flex; justify-content: space-between; align-items: center;
             padding: 0.45rem 0.75rem; border-bottom: 1px solid {BORDER}; font-size: 0.85rem;
@@ -595,10 +602,12 @@ if not df_p_jug.empty:
             
     df_p_jug['Label'] = labels
 
+# CÁLCULO DE MINUTOS LIGA OFICIALES (ÚNICA Y EXCLUSIVAMENTE A PARTIR DEL 06/09/2026)
 minutos_totales_partido = 0
-if not df_p_jug.empty:
-    df_m = df_p_jug[df_p_jug['Is_Partido'] == True]
-    minutos_totales_partido = int(df_m['Minutos'].sum())
+fecha_inicio_liga = pd.to_datetime("2026-09-06")
+if not df_rpe.empty:
+    df_rpe_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
+    minutos_totales_partido = int(df_rpe_m['Minutos'].sum())
 
 # =============================================================================
 # 5. CAMPOGRAMA
@@ -671,7 +680,7 @@ with col_hero:
             <div class="pd-facts">
                 <div class="pd-fact"><div class="k">Nacimiento</div><div class="v">{fecha_nac_str}</div></div>
                 <div class="pd-fact"><div class="k">Pierna</div><div class="v v-cyan">{pierna_str.upper()}</div></div>
-                <div class="pd-fact"><div class="k">Minutos Partidos</div><div class="v v-gold">{minutos_totales_partido}′</div></div>
+                <div class="pd-fact"><div class="k">Minutos Liga</div><div class="v v-gold">{minutos_totales_partido}′</div></div>
                 <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
             </div>
         </div>
