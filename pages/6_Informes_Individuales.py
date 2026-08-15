@@ -39,7 +39,7 @@ PRIMARY = "#e11d48"          # Crimson Accent
 PRIMARY_SOFT = "rgba(225, 29, 72, 0.15)"
 TEAM = "#38bdf8"             # Cool Blue
 GOOD = "#22c55e"
-WARNING = "#f59e0b"
+WARNING = "#f59e0b"          # Amber / Yellow Accent
 
 def inject_v0_css():
     st.markdown(f"""
@@ -86,9 +86,7 @@ def inject_v0_css():
         }}
         .metric-label {{ color: {MUTED}; font-weight: 600; }}
         .metric-val {{ color: {TEXT}; font-weight: 800; }}
-        .metric-pct {{ font-size: 0.8rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; }}
-        .pct-good {{ background-color: rgba(34, 197, 94, 0.15); color: {GOOD}; }}
-        .pct-bad {{ background-color: rgba(225, 29, 72, 0.15); color: {PRIMARY}; }}
+        .metric-opt {{ color: {WARNING}; font-weight: 800; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -1073,41 +1071,30 @@ with tab_gps:
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             
-            if 'match_carousel_idx' not in st.session_state or st.session_state['match_carousel_idx'] >= len(df_matches_jug):
-                st.session_state['match_carousel_idx'] = len(df_matches_jug) - 1
+            if 'sel_match_dt' not in st.session_state or st.session_state['sel_match_dt'] not in df_matches_jug['Fecha_dt'].values:
+                st.session_state['sel_match_dt'] = df_matches_jug.iloc[-1]['Fecha_dt']
 
-            col_carousel, col_radar_match, col_metrics_panel = st.columns([0.8, 1.8, 1.2], gap="medium")
+            st.markdown("<p style='font-size:0.85rem; color:#8b949e; margin-bottom:0.75rem; font-weight:700;'>FILTRO DE PARTIDO (FIXTURE GRID):</p>", unsafe_allow_html=True)
+            
+            # PARRILLA CRONOLÓGICA DE ESCUDOS
+            cols_per_row = 6
+            for i in range(0, len(df_matches_jug), cols_per_row):
+                row_cols = st.columns(cols_per_row)
+                for j, (idx, row) in enumerate(df_matches_jug.iloc[i:i+cols_per_row].iterrows()):
+                    with row_cols[j]:
+                        l_url = get_logo(row['Rival'])
+                        st.markdown(f'<div style="text-align:center;"><img src="{l_url}" style="width:38px; height:38px; object-fit:contain; margin-bottom:2px;"></div>', unsafe_allow_html=True)
+                        
+                        loc_txt = str(row.get('Localizacion', '')).strip().upper()
+                        loc_code = f" ({loc_txt[0]})" if loc_txt else ""
+                        btn_label = f"J{idx+1} · {pd.to_datetime(row['Fecha_dt']).strftime('%d/%m')}{loc_code}"
+                        
+                        if st.button(btn_label, key=f"btn_fixture_{idx}"):
+                            st.session_state['sel_match_dt'] = row['Fecha_dt']
 
-            with col_carousel:
-                st.markdown('<div class="pd-section-title" style="text-align:center;">Filtro de Partido</div>', unsafe_allow_html=True)
-                
-                if st.button("▲ Anterior", key="btn_car_prev"):
-                    if st.session_state['match_carousel_idx'] > 0:
-                        st.session_state['match_carousel_idx'] -= 1
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_radar_match, col_metrics_panel = st.columns([1.8, 1.2], gap="large")
 
-                curr_idx = st.session_state['match_carousel_idx']
-                row_match = df_matches_jug.iloc[curr_idx]
-                
-                r_logo = get_logo(row_match['Rival'])
-                r_name = str(row_match['Rival']).upper() if row_match['Rival'] else "PARTIDO"
-                r_date = pd.to_datetime(row_match['Fecha_dt']).strftime('%d/%m/%Y')
-                r_loc = str(row_match.get('Localizacion', '')).upper()
-                r_loc_str = f"({r_loc})" if r_loc else ""
-                
-                st.markdown(f"""
-                    <div class="carousel-card">
-                        <div style="font-size:0.75rem; color:{MUTED}; font-weight:800; margin-bottom:0.4rem;">JORNADA {curr_idx + 1} DE {len(df_matches_jug)}</div>
-                        <img src="{r_logo}" style="width:70px; height:75px; object-fit:contain; margin: 0.5rem 0;">
-                        <div style="font-size:1.05rem; font-weight:800; color:{TEXT}; margin-top:0.2rem;">vs {r_name}</div>
-                        <div style="font-size:0.85rem; color:{TEAM}; font-weight:700;">{r_date} {r_loc_str}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-                if st.button("▼ Siguiente", key="btn_car_next"):
-                    if st.session_state['match_carousel_idx'] < len(df_matches_jug) - 1:
-                        st.session_state['match_carousel_idx'] += 1
-
-            # TODAS LAS VARIABLES DEL EXCEL GPS
             cols_all_gps = [
                 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 
                 'N_Acc', 'N_Dec', 'AC_MAX', 'DEC_MAX', 'V_MAX', 'Player_Load'
@@ -1129,7 +1116,10 @@ with tab_gps:
                 if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
                 mean_opt = df_opt_base[cols_all_gps].mean()
                 
-                vals_match = row_match[cols_all_gps]
+                match_data = df_matches_jug[df_matches_jug['Fecha_dt'] == st.session_state['sel_match_dt']]
+                if match_data.empty: match_data = df_matches_jug.iloc[[-1]]
+                row_selected = match_data.iloc[0]
+                vals_match = row_selected[cols_all_gps]
 
                 z_pos = [0] * len(cols_all_gps)
                 z_opt = [(mean_opt[c] - mean_pos[c]) / std_pos[c] for c in cols_all_gps]
@@ -1142,7 +1132,7 @@ with tab_gps:
                 theta_labels = params_labels + [params_labels[0]]
 
                 with col_radar_match:
-                    r_name = str(row_match['Rival']).upper() if row_match['Rival'] else "PARTIDO"
+                    r_name = str(row_selected['Rival']).upper() if row_selected['Rival'] else "PARTIDO"
                     
                     fig_mr = go.Figure()
                     fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta_labels, fill="none", name="Media Posición (0)", line=dict(color=TEAM, width=2, dash='dash')))
@@ -1153,18 +1143,18 @@ with tab_gps:
                     ))
                     
                     fig_mr.update_layout(
-                        height=500, margin=dict(l=60, r=60, t=40, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        height=520, margin=dict(l=80, r=80, t=50, b=50), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         polar=dict(
                             bgcolor=SURFACE_2, 
                             radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER, range=[-2.5, 3.5]), 
-                            angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=12))
+                            angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
                         ),
                         legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
                     )
                     st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
 
                 with col_metrics_panel:
-                    st.markdown(f'<div class="pd-section-title">Comparativa vs Perfil Óptimo</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pd-section-title">Valores Reales vs Perfil Óptimo</div>', unsafe_allow_html=True)
                     
                     units_map = {
                         'Dist_Total': 'm', 'Dist_18': 'm', 'Dist_25': 'm', 'Dist_28': 'm',
@@ -1178,25 +1168,19 @@ with tab_gps:
                         val_opt = mean_opt[col_k]
                         unit = units_map.get(col_k, '')
                         
-                        # Cálculo del porcentaje del perfil óptimo
-                        if pd.notna(val_opt) and val_opt != 0:
-                            pct_opt = (val_m / val_opt) * 100
-                            pct_class = "pct-good" if pct_opt >= 100 else "pct-bad"
-                            pct_str = f'<span class="metric-pct {pct_class}">{pct_opt:.0f}%</span>'
-                        else:
-                            pct_str = '<span class="metric-pct">-</span>'
-
                         if col_k in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
-                            fmt_str = f"{val_m:.2f} {unit}"
+                            fmt_m = f"{val_m:.2f} {unit}"
+                            fmt_opt = f"{val_opt:.2f} {unit}" if pd.notna(val_opt) else "-"
                         else:
-                            fmt_str = f"{val_m:.0f} {unit}"
+                            fmt_m = f"{val_m:.0f} {unit}"
+                            fmt_opt = f"{val_opt:.0f} {unit}" if pd.notna(val_opt) else "-"
 
                         st.markdown(f"""
                             <div class="metric-row">
                                 <span class="metric-label">{lbl}</span>
                                 <div>
-                                    <span class="metric-val" style="margin-right:8px;">{fmt_str}</span>
-                                    {pct_str}
+                                    <span class="metric-val" style="margin-right:12px;">{fmt_m}</span>
+                                    <span class="metric-opt">{fmt_opt}</span>
                                 </div>
                             </div>
                         """, unsafe_allow_html=True)
