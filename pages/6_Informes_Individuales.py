@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly.express as px
 import os
 import glob
 import requests
@@ -73,12 +72,20 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         
-        div.stButton > button {{
-            width: 100%; border-radius: 8px; border: 1px solid {BORDER}; background-color: {SURFACE};
-            color: {TEXT}; padding: 0.4rem; transition: all 0.2s;
+        /* SHADCN CAROUSEL STYLE */
+        .carousel-card {{
+            background-color: {SURFACE_2};
+            border: 1px solid {BORDER};
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0.5rem 0;
         }}
-        div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE_2}; }}
-        div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -1046,91 +1053,108 @@ with tab_gps:
             df_matches_all = df_matches_all[df_matches_all['Is_Partido']].copy()
             df_matches_all = pd.merge(df_matches_all, df_pos[['Nombre_Norm', 'Posicion']], on='Nombre_Norm', how='left')
         
-        df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=True) if not df_p_jug.empty else pd.DataFrame()
+        df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=True).reset_index(drop=True) if not df_p_jug.empty else pd.DataFrame()
         
         st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido (Match Output)</div>', unsafe_allow_html=True)
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             
-            if 'sel_match_dt' not in st.session_state or st.session_state['sel_match_dt'] not in df_matches_jug['Fecha_dt'].values:
-                st.session_state['sel_match_dt'] = df_matches_jug.iloc[-1]['Fecha_dt']
+            if 'match_carousel_idx' not in st.session_state or st.session_state['match_carousel_idx'] >= len(df_matches_jug):
+                st.session_state['match_carousel_idx'] = len(df_matches_jug) - 1  # Por defecto el último (más reciente)
 
-            st.markdown("<p style='font-size:0.8rem; color:#8b949e; margin-bottom:0.5rem;'>Selecciona un partido para analizar su perfil:</p>", unsafe_allow_html=True)
-            
-            # Botonera cronológica de partidos
-            cols_per_row = 6
-            for i in range(0, len(df_matches_jug), cols_per_row):
-                row_cols = st.columns(cols_per_row)
-                for j, (idx, row) in enumerate(df_matches_jug.iloc[i:i+cols_per_row].iterrows()):
-                    with row_cols[j]:
-                        l_url = get_logo(row['Rival'])
-                        st.markdown(f'<div style="text-align:center;"><img src="{l_url}" style="width:32px; height:32px; object-fit:contain; margin-bottom:4px;"></div>', unsafe_allow_html=True)
-                        btn_txt = f"{pd.to_datetime(row['Fecha_dt']).strftime('%d/%m')}"
-                        if row.get('Localizacion'):
-                            btn_txt += f"\n({str(row['Localizacion'])[:1].upper()})"
-                        
-                        if st.button(btn_txt, key=f"btn_m_{idx}"):
-                            st.session_state['sel_match_dt'] = row['Fecha_dt']
+            col_carousel, col_radar_match = st.columns([1, 2.2], gap="large")
 
-            cols_radar = ['Dist_Total', 'Dist_18', 'Dist_25', 'Acc_Dec', 'V_MAX']
-            units_radar = ['km', 'm', 'm', 'acciones', 'km/h']
-            divs_radar = [1000, 1, 1, 1, 1]
-
-            pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
-            df_matches_pos = df_matches_all[df_matches_all['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)]
-            
-            if not df_matches_pos.empty:
-                mean_pos = df_matches_pos[cols_radar].mean()
-                std_pos = df_matches_pos[cols_radar].std().replace({0: 1, np.nan: 1})
+            with col_carousel:
+                st.markdown('<div class="pd-section-title">Navegador de Partidos</div>', unsafe_allow_html=True)
                 
-                df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
-                if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
-                mean_opt = df_opt_base[cols_radar].mean()
+                c_up, _ = st.columns([1, 3])
+                with c_up:
+                    if st.button("▲ Anterior", key="btn_car_prev"):
+                        if st.session_state['match_carousel_idx'] > 0:
+                            st.session_state['match_carousel_idx'] -= 1
+
+                curr_idx = st.session_state['match_carousel_idx']
+                row_match = df_matches_jug.iloc[curr_idx]
                 
-                match_data = df_matches_jug[df_matches_jug['Fecha_dt'] == st.session_state['sel_match_dt']]
-                if match_data.empty: match_data = df_matches_jug.iloc[[-1]]
-                vals_match = match_data.iloc[0][cols_radar]
+                r_logo = get_logo(row_match['Rival'])
+                r_name = str(row_match['Rival']).upper() if row_match['Rival'] else "PARTIDO"
+                r_date = pd.to_datetime(row_match['Fecha_dt']).strftime('%d/%m/%Y')
+                r_loc = str(row_match.get('Localizacion', '')).upper()
+                r_loc_str = f"({r_loc})" if r_loc else ""
+                
+                st.markdown(f"""
+                    <div class="carousel-card">
+                        <div style="font-size:0.75rem; color:{MUTED}; font-weight:800; margin-bottom:0.4rem;">PARTIDO {curr_idx + 1} DE {len(df_matches_jug)}</div>
+                        <img src="{r_logo}" style="width:75px; height:75px; object-fit:contain; margin: 0.5rem 0;">
+                        <div style="font-size:1.1rem; font-weight:800; color:{TEXT}; margin-top:0.2rem;">vs {r_name}</div>
+                        <div style="font-size:0.85rem; color:{TEAM}; font-weight:700;">{r_date} {r_loc_str}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-                z_pos = [0, 0, 0, 0, 0]
-                z_opt = [(mean_opt[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
-                z_match = [(vals_match[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
+                c_down, _ = st.columns([1, 3])
+                with c_down:
+                    if st.button("▼ Siguiente", key="btn_car_next"):
+                        if st.session_state['match_carousel_idx'] < len(df_matches_jug) - 1:
+                            st.session_state['match_carousel_idx'] += 1
 
-                def fmt_v(v, d, u):
-                    if pd.isna(v): return "-"
-                    if d == 1000 or 'km/h' in u: return f"{v/d:.1f} {u}"
-                    return f"{v/d:.0f} {u}"
+            with col_radar_match:
+                cols_radar = ['Dist_Total', 'Dist_18', 'Dist_25', 'Acc_Dec', 'V_MAX']
+                units_radar = ['km', 'm', 'm', 'acciones', 'km/h']
+                divs_radar = [1000, 1, 1, 1, 1]
+
+                pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
+                df_matches_pos = df_matches_all[df_matches_all['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)]
+                
+                if not df_matches_pos.empty:
+                    mean_pos = df_matches_pos[cols_radar].mean()
+                    std_pos = df_matches_pos[cols_radar].std().replace({0: 1, np.nan: 1})
                     
-                labels_match = [f"<b>{fmt_v(vals_match[c], divs_radar[i], units_radar[i])}</b>" for i,c in enumerate(cols_radar)]
-                
-                z_pos += [z_pos[0]]
-                z_opt += [z_opt[0]]
-                z_match += [z_match[0]]
-                labels_match += [labels_match[0]]
-                
-                theta = ['Dist. Total', 'Dist. >18 km/h', 'Sprint >25 km/h', 'Acc + Dec', 'Vel. Máxima']
-                theta += [theta[0]]
+                    df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
+                    if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
+                    mean_opt = df_opt_base[cols_radar].mean()
+                    
+                    vals_match = row_match[cols_radar]
 
-                fig_mr = go.Figure()
-                fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta, fill="none", name="Media Posición (0)", line=dict(color=TEAM, width=2, dash='dash')))
-                fig_mr.add_trace(go.Scatterpolar(r=z_opt, theta=theta, fill="toself", name="Perfil Óptimo (Last 4 >60min)", line=dict(color=WARNING, width=2), fillcolor="rgba(245, 158, 11, 0.15)"))
-                fig_mr.add_trace(go.Scatterpolar(
-                    r=z_match, theta=theta, fill="toself", mode="lines+markers+text", name="Partido Seleccionado", 
-                    line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)",
-                    text=labels_match, textposition="top center", textfont=dict(color="white", size=13)
-                ))
-                
-                fig_mr.update_layout(
-                    height=450, margin=dict(l=60, r=60, t=60, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    polar=dict(
-                        bgcolor=SURFACE_2, 
-                        radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER), 
-                        angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
-                    ),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
-                )
-                st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
-            else:
-                st.info("No hay datos suficientes de posición para calcular el radar.")
+                    z_pos = [0, 0, 0, 0, 0]
+                    z_opt = [(mean_opt[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
+                    z_match = [(vals_match[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
+
+                    def fmt_v(v, d, u):
+                        if pd.isna(v): return "-"
+                        if d == 1000 or 'km/h' in u: return f"{v/d:.1f} {u}"
+                        return f"{v/d:.0f} {u}"
+                        
+                    labels_match = [f"<b>{fmt_v(vals_match[c], divs_radar[i], units_radar[i])}</b>" for i,c in enumerate(cols_radar)]
+                    
+                    z_pos += [z_pos[0]]
+                    z_opt += [z_opt[0]]
+                    z_match += [z_match[0]]
+                    labels_match += [labels_match[0]]
+                    
+                    theta = ['Dist. Total', 'Dist. >18 km/h', 'Sprint >25 km/h', 'Acc + Dec', 'Vel. Máxima']
+                    theta += [theta[0]]
+
+                    fig_mr = go.Figure()
+                    fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta, fill="none", name="Media Posición", line=dict(color=TEAM, width=2, dash='dash')))
+                    fig_mr.add_trace(go.Scatterpolar(r=z_opt, theta=theta, fill="toself", name="Perfil Óptimo (Last 4 >60min)", line=dict(color=WARNING, width=2), fillcolor="rgba(245, 158, 11, 0.15)"))
+                    fig_mr.add_trace(go.Scatterpolar(
+                        r=z_match, theta=theta, fill="toself", mode="lines+markers+text", name=f"vs {r_name}", 
+                        line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)",
+                        text=labels_match, textposition="top center", textfont=dict(color="white", size=14)
+                    ))
+                    
+                    fig_mr.update_layout(
+                        height=480, margin=dict(l=80, r=80, t=50, b=50), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        polar=dict(
+                            bgcolor=SURFACE_2, 
+                            radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER, range=[-2, 3.5]), 
+                            angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
+                        ),
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
+                    )
+                    st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
+                else:
+                    st.info("No hay datos suficientes de posición para calcular el radar.")
         else:
             st.info("Aún no hay registros de partidos para construir el perfil.")
 
@@ -1167,7 +1191,6 @@ with tab_gps:
         cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
         cols_present = [c for c in cols_table if c in df_p_jug.columns]
         
-        # Corrección del ordenamiento seguro para evitar KeyError
         df_display = df_p_jug_chart[cols_present].copy()
         if 'Fecha_dt' in df_p_jug_chart.columns:
             df_display['Fecha_dt'] = df_p_jug_chart['Fecha_dt']
