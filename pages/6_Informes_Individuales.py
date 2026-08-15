@@ -511,11 +511,10 @@ elif not match_cuest.empty and 'Pierna_Dominante' in match_cuest.columns:
     val = str(match_cuest.iloc[-1]['Pierna_Dominante']).strip()
     if val.lower() not in ['nan', 'none', 'por definir', '0', '']: pierna_str = val
 
-minutos_oficiales = 0
+minutos_totales_partido = 0
 if not df_rpe.empty:
-    fecha_inicio_liga = pd.to_datetime("2026-09-06")
-    df_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
-    minutos_oficiales = int(df_m['Minutos'].sum())
+    df_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido'))]
+    minutos_totales_partido = int(df_m['Minutos'].sum())
 
 ranking_real_str = dict_rankings_reales.get(jug_norm, "#--")
 nombre_mostrar = jugador_sel.replace('_', ' ').upper()
@@ -591,7 +590,7 @@ with col_hero:
             <div class="pd-facts">
                 <div class="pd-fact"><div class="k">Nacimiento</div><div class="v">{fecha_nac_str}</div></div>
                 <div class="pd-fact"><div class="k">Pierna</div><div class="v v-cyan">{pierna_str.upper()}</div></div>
-                <div class="pd-fact"><div class="k">Minutos Liga</div><div class="v v-gold">{minutos_oficiales}′</div></div>
+                <div class="pd-fact"><div class="k">Minutos Partidos</div><div class="v v-gold">{minutos_totales_partido}′</div></div>
                 <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
             </div>
         </div>
@@ -772,8 +771,8 @@ with tab_tests:
             else: st.info("No hay datos de dinamometría para este jugador.")
 
         elif test_categoria == "🚀 Saltos & DRI":
-            sub_s = st.radio("Vista:", ["Evolución CMJ, slCMJright, slCMJleft", "Evolución DRI y DJ"], horizontal=True)
-            if "CMJ" in sub_s:
+            sub_s = st.radio("Vista:", ["Evolución CMJ", "Evolución DRI y DJ"], horizontal=True)
+            if sub_s == "Evolución CMJ":
                 if not df_j_s.empty:
                     fig_s = go.Figure()
                     for t_norm, col_name, c_color in [('CMJ', 'CMJ Total', PRIMARY), ('CMJ_D', 'slCMJ Derecha', TEAM), ('CMJ_I', 'slCMJ Izquierda', WARNING)]:
@@ -982,7 +981,6 @@ with tab_gps:
         df_p_jug['Rival'] = ''
         df_p_jug['Localizacion'] = ''
 
-    # Creación de etiquetas dinámicas (Labels)
     if not df_p_jug.empty:
         labels = []
         for _, r in df_p_jug.iterrows():
@@ -1067,49 +1065,37 @@ with tab_gps:
         st.info("No hay registros de partidos para este jugador.")
 
     if not df_p_jug.empty:
-        c1, c2 = st.columns(2, gap="large")
-        with c1:
-            st.markdown('<div class="pd-section-title">Evolución de Alta Intensidad (>18 km/h)</div>', unsafe_allow_html=True)
-            fig_gps_bar = go.Figure()
-            fig_gps_bar.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_18'], name="Dist >18 km/h", marker_color=PRIMARY))
-            fig_gps_bar.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_25'], name="Sprint >25 km/h", marker_color=TEAM))
-            
-            fig_gps_bar.add_trace(go.Scatter(
-                x=df_p_jug['Fecha'],
-                y=df_p_jug['Dist_18'] + df_p_jug['Dist_25'],
-                mode='text',
-                text=df_p_jug['Label'],
-                textposition='top center',
-                textfont=dict(color=TEXT, size=10),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
-            
-            max_val = (df_p_jug['Dist_18'] + df_p_jug['Dist_25']).max()
-            fig_gps_bar.update_layout(
-                barmode="stack", height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
-                font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2),
-                yaxis=dict(range=[0, max_val * 1.15])
-            )
-            st.plotly_chart(fig_gps_bar, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('<div class="pd-section-title">Evolución GPS: Alta Intensidad, Aceleraciones y Desaceleraciones</div>', unsafe_allow_html=True)
+        
+        fig_gps_combined = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        fig_gps_combined.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_18'], name="Dist >18 km/h", marker_color=PRIMARY), secondary_y=False)
+        fig_gps_combined.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_25'], name="Sprint >25 km/h", marker_color=TEAM), secondary_y=False)
+        
+        fig_gps_combined.add_trace(go.Scatter(
+            x=df_p_jug['Fecha'], y=df_p_jug['AC_MAX'], mode="lines+markers+text", name="AC_MAX", 
+            line=dict(color=GOOD, width=2.5),
+            text=df_p_jug['Label'], textposition='top center', textfont=dict(color=TEXT, size=10)
+        ), secondary_y=True)
+        
+        fig_gps_combined.add_trace(go.Scatter(
+            x=df_p_jug['Fecha'], y=df_p_jug['DEC_MAX'], mode="lines+markers", name="DEC_MAX", 
+            line=dict(color=WARNING, width=2.5)
+        ), secondary_y=True)
 
-        with c2:
-            st.markdown('<div class="pd-section-title">Aceleraciones vs Desaceleraciones</div>', unsafe_allow_html=True)
-            fig_acc = go.Figure()
-            fig_acc.add_trace(go.Scatter(
-                x=df_p_jug['Fecha'], y=df_p_jug['AC_MAX'], mode="lines+markers+text", name="AC_MAX", line=dict(color=TEAM, width=2.5),
-                text=df_p_jug['Label'], textposition='top center', textfont=dict(color=TEXT, size=10)
-            ))
-            fig_acc.add_trace(go.Scatter(x=df_p_jug['Fecha'], y=df_p_jug['DEC_MAX'], mode="lines+markers", name="DEC_MAX", line=dict(color=PRIMARY, width=2.5)))
-            
-            max_val = df_p_jug['AC_MAX'].max()
-            min_val = df_p_jug['DEC_MAX'].min()
-            fig_acc.update_layout(
-                height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
-                font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2),
-                yaxis=dict(range=[min_val * 1.1, max_val * 1.25])
-            )
-            st.plotly_chart(fig_acc, use_container_width=True, config={"displayModeBar": False})
+        max_dist = (df_p_jug['Dist_18'] + df_p_jug['Dist_25']).max()
+        max_ac = df_p_jug['AC_MAX'].max()
+        min_dec = df_p_jug['DEC_MAX'].min()
+
+        fig_gps_combined.update_layout(
+            barmode="stack", height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
+            font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2)
+        )
+        
+        fig_gps_combined.update_yaxes(title_text="Distancia (m)", showgrid=True, gridcolor=BORDER, secondary_y=False, range=[0, max_dist * 1.15] if pd.notna(max_dist) else None)
+        fig_gps_combined.update_yaxes(title_text="Acel / Decel (m/s²)", showgrid=False, secondary_y=True, range=[min_dec * 1.1 if pd.notna(min_dec) else -5, max_ac * 1.3 if pd.notna(max_ac) else 5])
+        
+        st.plotly_chart(fig_gps_combined, use_container_width=True, config={"displayModeBar": False})
 
         st.markdown('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>', unsafe_allow_html=True)
         st.dataframe(df_p_jug[['Fecha', 'Tipo_Sesion', 'Rival', 'Minutos', 'Dist_Total', 'Dist_18', 'Dist_25', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX']], use_container_width=True, hide_index=True)
