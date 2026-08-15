@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.express as px
 import os
 import glob
 import requests
@@ -10,10 +11,12 @@ import io
 import base64
 import re
 from datetime import datetime
+import matplotlib.pyplot as plt
+from mplsoccer import Radar, FontManager
 from utils import aplicar_diseno_responsive
 
 # =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA Y TEMAS V0 (FULL WIDTH SHADCN THEME)
+# 1. CONFIGURACIÓN DE PÁGINA Y TEMAS V0
 # =============================================================================
 aplicar_diseno_responsive()
 
@@ -72,20 +75,20 @@ def inject_v0_css():
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
         .stTabs [aria-selected="true"] {{ background: {SURFACE_2}; color: {TEXT}; border-bottom: 2px solid {PRIMARY}; }}
         
-        /* SHADCN CAROUSEL STYLE */
-        .carousel-card {{
-            background-color: {SURFACE_2};
-            border: 1px solid {BORDER};
-            border-radius: 16px;
-            padding: 1.5rem;
-            text-align: center;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            margin: 0.5rem 0;
+        /* Botonera Parrilla de Partidos */
+        div.stButton > button {{
+            width: 100%; border-radius: 10px; border: 1px solid {BORDER}; background-color: {SURFACE_2};
+            color: {TEXT}; padding: 0.35rem 0.2rem; transition: all 0.2s; font-size: 0.75rem; font-weight: 700;
         }}
+        div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE}; }}
+        div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
+
+        .metric-row {{
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.45rem 0.75rem; border-bottom: 1px solid {BORDER}; font-size: 0.85rem;
+        }}
+        .metric-label {{ color: {MUTED}; font-weight: 600; }}
+        .metric-val {{ color: {TEXT}; font-weight: 800; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -1031,7 +1034,7 @@ with tab_tests:
             st.info("No hay fechas registradas para calcular el Z-Score.")
 
 # -----------------------------------------------------------------------------
-# SUB-PAGE 2: GPS DATA Y MATCH OUTPUT
+# SUB-PAGE 2: GPS DATA Y MATCH OUTPUT (CON CAROUSEL Y MPLSOCCER RADAR)
 # -----------------------------------------------------------------------------
 with tab_gps:
     if not df_p_jug.empty:
@@ -1060,18 +1063,16 @@ with tab_gps:
         if not df_matches_jug.empty and not df_matches_all.empty:
             
             if 'match_carousel_idx' not in st.session_state or st.session_state['match_carousel_idx'] >= len(df_matches_jug):
-                st.session_state['match_carousel_idx'] = len(df_matches_jug) - 1  # Por defecto el último (más reciente)
+                st.session_state['match_carousel_idx'] = len(df_matches_jug) - 1
 
-            col_carousel, col_radar_match = st.columns([1, 2.2], gap="large")
+            col_carousel, col_radar_match, col_metrics_panel = st.columns([0.8, 1.8, 1.2], gap="medium")
 
             with col_carousel:
-                st.markdown('<div class="pd-section-title">Navegador de Partidos</div>', unsafe_allow_html=True)
+                st.markdown('<div class="pd-section-title" style="text-align:center;">Filtro de Partido</div>', unsafe_allow_html=True)
                 
-                c_up, _ = st.columns([1, 3])
-                with c_up:
-                    if st.button("▲ Anterior", key="btn_car_prev"):
-                        if st.session_state['match_carousel_idx'] > 0:
-                            st.session_state['match_carousel_idx'] -= 1
+                if st.button("▲ Anterior", key="btn_car_prev"):
+                    if st.session_state['match_carousel_idx'] > 0:
+                        st.session_state['match_carousel_idx'] -= 1
 
                 curr_idx = st.session_state['match_carousel_idx']
                 row_match = df_matches_jug.iloc[curr_idx]
@@ -1084,77 +1085,110 @@ with tab_gps:
                 
                 st.markdown(f"""
                     <div class="carousel-card">
-                        <div style="font-size:0.75rem; color:{MUTED}; font-weight:800; margin-bottom:0.4rem;">PARTIDO {curr_idx + 1} DE {len(df_matches_jug)}</div>
-                        <img src="{r_logo}" style="width:75px; height:75px; object-fit:contain; margin: 0.5rem 0;">
-                        <div style="font-size:1.1rem; font-weight:800; color:{TEXT}; margin-top:0.2rem;">vs {r_name}</div>
+                        <div style="font-size:0.75rem; color:{MUTED}; font-weight:800; margin-bottom:0.4rem;">JORNADA {curr_idx + 1} DE {len(df_matches_jug)}</div>
+                        <img src="{r_logo}" style="width:70px; height:75px; object-fit:contain; margin: 0.5rem 0;">
+                        <div style="font-size:1.05rem; font-weight:800; color:{TEXT}; margin-top:0.2rem;">vs {r_name}</div>
                         <div style="font-size:0.85rem; color:{TEAM}; font-weight:700;">{r_date} {r_loc_str}</div>
                     </div>
                 """, unsafe_allow_html=True)
 
-                c_down, _ = st.columns([1, 3])
-                with c_down:
-                    if st.button("▼ Siguiente", key="btn_car_next"):
-                        if st.session_state['match_carousel_idx'] < len(df_matches_jug) - 1:
-                            st.session_state['match_carousel_idx'] += 1
+                if st.button("▼ Siguiente", key="btn_car_next"):
+                    if st.session_state['match_carousel_idx'] < len(df_matches_jug) - 1:
+                        st.session_state['match_carousel_idx'] += 1
 
-            with col_radar_match:
-                cols_radar = ['Dist_Total', 'Dist_18', 'Dist_25', 'Acc_Dec', 'V_MAX']
-                units_radar = ['km', 'm', 'm', 'acciones', 'km/h']
-                divs_radar = [1000, 1, 1, 1, 1]
+            # TODAS LAS VARIABLES DEL EXCEL
+            cols_all_gps = [
+                'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 
+                'N_Acc', 'N_Dec', 'AC_MAX', 'DEC_MAX', 'V_MAX', 'Player_Load'
+            ]
+            
+            params_labels = [
+                "Dist Total", "Dist >18", "Dist >25.2", "Dist >28.8", "Nº Sprints", 
+                "Nº Acel", "Nº Decel", "Ac Max", "Dec Max", "V Max", "Player Load"
+            ]
 
-                pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
-                df_matches_pos = df_matches_all[df_matches_all['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)]
+            pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
+            df_matches_pos = df_matches_all[df_matches_all['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)]
+            
+            if not df_matches_pos.empty:
+                # Rangos dinámicos min/max para mplsoccer Radar
+                low_ranges = df_matches_pos[cols_all_gps].min().tolist()
+                high_ranges = df_matches_pos[cols_all_gps].max().tolist()
                 
-                if not df_matches_pos.empty:
-                    mean_pos = df_matches_pos[cols_radar].mean()
-                    std_pos = df_matches_pos[cols_radar].std().replace({0: 1, np.nan: 1})
-                    
-                    df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
-                    if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
-                    mean_opt = df_opt_base[cols_radar].mean()
-                    
-                    vals_match = row_match[cols_radar]
+                # Prevenir colapsos si min == max
+                for i in range(len(low_ranges)):
+                    if low_ranges[i] == high_ranges[i]:
+                        low_ranges[i] = low_ranges[i] * 0.8
+                        high_ranges[i] = high_ranges[i] * 1.2 if high_ranges[i] != 0 else 10.0
 
-                    z_pos = [0, 0, 0, 0, 0]
-                    z_opt = [(mean_opt[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
-                    z_match = [(vals_match[c] - mean_pos[c]) / std_pos[c] for c in cols_radar]
+                df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
+                if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
+                
+                values_opt = df_opt_base[cols_all_gps].mean().tolist()
+                values_pos = df_matches_pos[cols_all_gps].mean().tolist()
+                values_match = row_match[cols_all_gps].tolist()
 
-                    def fmt_v(v, d, u):
-                        if pd.isna(v): return "-"
-                        if d == 1000 or 'km/h' in u: return f"{v/d:.1f} {u}"
-                        return f"{v/d:.0f} {u}"
-                        
-                    labels_match = [f"<b>{fmt_v(vals_match[c], divs_radar[i], units_radar[i])}</b>" for i,c in enumerate(cols_radar)]
-                    
-                    z_pos += [z_pos[0]]
-                    z_opt += [z_opt[0]]
-                    z_match += [z_match[0]]
-                    labels_match += [labels_match[0]]
-                    
-                    theta = ['Dist. Total', 'Dist. >18 km/h', 'Sprint >25 km/h', 'Acc + Dec', 'Vel. Máxima']
-                    theta += [theta[0]]
-
-                    fig_mr = go.Figure()
-                    fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta, fill="none", name="Media Posición", line=dict(color=TEAM, width=2, dash='dash')))
-                    fig_mr.add_trace(go.Scatterpolar(r=z_opt, theta=theta, fill="toself", name="Perfil Óptimo (Last 4 >60min)", line=dict(color=WARNING, width=2), fillcolor="rgba(245, 158, 11, 0.15)"))
-                    fig_mr.add_trace(go.Scatterpolar(
-                        r=z_match, theta=theta, fill="toself", mode="lines+markers+text", name=f"vs {r_name}", 
-                        line=dict(color=PRIMARY, width=3), fillcolor="rgba(225,29,72,0.30)",
-                        text=labels_match, textposition="top center", textfont=dict(color="white", size=14)
-                    ))
-                    
-                    fig_mr.update_layout(
-                        height=480, margin=dict(l=80, r=80, t=50, b=50), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                        polar=dict(
-                            bgcolor=SURFACE_2, 
-                            radialaxis=dict(showticklabels=False, showgrid=True, gridcolor=BORDER, range=[-2, 3.5]), 
-                            angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
-                        ),
-                        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
+                with col_radar_match:
+                    # MPLSOCCER RADAR (SIN TEXTOS DE EJES)
+                    radar = Radar(
+                        params=params_labels,
+                        min_range=low_ranges,
+                        max_range=high_ranges,
+                        num_rings=4,
+                        ring_color="#26303b",
+                        fontfamily="sans-serif"
                     )
-                    st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
-                else:
-                    st.info("No hay datos suficientes de posición para calcular el radar.")
+
+                    fig, ax = radar.setup_axis(facecolor='none')
+                    fig.set_facecolor('none')
+
+                    # Dibujamos los polígonos
+                    radar.draw_circles(ax=ax, facecolor='#161b22', edgecolor='#26303b')
+                    
+                    # Dibujamos las áreas
+                    radar.draw_radar_solid(ax=ax, values=values_pos, kwargs=dict(facecolor='#38bdf8', alpha=0.15))
+                    radar.draw_radar_solid(ax=ax, values=values_opt, kwargs=dict(facecolor='#f59e0b', alpha=0.20))
+                    radar.draw_radar_solid(ax=ax, values=values_match, kwargs=dict(facecolor='#e11d48', alpha=0.40))
+                    
+                    # Líneas de contorno
+                    radar.draw_radar(ax=ax, values=values_pos, kwargs=dict(color='#38bdf8', linestyle='--', linewidth=1.5, label='Media Posición'))
+                    radar.draw_radar(ax=ax, values=values_opt, kwargs=dict(color='#f59e0b', linestyle='-', linewidth=2, label='Perfil Óptimo (Ópt.)'))
+                    radar.draw_radar(ax=ax, values=values_match, kwargs=dict(color='#e11d48', linestyle='-', linewidth=3, label=f'vs {r_name}'))
+
+                    # Etiquetamos ÚNICAMENTE las variables en las puntas (SIN números de ejes)
+                    radar.draw_param_labels(ax=ax, kwargs=dict(color='#e6edf3', fontsize=10, fontweight='bold'))
+
+                    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.12), ncol=3, frameon=False, labelcolor='#e6edf3', fontsize=10)
+
+                    st.pyplot(fig, clear_figure=True)
+
+                with col_metrics_panel:
+                    st.markdown('<div class="pd-section-title">Valores Reales del Partido</div>', unsafe_allow_html=True)
+                    
+                    units_map = {
+                        'Dist_Total': 'm', 'Dist_18': 'm', 'Dist_25': 'm', 'Dist_28': 'm',
+                        'N_Sprints': 'sprints', 'N_Acc': 'acciones', 'N_Dec': 'acciones',
+                        'AC_MAX': 'm/s²', 'DEC_MAX': 'm/s²', 'V_MAX': 'km/h', 'Player_Load': 'PL'
+                    }
+
+                    for i, col_k in enumerate(cols_all_gps):
+                        lbl = params_labels[i]
+                        val_m = values_match[i]
+                        unit = units_map.get(col_k, '')
+                        
+                        if col_k in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
+                            fmt_str = f"{val_m:.2f} {unit}"
+                        else:
+                            fmt_str = f"{val_m:.0f} {unit}"
+
+                        st.markdown(f"""
+                            <div class="metric-row">
+                                <span class="metric-label">{lbl}</span>
+                                <span class="metric-val">{fmt_str}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No hay datos suficientes de posición para calcular el radar.")
         else:
             st.info("Aún no hay registros de partidos para construir el perfil.")
 
