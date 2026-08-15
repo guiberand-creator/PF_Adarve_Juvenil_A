@@ -1136,7 +1136,7 @@ with tab_gps:
 
         st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
         
-        # Orden Cronológico (Izquierda a Derecha)
+        # Orden Cronológico Fijo (Izquierda a Derecha)
         df_p_jug_chart = df_p_jug.sort_values('Fecha_dt', ascending=True)
         
         fig_gps_combined = make_subplots(specs=[[{"secondary_y": True}]])
@@ -1167,8 +1167,12 @@ with tab_gps:
         cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
         cols_present = [c for c in cols_table if c in df_p_jug.columns]
         
-        df_display = df_p_jug_chart[cols_present].sort_values('Fecha_dt', ascending=False).copy()
-        
+        # Corrección del ordenamiento seguro para evitar KeyError
+        df_display = df_p_jug_chart[cols_present].copy()
+        if 'Fecha_dt' in df_p_jug_chart.columns:
+            df_display['Fecha_dt'] = df_p_jug_chart['Fecha_dt']
+            df_display = df_display.sort_values('Fecha_dt', ascending=False).drop(columns=['Fecha_dt'])
+            
         format_dict = {}
         for col in ['Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'Player_Load']:
             if col in df_display.columns: format_dict[col] = "{:.0f}"
