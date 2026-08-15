@@ -103,7 +103,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CARGA DE DATOS MULTIFUENTE CON CÁLCULO DE RANKING CONDICIONAL REAL
+# 2. CARGA DE DATOS MULTIFUENTE
 # =============================================================================
 def descargar_csv_drive(sheet_id, gid="0"):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
@@ -175,6 +175,7 @@ def cargar_todo_informes():
         c_t = next((c for c in cols if 'tipo' in str(c).lower() or 'sesion' in str(c).lower()), cols[2])
         c_m = next((c for c in cols if 'minuto' in str(c).lower() or 'tiempo' in str(c).lower()), cols[3])
         c_r = next((c for c in cols if 'rival' in str(c).lower() or 'equipo' in str(c).lower() or 'contra' in str(c).lower()), None)
+        c_loc = next((c for c in cols if 'casa' in str(c).lower() or 'fuera' in str(c).lower() or 'local' in str(c).lower() or 'visit' in str(c).lower() or 'condición' in str(c).lower() or 'condicion' in str(c).lower()), None)
         
         df_rpe['Fecha_dt'] = pd.to_datetime(df_rpe[c_f], dayfirst=True, errors='coerce')
         df_rpe['Fecha'] = df_rpe['Fecha_dt'].dt.strftime('%d/%m/%Y')
@@ -187,6 +188,11 @@ def cargar_todo_informes():
             df_rpe['Rival'] = df_rpe[c_r].astype(str).str.strip()
         else:
             df_rpe['Rival'] = df_rpe['Tipo_Sesion'].apply(lambda x: x.split('-')[-1].strip() if '-' in x else (x.replace('Partido', '').strip() if 'partido' in x.lower() else ''))
+            
+        if c_loc:
+            df_rpe['Localizacion'] = df_rpe[c_loc].astype(str).str.strip()
+        else:
+            df_rpe['Localizacion'] = ''
 
     ruta_gps = os.path.join("data", "GPS")
     df_gps_all = pd.DataFrame()
@@ -411,7 +417,7 @@ def cargar_todo_informes():
     if r_ref_campo_files:
         df_ref_campo = pd.read_excel(r_ref_campo_files[0])
 
-    # CARGA NUEVA BASE ESCUDOS (1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5)
+    # CARGA NUEVA BASE ESCUDOS
     df_escudos = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
     dict_escudos = {}
     if not df_escudos.empty:
@@ -958,14 +964,39 @@ with tab_gps:
     if not df_p_jug.empty and not df_rpe.empty:
         df_rpe_jug = df_rpe[df_rpe['Nombre_Norm'] == jug_norm].copy()
         df_rpe_jug = df_rpe_jug.drop_duplicates(subset=['Fecha_dt'])
-        df_p_jug = pd.merge(df_p_jug, df_rpe_jug[['Fecha_dt', 'Tipo_Sesion', 'Minutos', 'Rival']], on='Fecha_dt', how='left')
+        cols_to_merge = ['Fecha_dt', 'Tipo_Sesion', 'Minutos', 'Rival']
+        if 'Localizacion' in df_rpe_jug.columns:
+            cols_to_merge.append('Localizacion')
+            
+        df_p_jug = pd.merge(df_p_jug, df_rpe_jug[cols_to_merge], on='Fecha_dt', how='left')
         df_p_jug['Tipo_Sesion'] = df_p_jug['Tipo_Sesion'].fillna('Entrenamiento')
         df_p_jug['Minutos'] = df_p_jug['Minutos'].fillna(0)
         df_p_jug['Rival'] = df_p_jug['Rival'].fillna('')
+        if 'Localizacion' not in df_p_jug.columns:
+            df_p_jug['Localizacion'] = ''
+        else:
+            df_p_jug['Localizacion'] = df_p_jug['Localizacion'].fillna('')
     elif not df_p_jug.empty:
         df_p_jug['Tipo_Sesion'] = 'Entrenamiento'
         df_p_jug['Minutos'] = 0
         df_p_jug['Rival'] = ''
+        df_p_jug['Localizacion'] = ''
+
+    # Creación de etiquetas dinámicas (Labels)
+    if not df_p_jug.empty:
+        labels = []
+        for _, r in df_p_jug.iterrows():
+            ts = str(r['Tipo_Sesion']).strip()
+            if 'partido' in ts.lower():
+                riv = str(r['Rival']).strip()
+                loc = str(r['Localizacion']).strip()
+                if loc and loc.lower() not in ['nan', '']:
+                    labels.append(f"{riv} - {loc}")
+                else:
+                    labels.append(riv if riv else "Partido")
+            else:
+                labels.append(ts)
+        df_p_jug['Label'] = labels
 
     st.markdown('<div class="pd-section-title">GPS Totals (Season)</div>', unsafe_allow_html=True)
     
@@ -980,12 +1011,21 @@ with tab_gps:
 
     df_partidos = df_p_jug[df_p_jug['Tipo_Sesion'].str.lower().str.contains('partido')] if not df_p_jug.empty else pd.DataFrame()
     
-    st.markdown('<div class="pd-section-title">Rendimiento en Partido Oficial (Match Output)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="pd-section-title">Rendimiento en Partido Oficial y Amistoso (Match Output)</div>', unsafe_allow_html=True)
     if not df_partidos.empty:
         html_matches = '<div style="display:flex; flex-direction:column; gap:1rem; margin-bottom: 2rem;">'
         for _, r in df_partidos.iterrows():
             rival = r['Rival'] if r['Rival'] else 'Rival por definir'
+            loc_str = r.get('Localizacion', '')
+            if loc_str and loc_str.lower() not in ['nan', 'none', '']:
+                rival_display = f"{rival.upper()} ({loc_str.upper()})"
+            else:
+                rival_display = rival.upper()
+                
             fecha = r['Fecha']
+            fecha_dt_partido = pd.to_datetime(r['Fecha_dt'])
+            tipo_partido_str = "Partido Oficial" if fecha_dt_partido >= pd.to_datetime("2026-09-06") else "Partido Amistoso"
+            
             mins = int(r['Minutos'])
             dist = r['Dist_Total'] / 1000
             sprint = r['Dist_25']
@@ -997,8 +1037,8 @@ with tab_gps:
                 <div style="display:flex; align-items:center; gap:1.2rem; min-width:250px;">
                     <img src="{logo_url}" style="width:60px; height:60px; object-fit:contain;">
                     <div>
-                        <div style="font-size:1.2rem; font-weight:800; color:{TEXT}; line-height:1.2;">vs {rival.upper()}</div>
-                        <div style="font-size:0.85rem; color:{MUTED};">{fecha} &middot; Partido Oficial</div>
+                        <div style="font-size:1.2rem; font-weight:800; color:{TEXT}; line-height:1.2;">vs {rival_display}</div>
+                        <div style="font-size:0.85rem; color:{MUTED};">{fecha} &middot; {tipo_partido_str}</div>
                     </div>
                 </div>
                 <div style="display:flex; gap:2rem; text-align:center; flex-wrap:wrap;">
@@ -1024,7 +1064,7 @@ with tab_gps:
         html_matches += '</div>'
         st.markdown(html_matches, unsafe_allow_html=True)
     else:
-        st.info("No hay registros de partidos (Match Output) para este jugador.")
+        st.info("No hay registros de partidos para este jugador.")
 
     if not df_p_jug.empty:
         c1, c2 = st.columns(2, gap="large")
@@ -1033,15 +1073,42 @@ with tab_gps:
             fig_gps_bar = go.Figure()
             fig_gps_bar.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_18'], name="Dist >18 km/h", marker_color=PRIMARY))
             fig_gps_bar.add_trace(go.Bar(x=df_p_jug['Fecha'], y=df_p_jug['Dist_25'], name="Sprint >25 km/h", marker_color=TEAM))
-            fig_gps_bar.update_layout(barmode="stack", height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
+            
+            fig_gps_bar.add_trace(go.Scatter(
+                x=df_p_jug['Fecha'],
+                y=df_p_jug['Dist_18'] + df_p_jug['Dist_25'],
+                mode='text',
+                text=df_p_jug['Label'],
+                textposition='top center',
+                textfont=dict(color=TEXT, size=10),
+                showlegend=False,
+                hoverinfo='skip'
+            ))
+            
+            max_val = (df_p_jug['Dist_18'] + df_p_jug['Dist_25']).max()
+            fig_gps_bar.update_layout(
+                barmode="stack", height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
+                font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2),
+                yaxis=dict(range=[0, max_val * 1.15])
+            )
             st.plotly_chart(fig_gps_bar, use_container_width=True, config={"displayModeBar": False})
 
         with c2:
             st.markdown('<div class="pd-section-title">Aceleraciones vs Desaceleraciones</div>', unsafe_allow_html=True)
             fig_acc = go.Figure()
-            fig_acc.add_trace(go.Scatter(x=df_p_jug['Fecha'], y=df_p_jug['AC_MAX'], mode="lines+markers", name="AC_MAX", line=dict(color=TEAM, width=2.5)))
+            fig_acc.add_trace(go.Scatter(
+                x=df_p_jug['Fecha'], y=df_p_jug['AC_MAX'], mode="lines+markers+text", name="AC_MAX", line=dict(color=TEAM, width=2.5),
+                text=df_p_jug['Label'], textposition='top center', textfont=dict(color=TEXT, size=10)
+            ))
             fig_acc.add_trace(go.Scatter(x=df_p_jug['Fecha'], y=df_p_jug['DEC_MAX'], mode="lines+markers", name="DEC_MAX", line=dict(color=PRIMARY, width=2.5)))
-            fig_acc.update_layout(height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2))
+            
+            max_val = df_p_jug['AC_MAX'].max()
+            min_val = df_p_jug['DEC_MAX'].min()
+            fig_acc.update_layout(
+                height=350, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", 
+                font=dict(color=TEXT), legend=dict(orientation="h", y=-0.2),
+                yaxis=dict(range=[min_val * 1.1, max_val * 1.25])
+            )
             st.plotly_chart(fig_acc, use_container_width=True, config={"displayModeBar": False})
 
         st.markdown('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>', unsafe_allow_html=True)
