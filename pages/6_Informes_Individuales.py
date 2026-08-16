@@ -695,7 +695,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
 # 7. PESTAÑAS DE SUB-PÁGINAS ESTILO V0
 # =============================================================================
-tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
+tab_tests, tab_gps = st.tabs(["  Tests condicionales  ", "  Datos GPS  "])
 
 # -----------------------------------------------------------------------------
 # TAB 1: CONDITIONING TESTS (CON RADAR Z-SCORE COMPLETO DE 8 DIMENSIONES)
@@ -1097,7 +1097,7 @@ with tab_tests:
 # -----------------------------------------------------------------------------
 with tab_gps:
     if not df_p_jug.empty:
-        st.markdown('<div class="pd-section-title">GPS Totals (Season)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Acumulado temporada</div>', unsafe_allow_html=True)
         
         # BÚSQUEDA DEL PARTIDO DE MÁS DEMANDA
         df_partidos = df_p_jug[df_p_jug['Is_Partido'] == True]
@@ -1128,7 +1128,7 @@ with tab_gps:
         
         df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=True).reset_index(drop=True) if not df_p_jug.empty else pd.DataFrame()
         
-        st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido (Match Output)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido </div>', unsafe_allow_html=True)
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             
@@ -1228,7 +1228,7 @@ with tab_gps:
                     st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
 
                 with col_metrics_panel:
-                    st.markdown(f'<div class="pd-section-title">Valores Reales vs Perfil Óptimo</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pd-section-title">Valores Partido vs Perfil Óptimo</div>', unsafe_allow_html=True)
                     
                     units_map = {
                         'Dist_Total': 'm', 'Dist_18': 'm', 'Dist_25': 'm', 'Dist_28': 'm',
@@ -1263,7 +1263,7 @@ with tab_gps:
         else:
             st.info("Aún no hay registros de partidos para construir el perfil.")
 
-        st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Evolución GPS Sesiones</div>', unsafe_allow_html=True)
         
         # Orden Cronológico Fijo (Izquierda a Derecha)
         df_p_jug_chart = df_p_jug.sort_values('Fecha_dt', ascending=True)
