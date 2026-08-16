@@ -679,9 +679,9 @@ with col_hero:
             </div>
             <div class="pd-facts">
                 <div class="pd-fact"><div class="k">Nacimiento</div><div class="v">{fecha_nac_str}</div></div>
-                <div class="pd-fact"><div class="k">Pierna</div><div class="v v-cyan">{pierna_str.upper()}</div></div>
+                <div class="pd-fact"><div class="k">Pierna Dominante</div><div class="v v-cyan">{pierna_str.upper()}</div></div>
                 <div class="pd-fact"><div class="k">Minutos Liga</div><div class="v v-gold">{minutos_totales_partido}′</div></div>
-                <div class="pd-fact"><div class="k">Ranking</div><div class="v v-green">{ranking_real_str}</div></div>
+                <div class="pd-fact"><div class="k">Ranking Tests</div><div class="v v-green">{ranking_real_str}</div></div>
             </div>
         </div>
     """
@@ -695,7 +695,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
 # 7. PESTAÑAS DE SUB-PÁGINAS ESTILO V0
 # =============================================================================
-tab_tests, tab_gps = st.tabs(["  Tests condicionales  ", "  Datos GPS  "])
+tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
 # -----------------------------------------------------------------------------
 # TAB 1: CONDITIONING TESTS (CON RADAR Z-SCORE COMPLETO DE 8 DIMENSIONES)
@@ -1084,7 +1084,7 @@ with tab_tests:
                 polar=dict(
                     bgcolor=SURFACE_2, 
                     radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=10)), 
-                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=12))
+                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
                 ),
                 legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
             )
@@ -1097,7 +1097,7 @@ with tab_tests:
 # -----------------------------------------------------------------------------
 with tab_gps:
     if not df_p_jug.empty:
-        st.markdown('<div class="pd-section-title">Acumulado temporada</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">GPS Totals (Season)</div>', unsafe_allow_html=True)
         
         # BÚSQUEDA DEL PARTIDO DE MÁS DEMANDA
         df_partidos = df_p_jug[df_p_jug['Is_Partido'] == True]
@@ -1128,7 +1128,7 @@ with tab_gps:
         
         df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=True).reset_index(drop=True) if not df_p_jug.empty else pd.DataFrame()
         
-        st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido </div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido (Match Output)</div>', unsafe_allow_html=True)
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             
@@ -1228,7 +1228,7 @@ with tab_gps:
                     st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
 
                 with col_metrics_panel:
-                    st.markdown(f'<div class="pd-section-title">Valores Partido vs Perfil Óptimo</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pd-section-title">Valores Reales vs Perfil Óptimo</div>', unsafe_allow_html=True)
                     
                     units_map = {
                         'Dist_Total': 'm', 'Dist_18': 'm', 'Dist_25': 'm', 'Dist_28': 'm',
@@ -1263,7 +1263,7 @@ with tab_gps:
         else:
             st.info("Aún no hay registros de partidos para construir el perfil.")
 
-        st.markdown('<div class="pd-section-title">Evolución GPS Sesiones</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
         
         # Orden Cronológico Fijo (Izquierda a Derecha)
         df_p_jug_chart = df_p_jug.sort_values('Fecha_dt', ascending=True)
@@ -1293,7 +1293,9 @@ with tab_gps:
         st.plotly_chart(fig_gps_combined, use_container_width=True, config={"displayModeBar": False})
 
         st.markdown('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>', unsafe_allow_html=True)
-        cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
+        
+        # TABLA FINAL SIN LA COLUMNA DURACION
+        cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
         cols_present = [c for c in cols_table if c in df_p_jug.columns]
         
         df_display = df_p_jug_chart[cols_present].copy()
@@ -1302,7 +1304,7 @@ with tab_gps:
             df_display = df_display.sort_values('Fecha_dt', ascending=False).drop(columns=['Fecha_dt'])
             
         format_dict = {}
-        for col in ['Duracion', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'Player_Load']:
+        for col in ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'Player_Load']:
             if col in df_display.columns: format_dict[col] = "{:.0f}"
         for col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if col in df_display.columns: format_dict[col] = "{:.2f}"
