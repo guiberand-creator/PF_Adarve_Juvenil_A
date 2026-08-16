@@ -602,7 +602,7 @@ if not df_p_jug.empty:
             
     df_p_jug['Label'] = labels
 
-# CÁLCULO DE MINUTOS LIGA OFICIALES (ÚNICA Y EXCLUSIVAMENTE A PARTIR DEL 06/09/2026)
+# CÁLCULO DE MINUTOS LIGA OFICIALES (A PARTIR DEL 06/09/2026)
 minutos_totales_partido = 0
 fecha_inicio_liga = pd.to_datetime("2026-09-06")
 if not df_rpe.empty:
@@ -697,6 +697,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
+# -----------------------------------------------------------------------------
+# TAB 1: CONDITIONING TESTS (CON RADAR Z-SCORE COMPLETO DE 8 DIMENSIONES)
+# -----------------------------------------------------------------------------
 with tab_tests:
     st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
     
@@ -959,7 +962,7 @@ with tab_tests:
             else: st.info("No hay datos de Velocidad en Campo.")
 
     with right_col:
-        st.markdown('<div class="pd-section-title">Perfil Z-Score &middot; Radar</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pd-section-title">Perfil Z-Score &middot; Radar Completo</div>', unsafe_allow_html=True)
         
         all_dates = pd.Series(dtype='datetime64[ns]')
         if df_vam is not None and not df_vam.empty: all_dates = pd.concat([all_dates, df_vam['Fecha_dt']])
@@ -967,6 +970,8 @@ with tab_tests:
         if df_dri is not None and not df_dri.empty: all_dates = pd.concat([all_dates, df_dri['Fecha_dt']])
         if df_fts is not None and not df_fts.empty: all_dates = pd.concat([all_dates, df_fts['Fecha_dt']])
         if df_campo is not None and not df_campo.empty: all_dates = pd.concat([all_dates, df_campo['Fecha_dt']])
+        if df_mov is not None and not df_mov.empty: all_dates = pd.concat([all_dates, df_mov['Fecha_dt']])
+        if df_dina is not None and not df_dina.empty: all_dates = pd.concat([all_dates, df_dina['Fecha_dt']])
         all_dates = all_dates.dropna()
 
         if not all_dates.empty:
@@ -987,39 +992,82 @@ with tab_tests:
 
             df_radar = df_pos[['Nombre_Norm', 'Posicion']].copy() if not df_pos.empty else pd.DataFrame(columns=['Nombre_Norm', 'Posicion'])
 
+            # 1. VAM
             df_vam_z = get_metric_zscore(df_vam, 'VAM', filtro_radar)
             if not df_vam_z.empty: df_radar = pd.merge(df_radar, df_vam_z[['Nombre_Norm', 'Z_VAM']], on='Nombre_Norm', how='left')
 
+            # 2. CMJ
             df_cmj = df_saltos[df_saltos['Tipo_Norm'] == 'CMJ'] if df_saltos is not None and not df_saltos.empty else pd.DataFrame()
             df_cmj_z = get_metric_zscore(df_cmj, 'Altura', filtro_radar)
             if not df_cmj_z.empty: 
                 df_cmj_z.rename(columns={'Z_Altura': 'Z_CMJ'}, inplace=True)
                 df_radar = pd.merge(df_radar, df_cmj_z[['Nombre_Norm', 'Z_CMJ']], on='Nombre_Norm', how='left')
 
+            # 3. DRI
             df_dri_z = get_metric_zscore(df_dri, 'DRI', filtro_radar)
             if not df_dri_z.empty: df_radar = pd.merge(df_radar, df_dri_z[['Nombre_Norm', 'Z_DRI']], on='Nombre_Norm', how='left')
 
+            # 4. Tren Superior
             if df_fts is not None and not df_fts.empty:
                 df_fts_t = df_fts.copy()
                 df_fts_t['Tren_Sup'] = pd.to_numeric(df_fts_t['Press_Banca'], errors='coerce').fillna(0) + pd.to_numeric(df_fts_t['Dominada'], errors='coerce').fillna(0)
                 df_ts_z = get_metric_zscore(df_fts_t, 'Tren_Sup', filtro_radar)
                 if not df_ts_z.empty: df_radar = pd.merge(df_radar, df_ts_z[['Nombre_Norm', 'Z_Tren_Sup']], on='Nombre_Norm', how='left')
 
+            # 5. V_MAX
             df_vmax_z = get_metric_zscore(df_campo, 'V_MAX', filtro_radar)
             if not df_vmax_z.empty: df_radar = pd.merge(df_radar, df_vmax_z[['Nombre_Norm', 'Z_V_MAX']], on='Nombre_Norm', how='left')
 
-            categories = ['VAM', 'CMJ', 'DRI', 'Tren Sup.', 'V_MAX']
-            cols = ['Z_VAM', 'Z_CMJ', 'Z_DRI', 'Z_Tren_Sup', 'Z_V_MAX']
+            # 6. AC_MAX (Aceleración)
+            df_acmax_z = get_metric_zscore(df_campo, 'AC_MAX', filtro_radar)
+            if not df_acmax_z.empty: df_radar = pd.merge(df_radar, df_acmax_z[['Nombre_Norm', 'Z_AC_MAX']], on='Nombre_Norm', how='left')
+
+            # 7. Movilidad (Media de Z-Score de tests de movilidad)
+            if df_mov is not None and not df_mov.empty:
+                df_mov_f = df_mov[df_mov['Fecha_dt'].dt.date == filtro_radar].copy()
+                if not df_mov_f.empty:
+                    mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I'] if c in df_mov_f.columns]
+                    z_mov_df = pd.DataFrame({'Nombre_Norm': df_mov_f['Nombre_Norm'].unique()})
+                    l_z_cols = []
+                    for mc in mov_cols:
+                        df_mc_z = get_metric_zscore(df_mov, mc, filtro_radar)
+                        if not df_mc_z.empty:
+                            z_mov_df = pd.merge(z_mov_df, df_mc_z[['Nombre_Norm', f'Z_{mc}']], on='Nombre_Norm', how='left')
+                            l_z_cols.append(f'Z_{mc}')
+                    if l_z_cols:
+                        z_mov_df['Z_Movilidad'] = z_mov_df[l_z_cols].mean(axis=1)
+                        df_radar = pd.merge(df_radar, z_mov_df[['Nombre_Norm', 'Z_Movilidad']], on='Nombre_Norm', how='left')
+
+            # 8. Dinamometría (Media de Z-Score de la fuerza relativa)
+            if df_dina is not None and not df_dina.empty:
+                dict_pesos = {}
+                if df_peso is not None and not df_peso.empty:
+                    for nom_n in df_peso['Nombre_Norm'].unique():
+                        df_p_j = df_peso[df_peso['Nombre_Norm'] == nom_n].sort_values('Fecha_dt')
+                        dict_pesos[nom_n] = float(df_p_j.iloc[-1]['Peso'])
+                
+                df_dina_f = df_dina[df_dina['Fecha_dt'].dt.date == filtro_radar].copy()
+                if not df_dina_f.empty:
+                    df_dina_f['Peso_Jug'] = df_dina_f['Nombre_Norm'].map(dict_pesos).fillna(70.0)
+                    df_dina_f['Fmax_Rel'] = df_dina_f['Fmax_Abs'] / df_dina_f['Peso_Jug']
+                    df_dina_z = get_metric_zscore(df_dina_f, 'Fmax_Rel', filtro_radar)
+                    if not df_dina_z.empty:
+                        df_dina_z.rename(columns={'Z_Fmax_Rel': 'Z_Dinamometria'}, inplace=True)
+                        df_radar = pd.merge(df_radar, df_dina_z[['Nombre_Norm', 'Z_Dinamometria']], on='Nombre_Norm', how='left')
+
+            categories = ['VAM', 'CMJ', 'DRI', 'Tren Sup.', 'V_MAX', 'Acel Max', 'Movilidad', 'Dinamometría']
+            cols = ['Z_VAM', 'Z_CMJ', 'Z_DRI', 'Z_Tren_Sup', 'Z_V_MAX', 'Z_AC_MAX', 'Z_Movilidad', 'Z_Dinamometria']
             
             for c in cols:
                 if c not in df_radar.columns: df_radar[c] = np.nan
 
             df_jug_r = df_radar[df_radar['Nombre_Norm'] == jug_norm]
-            df_pos_r = df_radar[df_radar['Posicion'].astype(str).str.contains(posicion_str.split()[0], case=False, na=False)] if posicion_str != "Por definir" else df_radar
+            pos_base = posicion_str.split()[0] if posicion_str != "Por definir" else ""
+            df_pos_r = df_radar[df_radar['Posicion'].astype(str).str.contains(pos_base, case=False, na=False)] if pos_base else df_radar
 
             v_j = [df_jug_r[c].mean() for c in cols]
             v_p = [df_pos_r[c].mean() for c in cols]
-            v_eq = [0, 0, 0, 0, 0]
+            v_eq = [0] * len(cols)
 
             v_j = [(x if pd.notna(x) else 0) for x in v_j]; v_j.append(v_j[0])
             v_p = [(x if pd.notna(x) else 0) for x in v_p]; v_p.append(v_p[0])
@@ -1036,7 +1084,7 @@ with tab_tests:
                 polar=dict(
                     bgcolor=SURFACE_2, 
                     radialaxis=dict(range=[-3, 3], tickvals=[-2, -1, 0, 1, 2], ticktext=['-2 SD', '-1 SD', 'Media', '+1 SD', '+2 SD'], gridcolor=BORDER, tickfont=dict(color=MUTED, size=10)), 
-                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=13))
+                    angularaxis=dict(gridcolor=BORDER, tickfont=dict(color=TEXT, size=12))
                 ),
                 legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=12))
             )
