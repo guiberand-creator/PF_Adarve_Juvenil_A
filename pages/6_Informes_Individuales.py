@@ -372,6 +372,7 @@ def cargar_todo_informes():
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX']:
             if num_col in df_campo.columns: df_campo[num_col] = pd.to_numeric(df_campo[num_col].astype(str).str.replace(',', '.'), errors='coerce')
 
+    # CÁLCULO UNIFICADO Y SINCRONIZADO DE RANKINGS TESTS
     dict_rankings_reales = {}
     if not df_pos.empty:
         df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
