@@ -105,8 +105,6 @@ def cargar_datos_evaluaciones():
         df_pos.rename(columns=renomb_p, inplace=True)
         if 'Nombre' in df_pos.columns: df_pos['Nombre'] = df_pos['Nombre'].astype(str).str.strip()
         if 'Posicion' in df_pos.columns: df_pos['Posicion'] = df_pos['Posicion'].astype(str).str.strip()
-        if 'Nombre' in df_pos.columns:
-            df_pos['Nombre_Norm'] = df_pos['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
 
     if os.path.exists(RUTA_MOVILIDAD) and os.path.exists(RUTA_REFERENCIAS_MOV):
         df_mov = pd.read_excel(RUTA_MOVILIDAD)
@@ -114,7 +112,6 @@ def cargar_datos_evaluaciones():
         df_mov['Fecha_dt'] = pd.to_datetime(df_mov['Fecha'], dayfirst=True, errors='coerce')
         df_mov['Fecha'] = df_mov['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_mov['Nombre'] = df_mov['Nombre'].astype(str).str.strip()
-        df_mov['Nombre_Norm'] = df_mov['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_mov = df_mov.sort_values('Fecha_dt')
 
     if os.path.exists(RUTA_PESO):
@@ -127,7 +124,6 @@ def cargar_datos_evaluaciones():
             elif 'peso' in c_clean or 'kg' in c_clean: renombres_p[col] = 'Peso'
         df_peso.rename(columns=renombres_p, inplace=True)
         df_peso['Nombre'] = df_peso['Nombre'].astype(str).str.strip()
-        df_peso['Nombre_Norm'] = df_peso['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_peso['Fecha_dt'] = pd.to_datetime(df_peso['Fecha'], dayfirst=True, errors='coerce')
         df_peso['Fecha'] = df_peso['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_peso = df_peso.sort_values('Fecha_dt')
@@ -143,7 +139,6 @@ def cargar_datos_evaluaciones():
             elif 'vam' in c_c: renomb_v[col] = 'VAM'
         df_vam.rename(columns=renomb_v, inplace=True)
         df_vam['Nombre'] = df_vam['Nombre'].astype(str).str.strip()
-        df_vam['Nombre_Norm'] = df_vam['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_vam['Fecha_dt'] = pd.to_datetime(df_vam['Fecha'], dayfirst=True, errors='coerce')
         df_vam['Fecha'] = df_vam['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_vam = df_vam.sort_values('Fecha_dt')
@@ -177,7 +172,6 @@ def cargar_datos_evaluaciones():
     if df_dina is not None:
         df_dina.rename(columns={'Name': 'Nombre', 'Date': 'Fecha', 'Exercise': 'Exercise', 'MaxForce (raw)': 'Fmax_Abs'}, inplace=True)
         df_dina['Nombre'] = df_dina['Nombre'].astype(str).str.strip()
-        df_dina['Nombre_Norm'] = df_dina['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_dina['Exercise'] = df_dina['Exercise'].astype(str).str.replace(r'\\u00BA', '', regex=True).str.replace('°', '', regex=False).str.strip()
         df_dina['Fecha_dt'] = pd.to_datetime(df_dina['Fecha'], dayfirst=True, errors='coerce')
         df_dina['Fecha'] = df_dina['Fecha_dt'].dt.strftime('%d/%m/%Y')
@@ -193,7 +187,6 @@ def cargar_datos_evaluaciones():
             elif 'fecha' in c_l: renomb_s[col] = 'Fecha_Hora'
         df_saltos.rename(columns=renomb_s, inplace=True)
         df_saltos['Nombre'] = df_saltos['Nombre'].astype(str).str.strip()
-        df_saltos['Nombre_Norm'] = df_saltos['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_saltos['Tipo'] = df_saltos['Tipo'].astype(str).str.strip()
         df_saltos['Fecha_dt'] = pd.to_datetime(df_saltos['Fecha_Hora'].astype(str).str.split('_').str[0], errors='coerce')
         df_saltos['Fecha'] = df_saltos['Fecha_dt'].dt.strftime('%d/%m/%Y')
@@ -227,7 +220,6 @@ def cargar_datos_evaluaciones():
             elif 'tipo' in c_l: renomb_dri[col] = 'Tipo'
         df_dri_sheet.rename(columns=renomb_dri, inplace=True)
         df_dri_sheet['Nombre'] = df_dri_sheet['Nombre'].astype(str).str.strip()
-        df_dri_sheet['Nombre_Norm'] = df_dri_sheet['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_dri_sheet['Fecha_dt'] = pd.to_datetime(df_dri_sheet['Fecha_Hora'].astype(str).str.split('_').str[0], errors='coerce')
         df_dri_sheet['Fecha'] = df_dri_sheet['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_dri_sheet['TC'] = pd.to_numeric(df_dri_sheet['TC'].astype(str).str.replace(',', '.'), errors='coerce')
@@ -248,7 +240,6 @@ def cargar_datos_evaluaciones():
             elif 'dominad' in c_l: renomb_fts[col] = 'Dominada'
         df_fts.rename(columns=renomb_fts, inplace=True)
         df_fts['Nombre'] = df_fts['Nombre'].astype(str).str.strip()
-        df_fts['Nombre_Norm'] = df_fts['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_fts['Fecha_dt'] = pd.to_datetime(df_fts['Fecha'], dayfirst=True, errors='coerce')
         df_fts['Fecha'] = df_fts['Fecha_dt'].dt.strftime('%d/%m/%Y')
         df_fts['Press_Banca'] = pd.to_numeric(df_fts['Press_Banca'], errors='coerce')
@@ -269,7 +260,6 @@ def cargar_datos_evaluaciones():
             elif 'cod' in c_l: renomb_c[col] = 'Tecnica_COD'
         df_campo.rename(columns=renomb_c, inplace=True)
         df_campo['Nombre'] = df_campo['Nombre'].astype(str).str.strip()
-        df_campo['Nombre_Norm'] = df_campo['Nombre'].apply(lambda x: " ".join(str(x).replace('_', ' ').strip().lower().split()))
         df_campo['Fecha_dt'] = pd.to_datetime(df_campo['Fecha'], dayfirst=True, errors='coerce')
         df_campo['Fecha'] = df_campo['Fecha_dt'].dt.strftime('%d/%m/%Y')
         for num_col in ['V_MAX', 'AC_MAX', 'DEC_MAX', 'Tecnica_Sprint', 'Tecnica_COD']:
@@ -692,7 +682,7 @@ elif pest_sel == "⚡ Velocidad & COD":
             fig_vmax.update_layout(title="Velocidad Máxima (V_MAX km/h)", xaxis=dict(tickangle=-45), height=460)
             st.plotly_chart(fig_vmax, use_container_width=True)
 
-# RANKING GLOBAL (ACTUALIZADO SIN LUMBAR Y SINCRONIZADO)
+# RANKING GLOBAL (CORREGIDO PARA USAR df_saltos['Tipo'] O df_saltos['Tipo_Norm'] SIN ERRAR)
 elif pest_sel == "🏆 Ranking Global":
     if df_pos is None or df_pos.empty:
         st.warning("⚠️ No se encontró la lista de plantilla.")
@@ -713,7 +703,7 @@ elif pest_sel == "🏆 Ranking Global":
                 f_sel_dt = st.selectbox("📅 Selecciona Fecha para el Ranking:", options=fechas_unicas_dt, index=len(fechas_unicas_dt)-1, format_func=lambda x: dict_fechas_str[x])
 
             f_sel_str = dict_fechas_str[f_sel_dt]
-            df_rank_base = df_pos[['Nombre', 'Nombre_Norm', 'Posicion']].copy()
+            df_rank_base = df_pos[['Nombre', 'Posicion']].copy()
 
             def get_metric_hasta_fecha(df_origen, col_metric, agg_func='mean'):
                 if df_origen is not None and not df_origen.empty and col_metric in df_origen.columns:
@@ -721,55 +711,54 @@ elif pest_sel == "🏆 Ranking Global":
                     if not df_sub.empty:
                         ult_f_sub = df_sub['Fecha_dt'].max()
                         df_u = df_sub[df_sub['Fecha_dt'] == ult_f_sub]
-                        return df_u.groupby('Nombre_Norm', as_index=False)[col_metric].agg(agg_func)
+                        return df_u.groupby('Nombre', as_index=False)[col_metric].agg(agg_func)
                 return None
 
             # 1. Movilidad (SIN LUMBAR)
             if df_mov is not None and not df_mov.empty:
-                df_m_sub = df_mov[df_mov['Fecha_dt'] <= f_sel_dt].copy()
+                df_m_sub = df_mov[df_mov['Fecha_dt'] <= f_sel_dt]
                 if not df_m_sub.empty:
                     ult_f_m = df_m_sub['Fecha_dt'].max()
                     df_m_u = df_m_sub[df_m_sub['Fecha_dt'] == ult_f_m].copy()
                     mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I'] if c in df_m_u.columns]
                     if mov_cols:
                         df_m_u['Movilidad_Score'] = df_m_u[mov_cols].mean(axis=1)
-                        df_rank_base = pd.merge(df_rank_base, df_m_u[['Nombre_Norm', 'Movilidad_Score']], on='Nombre_Norm', how='left')
+                        df_rank_base = pd.merge(df_rank_base, df_m_u[['Nombre', 'Movilidad_Score']], on='Nombre', how='left')
 
             # 2. VAM
             df_v_met = get_metric_hasta_fecha(df_vam, 'VAM')
-            if df_v_met is not None: 
-                df_rank_base = pd.merge(df_rank_base, df_v_met[['Nombre_Norm', 'VAM']], on='Nombre_Norm', how='left')
+            if df_v_met is not None: df_rank_base = pd.merge(df_rank_base, df_v_met[['Nombre', 'VAM']], on='Nombre', how='left')
 
             # 3. Dinamometría
             dict_pesos = {}
             if df_peso is not None and not df_peso.empty:
-                for nom_n in df_peso['Nombre_Norm'].unique():
-                    df_p_j = df_peso[df_peso['Nombre_Norm'] == nom_n].sort_values('Fecha_dt')
-                    dict_pesos[nom_n] = float(df_p_j.iloc[-1]['Peso'])
+                for nom in df_peso['Nombre'].unique():
+                    df_p_j = df_peso[df_peso['Nombre'] == nom].sort_values('Fecha_dt')
+                    dict_pesos[nom] = float(df_p_j.iloc[-1]['Peso'])
 
             if df_dina is not None and not df_dina.empty:
                 df_d_sub = df_dina[df_dina['Fecha_dt'] <= f_sel_dt].copy()
                 if not df_d_sub.empty:
                     ult_f_d = df_d_sub['Fecha_dt'].max()
                     df_d_u = df_d_sub[df_d_sub['Fecha_dt'] == ult_f_d].copy()
-                    df_d_u['Peso_Jug'] = df_d_u['Nombre_Norm'].map(dict_pesos).fillna(70.0)
+                    df_d_u['Peso_Jug'] = df_d_u['Nombre'].map(dict_pesos)
                     df_d_u['Fmax_Rel'] = df_d_u['Fmax_Abs'] / df_d_u['Peso_Jug']
-                    df_d_agg = df_d_u.groupby('Nombre_Norm', as_index=False)['Fmax_Rel'].mean()
-                    df_rank_base = pd.merge(df_rank_base, df_d_agg[['Nombre_Norm', 'Fmax_Rel']], on='Nombre_Norm', how='left')
+                    df_d_agg = df_d_u.groupby('Nombre', as_index=False)['Fmax_Rel'].mean()
+                    df_rank_base = pd.merge(df_rank_base, df_d_agg[['Nombre', 'Fmax_Rel']], on='Nombre', how='left')
 
-            # 4. Saltos (CMJ)
+            # 4. Saltos (CMJ) - CORREGIDO PARA USAR LA COLUMNA 'Tipo' EXACTA
             if df_saltos is not None and not df_saltos.empty:
-                df_cmj_sub = df_saltos[(df_saltos['Tipo_Norm'] == 'CMJ') & (df_saltos['Fecha_dt'] <= f_sel_dt)].copy()
+                col_tipo_salto = 'Tipo_Norm' if 'Tipo_Norm' in df_saltos.columns else 'Tipo'
+                df_cmj_sub = df_saltos[(df_saltos[col_tipo_salto].astype(str).str.upper() == 'CMJ') & (df_saltos['Fecha_dt'] <= f_sel_dt)].copy()
                 if not df_cmj_sub.empty:
                     ult_f_s = df_cmj_sub['Fecha_dt'].max()
-                    df_s_u = df_cmj_sub[df_cmj_sub['Fecha_dt'] == ult_f_s].groupby('Nombre_Norm', as_index=False)['Altura'].mean()
+                    df_s_u = df_cmj_sub[df_cmj_sub['Fecha_dt'] == ult_f_s].groupby('Nombre', as_index=False)['Altura'].mean()
                     df_s_u.rename(columns={'Altura': 'CMJ_Altura'}, inplace=True)
-                    df_rank_base = pd.merge(df_rank_base, df_s_u[['Nombre_Norm', 'CMJ_Altura']], on='Nombre_Norm', how='left')
+                    df_rank_base = pd.merge(df_rank_base, df_s_u[['Nombre', 'CMJ_Altura']], on='Nombre', how='left')
 
             # 5. DRI
             df_dri_met = get_metric_hasta_fecha(df_dri_sheet, 'DRI')
-            if df_dri_met is not None: 
-                df_rank_base = pd.merge(df_rank_base, df_dri_met[['Nombre_Norm', 'DRI']], on='Nombre_Norm', how='left')
+            if df_dri_met is not None: df_rank_base = pd.merge(df_rank_base, df_dri_met[['Nombre', 'DRI']], on='Nombre', how='left')
 
             # 6. Tren Superior
             if df_fts is not None and not df_fts.empty:
@@ -778,17 +767,16 @@ elif pest_sel == "🏆 Ranking Global":
                     ult_f_ts = df_ts_sub['Fecha_dt'].max()
                     df_ts_u = df_ts_sub[df_ts_sub['Fecha_dt'] == ult_f_ts].copy()
                     df_ts_u['Tren_Superior_Reps'] = df_ts_u['Press_Banca'].fillna(0) + df_ts_u['Dominada'].fillna(0)
-                    df_rank_base = pd.merge(df_rank_base, df_ts_u[['Nombre_Norm', 'Tren_Superior_Reps']], on='Nombre_Norm', how='left')
+                    df_rank_base = pd.merge(df_rank_base, df_ts_u[['Nombre', 'Tren_Superior_Reps']], on='Nombre', how='left')
 
-            # 7 & 8. Velocidad & COD
+            # 7 & 8. Velocidad & AC_MAX
             if df_campo is not None and not df_campo.empty:
-                df_c_sub = df_campo[df_campo['Fecha_dt'] <= f_sel_dt].copy()
+                df_c_sub = df_campo[df_campo['Fecha_dt'] <= f_sel_dt]
                 if not df_c_sub.empty:
                     ult_f_c = df_c_sub['Fecha_dt'].max()
                     df_c_u = df_c_sub[df_c_sub['Fecha_dt'] == ult_f_c]
-                    df_rank_base = pd.merge(df_rank_base, df_c_u[['Nombre_Norm', 'V_MAX', 'AC_MAX']], on='Nombre_Norm', how='left')
+                    df_rank_base = pd.merge(df_rank_base, df_c_u[['Nombre', 'V_MAX', 'AC_MAX']], on='Nombre', how='left')
 
-            # Cálculo de Puntos
             columnas_pruebas = {
                 'Movilidad_Score': ('Movilidad', True),
                 'VAM': ('VAM Aeróbico', True),
