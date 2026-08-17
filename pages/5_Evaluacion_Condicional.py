@@ -6,6 +6,7 @@ import os
 import base64
 import requests
 import io
+import re
 from utils import aplicar_diseno_responsive
 
 aplicar_diseno_responsive()
@@ -304,7 +305,7 @@ for i, opcion in enumerate(opciones_menu):
 st.markdown("<br>", unsafe_allow_html=True)
 pest_sel = st.session_state['pestaña_activa']
 
-# MOVILIDAD (SIN LUMBAR)
+# MOVILIDAD
 if pest_sel == "🩺 Movilidad":
     if df_mov is None or df_ref_mov is None:
         st.error("❌ No se encontraron los archivos de movilidad.")
@@ -363,6 +364,323 @@ if pest_sel == "🩺 Movilidad":
         fig_barras = aplicar_estilo_shadcn(fig_barras)
         fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max(max_y + 5, val_verde + 5)]), height=460, margin=dict(l=20, r=20, t=50, b=100))
         st.plotly_chart(fig_barras, use_container_width=True)
+
+# PESO
+elif pest_sel == "⚖️ Peso":
+    if df_peso is None or df_peso.empty:
+        st.warning("⚠️ No se encontró el archivo 'PESO.xlsx'.")
+    else:
+        df_p_equipo = df_peso.sort_values(['Nombre', 'Fecha_dt']).copy()
+        df_p_equipo['Peso_Ant'] = df_p_equipo.groupby('Nombre')['Peso'].shift(1)
+        df_p_equipo['Var_Pct'] = ((df_p_equipo['Peso'] - df_p_equipo['Peso_Ant']) / df_p_equipo['Peso_Ant']) * 100
+        fechas_ordenadas = sorted(list(df_p_equipo['Fecha'].unique()))
+        
+        fig_p_equipo = go.Figure()
+        for i, f in enumerate(fechas_ordenadas):
+            df_f = df_p_equipo[df_p_equipo['Fecha'] == f]
+            etiquetas_equipo = [f"<b>{row['Peso']:.1f} kg</b>" if pd.isna(row['Var_Pct']) else f"<b>{row['Peso']:.1f} kg</b><br><i>{'+' if row['Var_Pct']>0 else ''}{row['Var_Pct']:.1f}%</i>" for _, row in df_f.iterrows()]
+            fig_p_equipo.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['Peso'], name=f"Fecha {f}", text=etiquetas_equipo, textposition='outside', marker_color=SHADCN_COLORS[i % len(SHADCN_COLORS)], textfont=dict(color='white', size=11)))
+
+        fig_p_equipo = aplicar_estilo_shadcn(fig_p_equipo)
+        fig_p_equipo.update_layout(title="Evolución del Peso por Jugador", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Peso (kg)", range=[max(0, df_p_equipo['Peso'].min() - 5), df_p_equipo['Peso'].max() + 7]), height=500, margin=dict(l=20, r=20, t=50, b=110))
+        st.plotly_chart(fig_p_equipo, use_container_width=True)
+
+# VAM
+elif pest_sel == "🫁 VAM / Aeróbico":
+    if df_vam is None or df_vam.empty:
+        st.warning("⚠️ No se encontraron los archivos de VAM.")
+    else:
+        df_v_valid = df_vam[df_vam['VAM'] > 0].copy()
+        ult_fecha_vam = df_v_valid['Fecha_dt'].max()
+        ult_fecha_vam_str = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam]['Fecha'].iloc[0]
+        df_v_ult = df_v_valid[df_v_valid['Fecha_dt'] == ult_fecha_vam].copy()
+
+        dict_alertas_vam = {}
+        for _, r_j in df_v_ult.iterrows():
+            nom_j, pos_j, vam_val = r_j['Nombre'], r_j['Posicion'], r_j['VAM']
+            if df_ref_vam is not None and not df_ref_vam.empty:
+                r_ref = df_ref_vam[df_ref_vam['Posicion'] == pos_j]
+                if not r_ref.empty:
+                    ref_val = r_ref.iloc[0]['VAM_Ref']
+                    if pd.notna(vam_val) and pd.notna(ref_val) and vam_val < ref_val:
+                        dict_alertas_vam[nom_j] = ["Trabajo Aeróbico"]
+
+        c_v1, c_v2 = st.columns(2)
+        with c_v1: st.metric("Prescripción Trabajo Individual", f"{len(dict_alertas_vam)} / {len(df_v_ult)}")
+        with c_v2: st.metric("Porcentaje Vestuario en Objetivo", f"{(((len(df_v_ult) - len(dict_alertas_vam)) / len(df_v_ult) * 100) if len(df_v_ult) > 0 else 100):.0f}%")
+
+        if dict_alertas_vam:
+            col_va1, col_va2 = st.columns(2)
+            items_v = list(dict_alertas_vam.items())
+            mitad_v = (len(items_v) + 1) // 2
+            with col_va1:
+                for nom, defs in items_v[:mitad_v]: st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+            with col_va2:
+                for nom, defs in items_v[mitad_v:]: st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+        else: st.success("✅ ¡Excelente! Todo el vestuario cumple o supera la VAM de referencia.")
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        posiciones_unicas = sorted([p for p in df_v_valid['Posicion'].dropna().unique() if str(p).strip() not in ['nan', '']]) if 'Posicion' in df_v_valid.columns else []
+        col_filtro, _ = st.columns([1, 2])
+        with col_filtro: pos_seleccionada = st.selectbox("⚽ Filtrar por Demarcación:", ["Todas las Demarcaciones"] + posiciones_unicas)
+
+        pos_a_mostrar = posiciones_unicas if pos_seleccionada == "Todas las Demarcaciones" else [pos_seleccionada]
+        for i in range(0, len(pos_a_mostrar), 2):
+            col_g1, col_g2 = st.columns(2) if len(pos_a_mostrar) > 1 else (st.container(), None)
+            columnas_iter = [col_g1, col_g2] if len(pos_a_mostrar) > 1 else [col_g1]
+            for idx_c, col_curr in enumerate(columnas_iter):
+                if col_curr is not None and (i + idx_c < len(pos_a_mostrar)):
+                    pos_curr = pos_a_mostrar[i + idx_c]
+                    with col_curr:
+                        df_p = df_v_valid[df_v_valid['Posicion'] == pos_curr].sort_values(['Nombre', 'Fecha_dt']).copy()
+                        df_p['VAM_Ant'] = df_p.groupby('Nombre')['VAM'].shift(1)
+                        df_p['Var_Pct'] = ((df_p['VAM'] - df_p['VAM_Ant']) / df_p['VAM_Ant']) * 100
+                        fechas_p = sorted(list(df_p['Fecha'].unique()))
+                        fig_p = go.Figure()
+                        
+                        for idx_f, f in enumerate(fechas_p):
+                            df_f = df_p[df_p['Fecha'] == f]
+                            etiquetas = [f"<b>{r['VAM']:.2f}</b>" if pd.isna(r['Var_Pct']) else f"<b>{r['VAM']:.2f}</b><br><i>{'+' if r['Var_Pct']>0 else ''}{r['Var_Pct']:.1f}%</i>" for _, r in df_f.iterrows()]
+                            fig_p.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['VAM'], name=f"Fecha {f}", text=etiquetas, textposition='outside', marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], textfont=dict(color='white', size=11)))
+
+                        ref_val = None
+                        if df_ref_vam is not None:
+                            row_r = df_ref_vam[df_ref_vam['Posicion'] == pos_curr]
+                            if not row_r.empty:
+                                ref_val = row_r.iloc[0]['VAM_Ref']
+                                fig_p.add_shape(type="line", x0=-0.5, x1=len(df_p['Nombre'].unique())-0.5, y0=ref_val, y1=ref_val, line=dict(color="#ef4444", width=2, dash="dash"))
+
+                        fig_p = aplicar_estilo_shadcn(fig_p)
+                        fig_p.update_layout(title=f"⚽ Demarcación: {pos_curr}", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="VAM (km/h)", range=[0, max(df_p['VAM'].max() if not df_p.empty else 20, (ref_val or 0)) + 3]), height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=True)
+                        st.plotly_chart(fig_p, use_container_width=True)
+
+# DINAMOMETRÍA
+elif pest_sel == "⚙️ Dinamometría":
+    if df_dina is None or df_dina.empty:
+        st.warning("⚠️ No se encontró el archivo de dinamometría.")
+    else:
+        dict_pesos = {}
+        if df_peso is not None and not df_peso.empty:
+            for nom in df_peso['Nombre'].unique():
+                df_p_j = df_peso[df_peso['Nombre'] == nom].sort_values('Fecha_dt')
+                dict_pesos[nom] = float(df_p_j.iloc[-1]['Peso'])
+
+        df_dina_agg = df_dina.groupby(['Fecha', 'Fecha_dt', 'Nombre', 'Exercise'], as_index=False).agg({'Fmax_Abs': 'mean'})
+        df_dina_agg['Peso_Jug'] = df_dina_agg['Nombre'].map(dict_pesos)
+        df_dina_agg['Fmax_Rel'] = df_dina_agg['Fmax_Abs'] / df_dina_agg['Peso_Jug']
+
+        ult_fecha_dina = df_dina_agg['Fecha_dt'].max()
+        df_d_ult = df_dina_agg[df_dina_agg['Fecha_dt'] == ult_fecha_dina].copy()
+        piv_frel = df_d_ult.pivot_table(index='Nombre', columns='Exercise', values='Fmax_Rel', aggfunc='mean')
+        
+        dict_detalles = {}
+        for jug in piv_frel.index:
+            detalles_fmax, detalles_asim, detalles_descomp = [], [], []
+            def val(piv, ej_name): return float(piv.loc[jug, ej_name]) if ej_name in piv.columns and pd.notna(piv.loc[jug, ej_name]) else None
+
+            nombres_ej = [('Extension_rodilla_90', 'Extensión Rodilla 90°', 6.0), ('Flexion_rodilla_90', 'Flexión Rodilla 90°', 3.5), ('ABD_Cadera_De_Pie', 'ABD Cadera de Pie', 3.5), ('ADD_Cadera_De_Pie', 'ADD Cadera de Pie', 3.6)]
+
+            for base_key, label_ej, ref_val in nombres_ej:
+                d_v, i_v = val(piv_frel, f"{base_key}_Derecha"), val(piv_frel, f"{base_key}_Izquierda")
+                if d_v is not None and i_v is not None:
+                    med = (d_v + i_v) / 2.0
+                    if med < ref_val: detalles_fmax.append(f"• <b>{label_ej}</b>: {med:.2f} N/kg (Ref: >{ref_val:.1f} N/kg)")
+                    max_v = max(d_v, i_v)
+                    if max_v > 0:
+                        asim = (abs(d_v - i_v) / max_v) * 100.0
+                        if asim > 10.0: detalles_asim.append(f"• <b>{label_ej}</b>: {asim:.1f}% asimetría (D: {d_v:.2f} | I: {i_v:.2f} N/kg)")
+
+            if detalles_fmax or detalles_asim or detalles_descomp:
+                dict_detalles[jug] = {'fmax': detalles_fmax, 'asim': detalles_asim, 'descomp': detalles_descomp}
+
+        c_d1, c_d2 = st.columns(2)
+        with c_d1: st.metric("Prescripción Trabajo Individual", f"{len(dict_detalles)} / {len(piv_frel)}")
+        with c_d2: st.metric("Porcentaje Vestuario en Objetivo", f"{(((len(piv_frel) - len(dict_detalles)) / len(piv_frel) * 100) if len(piv_frel)>0 else 100):.0f}%")
+
+        if dict_detalles:
+            col_da1, col_da2 = st.columns(2)
+            items_d = list(dict_detalles.items())
+            mitad_d = (len(items_d) + 1) // 2
+            with col_da1:
+                for nom, det in items_d[:mitad_d]:
+                    tags = []
+                    if det['fmax']: tags.append("Trabajo de Fuerza Máxima")
+                    if det['asim']: tags.append("Corregir Asimetrías")
+                    with st.expander(f"🔴 **{nom}**: " + " • ".join(tags)):
+                        for d in det['fmax']: st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        for d in det['asim']: st.markdown(f"<p style='color: #ef4444; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+            with col_da2:
+                for nom, det in items_d[mitad_d:]:
+                    tags = []
+                    if det['fmax']: tags.append("Trabajo de Fuerza Máxima")
+                    if det['asim']: tags.append("Corregir Asimetrías")
+                    with st.expander(f"🔴 **{nom}**: " + " • ".join(tags)):
+                        for d in det['fmax']: st.markdown(f"<p style='color: #CCCCCC; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+                        for d in det['asim']: st.markdown(f"<p style='color: #ef4444; font-size: 13px; margin: 2px 0;'>{d}</p>", unsafe_allow_html=True)
+        else: st.success("✅ Todo el vestuario cumple los umbrales óptimos.")
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        bloque_ejercicio = st.selectbox("🎯 Selecciona Ejercicio / Articulación:", ["Extensión Rodilla 90°", "Flexión Rodilla 90°", "ABD Cadera de Pie", "ADD Cadera de Pie"])
+
+        if bloque_ejercicio == "Extensión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Extension_rodilla_90_Derecha', 'Extension_rodilla_90_Izquierda', 6.0
+        elif bloque_ejercicio == "Flexión Rodilla 90°": ej_d, ej_i, umbral_frel = 'Flexion_rodilla_90_Derecha', 'Flexion_rodilla_90_Izquierda', 3.5
+        elif bloque_ejercicio == "ABD Cadera de Pie": ej_d, ej_i, umbral_frel = 'ABD_Cadera_De_Pie_Derecha', 'ABD_Cadera_De_Pie_Izquierda', 3.5
+        else: ej_d, ej_i, umbral_frel = 'ADD_Cadera_De_Pie_Derecha', 'ADD_Cadera_De_Pie_Izquierda', 3.6
+
+        if ej_d in piv_frel.columns and ej_i in piv_frel.columns:
+            df_g_frel = piv_frel[[ej_d, ej_i]].dropna().reset_index()
+            df_g_frel['Asimetria_Pct'] = (abs(df_g_frel[ej_d] - df_g_frel[ej_i]) / df_g_frel[[ej_d, ej_i]].max(axis=1)) * 100
+
+            fig_frel = go.Figure()
+            fig_frel.add_trace(go.Bar(x=df_g_frel['Nombre'], y=df_g_frel[ej_d], name='Derecha (D)', marker_color='#3b82f6', text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_d]], textposition='inside', textfont=dict(color='white')))
+            fig_frel.add_trace(go.Bar(x=df_g_frel['Nombre'], y=df_g_frel[ej_i], name='Izquierda (I)', marker_color='#10b981', text=[f"<b>{v:.2f}</b>" for v in df_g_frel[ej_i]], textposition='inside', textfont=dict(color='white')))
+
+            max_alturas_f = df_g_frel[[ej_d, ej_i]].max(axis=1)
+            for idx_f, row_f in df_g_frel.iterrows():
+                asim_val = row_f['Asimetria_Pct']
+                fig_frel.add_annotation(x=row_f['Nombre'], y=max_alturas_f.iloc[idx_f] + 0.25, text=f"<b>{asim_val:.1f}%</b>", showarrow=False, font=dict(color="#ef4444" if asim_val > 10 else "#10b981", size=13))
+
+            fig_frel.add_shape(type="line", x0=-0.5, x1=len(df_g_frel)-0.5, y0=umbral_frel, y1=umbral_frel, line=dict(color="#10b981", width=2, dash="dash"))
+            fig_frel = aplicar_estilo_shadcn(fig_frel)
+            fig_frel.update_layout(title=f"💪 Pico de Fuerza Relativo (N/kg) y % Asimetría - {bloque_ejercicio}", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max(df_g_frel[ej_d].max(), df_g_frel[ej_i].max()) + 1.2]), height=460, margin=dict(l=20, r=20, t=50, b=90))
+            st.plotly_chart(fig_frel, use_container_width=True)
+
+# SALTOS
+elif pest_sel == "🚀 Saltos (CMJ)":
+    if df_saltos is not None and not df_saltos.empty:
+        ult_f_saltos = df_saltos['Fecha_dt'].max()
+        ult_f_saltos_str = df_saltos[df_saltos['Fecha_dt'] == ult_f_saltos]['Fecha'].iloc[0]
+        df_s_ult = df_saltos[df_saltos['Fecha_dt'] == ult_f_saltos].copy()
+
+        df_piv_s = df_s_ult.groupby(['Nombre', 'Posicion', 'Tipo'], as_index=False)['Altura'].mean()
+        piv_total_j = df_piv_s.pivot_table(index=['Nombre', 'Posicion'], columns='Tipo', values='Altura', aggfunc='mean').reset_index()
+
+        dict_prescripciones_saltos = {}
+        for _, row_j in piv_total_j.iterrows():
+            nom_j, pos_j = row_j['Nombre'], row_j['Posicion']
+            cmj_val, sr_val, sl_val = row_j.get('CMJ', None), row_j.get('slCMJright', None), row_j.get('slCMJleft', None)
+            prescripciones_j = []
+            needs_potencia = False
+            ref_cmj_val, ref_sl_val = None, None
+
+            if df_ref_saltos is not None and not df_ref_saltos.empty:
+                r_ref = df_ref_saltos[df_ref_saltos['Posicion'] == pos_j]
+                if not r_ref.empty:
+                    ref_cmj_val = r_ref.iloc[0].get('CMJ_Ref', None)
+                    sr_r, sl_r = r_ref.iloc[0].get('slCMJright_Ref', None), r_ref.iloc[0].get('slCMJleft_Ref', None)
+                    if pd.notna(sr_r) and pd.notna(sl_r): ref_sl_val = (float(sr_r) + float(sl_r)) / 2
+
+            if pd.notna(cmj_val) and ref_cmj_val and pd.notna(ref_cmj_val) and cmj_val < ref_cmj_val: needs_potencia = True
+            if needs_potencia: prescripciones_j.append("Trabajo de Potencia")
+
+            if pd.notna(sr_val) and pd.notna(sl_val) and max(sr_val, sl_val) > 0:
+                if ((abs(sr_val - sl_val) / max(sr_val, sl_val)) * 100) > 10:
+                    prescripciones_j.append("Corregir Asimetrías")
+
+            if prescripciones_j: dict_prescripciones_saltos[nom_j] = prescripciones_j
+
+        c_s1, c_s2 = st.columns(2)
+        with c_s1: st.metric("Prescripción Trabajo Individual", f"{len(dict_prescripciones_saltos)} / {len(piv_total_j)}")
+        with c_s2: st.metric("Porcentaje Vestuario en Objetivo", f"{(((len(piv_total_j) - len(dict_prescripciones_saltos)) / len(piv_total_j) * 100) if len(piv_total_j)>0 else 100):.0f}%")
+
+        if dict_prescripciones_saltos:
+            col_sa1, col_sa2 = st.columns(2)
+            items_s = list(dict_prescripciones_saltos.items())
+            mitad_s = (len(items_s) + 1) // 2
+            with col_sa1:
+                for nom, defs in items_s[:mitad_s]: st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+            with col_sa2:
+                for nom, defs in items_s[mitad_s:]: st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+        else: st.success("✅ Todo el vestuario cumple las referencias de saltabilidad.")
+
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        df_cmj = df_saltos[df_saltos['Tipo'].str.upper() == 'CMJ'].copy()
+        if not df_cmj.empty:
+            df_jug_cmj = df_cmj.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean()
+            df_cmj_eq = df_jug_cmj.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(Media_Equipo=('Altura', 'mean'), SD_Equipo=('Altura', 'std')).sort_values('Fecha_dt')
+            df_cmj_eq['SD_Equipo'] = df_cmj_eq['SD_Equipo'].fillna(0)
+            
+            fig_cmj = go.Figure()
+            fig_cmj.add_trace(go.Scatter(x=df_cmj_eq['Fecha'].tolist(), y=df_cmj_eq['Media_Equipo'], mode='lines+markers', line=dict(color='#3b82f6', width=3), marker=dict(size=10, color='#3b82f6'), error_y=dict(type='data', array=df_cmj_eq['SD_Equipo'], visible=True, color='rgba(255,255,255,0.3)'), name='Media Equipo CMJ'))
+            fig_cmj = aplicar_estilo_shadcn(fig_cmj)
+            fig_cmj.update_layout(title="Evolución CMJ (cm) - Media ± SD Granate", xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)"), height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False)
+            st.plotly_chart(fig_cmj, use_container_width=True)
+
+# TREN SUPERIOR
+elif pest_sel == "🏋️ Tren Superior":
+    if df_fts is None or df_fts.empty:
+        st.warning("⚠️ No se encontró el archivo de Tren Superior.")
+    else:
+        fechas_ts_dt = sorted(df_fts['Fecha_dt'].unique())
+        ult_fecha_ts_dt = fechas_ts_dt[-1]
+        df_fts_ult = df_fts[df_fts['Fecha_dt'] == ult_fecha_ts_dt].copy()
+
+        dict_prescripciones_ts = {}
+        for _, row_j in df_fts_ult.iterrows():
+            nom_j = row_j['Nombre']
+            pb_val, dom_val = row_j.get('Press_Banca', None), row_j.get('Dominada', None)
+            if (pd.notna(pb_val) and pb_val < 20.0) or (pd.notna(dom_val) and dom_val < 10.0):
+                dict_prescripciones_ts[nom_j] = ["Trabajo de Fuerza Tren Superior"]
+
+        c_ts1, c_ts2 = st.columns(2)
+        with c_ts1: st.metric("Prescripción Trabajo Individual", f"{len(dict_prescripciones_ts)} / {len(df_fts_ult)}")
+        with c_ts2: st.metric("Porcentaje Vestuario en Objetivo", f"{(((len(df_fts_ult) - len(dict_prescripciones_ts)) / len(df_fts_ult) * 100) if len(df_fts_ult)>0 else 100):.0f}%")
+
+        col_pb, col_dom = st.columns(2)
+        with col_pb:
+            df_pb = df_fts.dropna(subset=['Press_Banca']).copy()
+            if not df_pb.empty:
+                df_pb_ult = df_pb[df_pb['Fecha_dt'] == ult_fecha_ts_dt].sort_values('Press_Banca', ascending=False)
+                fig_pb = go.Figure(go.Bar(x=df_pb_ult['Nombre'], y=df_pb_ult['Press_Banca'], marker_color='#3b82f6', text=df_pb_ult['Press_Banca'].round(0), textposition='outside'))
+                fig_pb = aplicar_estilo_shadcn(fig_pb)
+                fig_pb.update_layout(title="Ranking Press Banca (reps)", xaxis=dict(tickangle=-45), height=480)
+                st.plotly_chart(fig_pb, use_container_width=True)
+
+        with col_dom:
+            df_dom = df_fts.dropna(subset=['Dominada']).copy()
+            if not df_dom.empty:
+                df_dom_ult = df_dom[df_dom['Fecha_dt'] == ult_fecha_ts_dt].sort_values('Dominada', ascending=False)
+                fig_dom = go.Figure(go.Bar(x=df_dom_ult['Nombre'], y=df_dom_ult['Dominada'], marker_color='#10b981', text=df_dom_ult['Dominada'].round(0), textposition='outside'))
+                fig_dom = aplicar_estilo_shadcn(fig_dom)
+                fig_dom.update_layout(title="Ranking Dominadas (reps)", xaxis=dict(tickangle=-45), height=480)
+                st.plotly_chart(fig_dom, use_container_width=True)
+
+# VELOCIDAD & COD
+elif pest_sel == "⚡ Velocidad & COD":
+    if df_campo is None or df_campo.empty:
+        st.warning("⚠️ No se encontró el archivo de CAMPO.")
+    else:
+        ult_f_campo_dt = df_campo['Fecha_dt'].max()
+        df_c_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].copy()
+
+        dict_detalles_campo = {}
+        for _, row_j in df_c_ult.iterrows():
+            nom_j, pos_j = row_j['Nombre'], row_j.get('Posicion', 'Sin Posición')
+            v_val, ac_val, dec_val = row_j.get('V_MAX', None), row_j.get('AC_MAX', None), row_j.get('DEC_MAX', None)
+            alertas_j = []
+
+            ref_v, ref_ac, ref_dec = None, None, None
+            if df_ref_campo is not None and not df_ref_campo.empty:
+                r_ref = df_ref_campo[df_ref_campo['Posicion'] == pos_j]
+                if not r_ref.empty:
+                    ref_v, ref_ac, ref_dec = r_ref.iloc[0].get('V_MAX_Ref', None), r_ref.iloc[0].get('AC_MAX_Ref', None), r_ref.iloc[0].get('DEC_MAX_Ref', None)
+
+            if pd.notna(v_val) and pd.notna(ref_v) and v_val < ref_v: alertas_j.append("Trabajo de velocidad")
+            if pd.notna(ac_val) and pd.notna(ref_ac) and ac_val < ref_ac: alertas_j.append("Trabajo de AC")
+            if pd.notna(dec_val) and pd.notna(ref_dec) and dec_val > ref_dec: alertas_j.append("Trabajo de DEC")
+
+            if alertas_j: dict_detalles_campo[nom_j] = alertas_j
+
+        c_c1, c_c2 = st.columns(2)
+        with c_c1: st.metric("Prescripción Trabajo Individual", f"{len(dict_detalles_campo)} / {len(df_c_ult)}")
+        with c_c2: st.metric("Porcentaje Vestuario en Objetivo", f"{(((len(df_c_ult) - len(dict_detalles_campo)) / len(df_c_ult) * 100) if len(df_c_ult)>0 else 100):.0f}%")
+
+        if 'V_MAX' in df_campo.columns and not df_campo['V_MAX'].dropna().empty:
+            df_v_ult = df_campo[df_campo['Fecha_dt'] == ult_f_campo_dt].sort_values('V_MAX', ascending=False)
+            fig_vmax = go.Figure(go.Bar(x=df_v_ult['Nombre'], y=df_v_ult['V_MAX'], marker_color='#ef4444', text=df_v_ult['V_MAX'].round(1), textposition='outside'))
+            fig_vmax = aplicar_estilo_shadcn(fig_vmax)
+            fig_vmax.update_layout(title="Velocidad Máxima (V_MAX km/h)", xaxis=dict(tickangle=-45), height=460)
+            st.plotly_chart(fig_vmax, use_container_width=True)
 
 # RANKING GLOBAL (SIN LUMBAR EN MOVILIDAD)
 elif pest_sel == "🏆 Ranking Global":
