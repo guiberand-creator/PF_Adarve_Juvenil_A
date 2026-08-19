@@ -113,11 +113,11 @@ def cargar_matriz_completa():
 
         df_rpe = df_rpe.dropna(subset=['Fecha_dt'])
 
-    # Shift de sRPE por Fecha_Date
+    # Shift de sRPE por Fecha_Date (sin duplicar nombres de columnas)
     if not df_rpe.empty:
         df_rpe_daily = df_rpe.groupby(['Fecha_Date', 'Nombre_Cruce'], as_index=False)['sRPE'].sum()
-        df_rpe_daily['Fecha_Date_Next'] = df_rpe_daily['Fecha_Date'].apply(lambda d: d + timedelta(days=1))
-        df_rpe_daily.rename(columns={'sRPE': 'sRPE_prev', 'Fecha_Date_Next': 'Fecha_Date'}, inplace=True)
+        df_rpe_daily['Fecha_Date'] = df_rpe_daily['Fecha_Date'].apply(lambda d: d + timedelta(days=1) if pd.notna(d) else d)
+        df_rpe_daily.rename(columns={'sRPE': 'sRPE_prev'}, inplace=True)
         df_rpe = pd.merge(df_rpe, df_rpe_daily[['Fecha_Date', 'Nombre_Cruce', 'sRPE_prev']], on=['Fecha_Date', 'Nombre_Cruce'], how='left')
 
     # 2. CARGAR GPS
@@ -169,7 +169,7 @@ def cargar_matriz_completa():
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
     df_base['Carga_UA'] = (df_base['Dist_Total'] + (df_base['Dist_18']*2) + (df_base['Dist_25']*4) + (df_base['Acc_Dec']*1.5)) * df_base['RPE_G']
     df_base['Fecha_dt'] = pd.to_datetime(df_base['Fecha'])
-    df_base = df_base.sort_values('Fecha_dt')
+    df_base = df_base.sort_values('Fecha_dt').reset_index(drop=True)
 
     # 3. WELLNESS
     df_w_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "0")
@@ -184,7 +184,7 @@ def cargar_matriz_completa():
         df_w_clean = df_w_raw.groupby(['Fecha', 'Nombre_Cruce'])['Wellness'].mean().reset_index()
         df_base = pd.merge(df_base, df_w_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
 
-    # 4. EVALUACIONES FÍSICAS (CRUCE ROBUSTO POR NOMBRE Y FECHA)
+    # 4. EVALUACIONES FÍSICAS
     def cruzar_evaluacion(df_eval, col_valor, nuevo_nombre):
         if not df_eval.empty and col_valor in df_eval.columns:
             df_ev = df_eval.dropna(subset=['Fecha_dt']).copy()
@@ -358,7 +358,7 @@ if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
                 st.rerun()
 
 # =============================================================================
-# 5. MATRICES DE CORRELACIÓN SEPARADAS (CALCULADAS SOBRE TODO EL VESTUARIO df_f)
+# 5. MATRICES DE CORRELACIÓN SEPARADAS (INDEPENDIENTES DEL FILTRO DE GRÁFICO)
 # =============================================================================
 st.markdown("---")
 st.markdown("### 📊 Matriz 1: Variables de Frecuencia Diaria (Control y Carga)")
