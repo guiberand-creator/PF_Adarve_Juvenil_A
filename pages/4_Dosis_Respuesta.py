@@ -274,7 +274,7 @@ if df_f.empty:
     st.stop()
 
 # =============================================================================
-# 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA CON TRANSPARENCIA 70%
+# 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA (SIN DUPLICACIONES Y CON FILTRADO COMPLETO)
 # =============================================================================
 if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
     fig = px.scatter(
@@ -284,7 +284,7 @@ if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
         title="Dispersión: Dosis (Carga Externa UA) vs Respuesta (Carga Interna sRPE)"
     )
 
-    # Aplicamos opacidad diferenciada por traza (jugador)
+    # Aplicamos la transparencia a TODA la traza del jugador
     for trace in fig.data:
         player_name = trace.name
         if st.session_state.jugadores_seleccionados_dosis:
@@ -293,9 +293,9 @@ if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
                 trace.marker.size = 16
                 trace.marker.line = dict(width=2, color='white')
             else:
-                trace.marker.opacity = 0.25  # 75% de transparencia (faded out)
-                trace.marker.size = 11
-                trace.marker.line = dict(width=0.5, color='rgba(255,255,255,0.2)')
+                trace.marker.opacity = 0.20  # 80% de transparencia
+                trace.marker.size = 10
+                trace.marker.line = dict(width=0.5, color='rgba(255,255,255,0.1)')
         else:
             trace.marker.opacity = 0.90
             trace.marker.size = 14
@@ -309,25 +309,35 @@ if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
         legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
     )
 
-    try:
-        s_d = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode=["points"], key=f"d_k_{st.session_state.dosis_key}")
-        if s_d and hasattr(s_d, 'selection'):
-            points = getattr(s_d.selection, 'points', [])
-            if points:
-                cambio = False
-                for p in points:
-                    if p.get('customdata'):
-                        clicked_player = p['customdata'][0]
-                        if clicked_player in st.session_state.jugadores_seleccionados_dosis:
-                            st.session_state.jugadores_seleccionados_dosis.remove(clicked_player)
-                            cambio = True
-                        else:
-                            st.session_state.jugadores_seleccionados_dosis.append(clicked_player)
-                            cambio = True
-                if cambio:
-                    st.session_state.dosis_key += 1
-                    st.rerun()
-    except: st.plotly_chart(fig, use_container_width=True)
+    chart_key = f"dosis_scatter_{st.session_state.dosis_key}"
+    
+    # Manejo seguro del evento de selección
+    event = st.plotly_chart(
+        fig, 
+        use_container_width=True, 
+        on_select="rerun", 
+        selection_mode="points", 
+        key=chart_key
+    )
+    
+    if event and isinstance(event, dict) and "selection" in event:
+        pts = event["selection"].get("points", [])
+        if pts:
+            cambio = False
+            for p in pts:
+                cdata = p.get("customdata")
+                clicked_player = cdata[0] if cdata else p.get("legendgroup")
+                
+                if clicked_player:
+                    if clicked_player in st.session_state.jugadores_seleccionados_dosis:
+                        st.session_state.jugadores_seleccionados_dosis.remove(clicked_player)
+                    else:
+                        st.session_state.jugadores_seleccionados_dosis.append(clicked_player)
+                    cambio = True
+            
+            if cambio:
+                st.session_state.dosis_key += 1
+                st.rerun()
 
 # =============================================================================
 # 5. MATRICES DE CORRELACIÓN SEPARADAS
