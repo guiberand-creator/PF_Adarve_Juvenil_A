@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 if 'logeado' not in st.session_state or not st.session_state['logeado']:
-    st.warning("⚠️ Por favor, inicia sesión en la página principal para acceder.")
+    st.error("⚠️ Por favor, inicia sesión en la página principal para acceder.")
     st.stop()
 
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
@@ -78,7 +78,6 @@ def cargar_matriz_completa():
         col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
         col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
         
-        # Nuevas variables del RPE
         col_animo = next((c for c in cols if 'animo' in str(c).lower() or 'ánimo' in str(c).lower() or 'estado' in str(c).lower()), None)
         col_res = next((c for c in cols if 'resultado' in str(c).lower() or 'partido' in str(c).lower()), None)
 
@@ -103,7 +102,6 @@ def cargar_matriz_completa():
 
         df_rpe = df_rpe.dropna(subset=['Fecha'])
 
-    # Calcular sRPE del DÍA ANTERIOR (sRPE_prev)
     if not df_rpe.empty:
         df_rpe_shift = df_rpe[['Fecha_dt', 'Nombre_Cruce', 'sRPE']].copy()
         df_rpe_shift['Fecha_dt'] = df_rpe_shift['Fecha_dt'] + timedelta(days=1)
@@ -156,13 +154,12 @@ def cargar_matriz_completa():
 
     if df_gps.empty or df_rpe.empty: return pd.DataFrame()
 
-    # FUSIÓN BASE: GPS + RPE y Cálculo de Carga UA
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
     df_base['Carga_UA'] = (df_base['Dist_Total'] + (df_base['Dist_18']*2) + (df_base['Dist_25']*4) + (df_base['Acc_Dec']*1.5)) * df_base['RPE_G']
     df_base['Fecha_dt'] = pd.to_datetime(df_base['Fecha'])
     df_base = df_base.sort_values('Fecha_dt')
 
-    # 3. AÑADIR WELLNESS (DEL MISMO DÍA)
+    # 3. WELLNESS
     df_w_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "0")
     if not df_w_raw.empty:
         cw = df_w_raw.columns
@@ -175,7 +172,7 @@ def cargar_matriz_completa():
         df_w_clean = df_w_raw.groupby(['Fecha', 'Nombre_Cruce'])['Wellness'].mean().reset_index()
         df_base = pd.merge(df_base, df_w_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
 
-    # 4. AÑADIR EVALUACIONES FÍSICAS (Último test previo)
+    # 4. EVALUACIONES FÍSICAS
     def cruzar_evaluacion(df_eval, col_valor, nuevo_nombre):
         if not df_eval.empty and col_valor in df_eval.columns:
             df_eval = df_eval.dropna(subset=['Fecha_dt']).sort_values('Fecha_dt')
@@ -184,7 +181,6 @@ def cargar_matriz_completa():
             return df_res[col_valor].rename(nuevo_nombre)
         return np.nan
 
-    # A) Peso
     r_peso = os.path.join("data", "EVALUACIONES", "PESO", "PESO.xlsx")
     if os.path.exists(r_peso):
         try:
@@ -194,7 +190,6 @@ def cargar_matriz_completa():
             df_base['Peso_Eval'] = cruzar_evaluacion(d_p, 'Peso', 'Peso_Eval')
         except: pass
     
-    # B) Saltos (CMJ y slCMJ)
     r_saltos = os.path.join("data", "EVALUACIONES", "SALTOS", "SALTOS.xlsx")
     if os.path.exists(r_saltos):
         try:
@@ -214,7 +209,6 @@ def cargar_matriz_completa():
             df_base['slCMJ_Eval'] = cruzar_evaluacion(d_sl, 'Altura', 'slCMJ_Eval')
         except: pass
 
-    # C) Fuerza Isométrica General
     r_fuerza = os.path.join("data", "EVALUACIONES", "FUERZA", "ISOMETRICA.xlsx")
     if os.path.exists(r_fuerza):
         try:
@@ -263,8 +257,10 @@ df_f = df_f[(df_f['Fecha_dt'].dt.date >= rango_s[0]) & (df_f['Fecha_dt'].dt.date
 
 c_i, c_b = st.columns([3, 1])
 with c_i:
-    if st.session_state.jugadores_seleccionados_dosis: st.markdown(f"🏃 **Filtrado por Jugador:** `{', '.join(st.session_state.jugadores_seleccionados_dosis)}`")
-    else: st.caption("💡 Se están analizando todos los jugadores. Filtra desde el menú lateral si lo necesitas.")
+    if st.session_state.jugadores_seleccionados_dosis: 
+        st.markdown(f"🏃 **Filtrado por Jugador:** `{', '.join(st.session_state.jugadores_seleccionados_dosis)}`")
+    else: 
+        st.caption("💡 Se están analizando todos los jugadores. Puedes hacer clic sobre cualquier punto para destacarlo.")
 with c_b:
     if st.session_state.jugadores_seleccionados_dosis and st.button("🧹 Limpiar", use_container_width=True):
         st.session_state.jugadores_seleccionados_dosis = []
@@ -273,36 +269,64 @@ with c_b:
 
 df_g = df_f[df_f['Nombre_Oficial'].isin(st.session_state.jugadores_seleccionados_dosis)] if st.session_state.jugadores_seleccionados_dosis else df_f.copy()
 
-if df_g.empty:
+if df_f.empty:
     st.warning("No hay registros en el rango seleccionado.")
     st.stop()
 
 # =============================================================================
-# 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA (Carga UA vs sRPE)
+# 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA CON TRANSPARENCIA 70%
 # =============================================================================
-if 'Carga_UA' in df_g.columns and 'sRPE' in df_g.columns:
+if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
     fig = px.scatter(
-        df_g, x="sRPE", y="Carga_UA", color="Nombre_Oficial", custom_data=["Nombre_Oficial"],
+        df_f, x="sRPE", y="Carga_UA", color="Nombre_Oficial", custom_data=["Nombre_Oficial"],
         hover_data=["Fecha", "Tipo_Sesion", "Minutos", "RPE_G", "Dist_Total"],
         labels={"sRPE": "Carga Interna (sRPE)", "Carga_UA": "Carga Externa (UA)", "Nombre_Oficial": "Jugador"}, template="plotly_dark",
         title="Dispersión: Dosis (Carga Externa UA) vs Respuesta (Carga Interna sRPE)"
     )
-    fig.update_traces(marker=dict(size=14, line=dict(width=1, color='White')))
+
+    # Aplicamos opacidad diferenciada por traza (jugador)
+    for trace in fig.data:
+        player_name = trace.name
+        if st.session_state.jugadores_seleccionados_dosis:
+            if player_name in st.session_state.jugadores_seleccionados_dosis:
+                trace.marker.opacity = 1.0
+                trace.marker.size = 16
+                trace.marker.line = dict(width=2, color='white')
+            else:
+                trace.marker.opacity = 0.25  # 75% de transparencia (faded out)
+                trace.marker.size = 11
+                trace.marker.line = dict(width=0.5, color='rgba(255,255,255,0.2)')
+        else:
+            trace.marker.opacity = 0.90
+            trace.marker.size = 14
+            trace.marker.line = dict(width=1, color='white')
+
     fig.add_vline(x=df_f['sRPE'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
     fig.add_hline(y=df_f['Carga_UA'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
-    fig.update_layout(height=500, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0.2)', margin=dict(l=20, r=20, t=40, b=80), legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5))
+    fig.update_layout(
+        height=520, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0.2)', 
+        margin=dict(l=20, r=20, t=40, b=80), 
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
+    )
 
     try:
         s_d = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode=["points"], key=f"d_k_{st.session_state.dosis_key}")
         if s_d and hasattr(s_d, 'selection'):
-            cambio = False
-            for p in getattr(s_d.selection, 'points', []):
-                if p.get('customdata') and p['customdata'][0] not in st.session_state.jugadores_seleccionados_dosis:
-                    st.session_state.jugadores_seleccionados_dosis.append(p['customdata'][0])
-                    cambio = True
-            if cambio:
-                st.session_state.dosis_key += 1
-                st.rerun()
+            points = getattr(s_d.selection, 'points', [])
+            if points:
+                cambio = False
+                for p in points:
+                    if p.get('customdata'):
+                        clicked_player = p['customdata'][0]
+                        if clicked_player in st.session_state.jugadores_seleccionados_dosis:
+                            st.session_state.jugadores_seleccionados_dosis.remove(clicked_player)
+                            cambio = True
+                        else:
+                            st.session_state.jugadores_seleccionados_dosis.append(clicked_player)
+                            cambio = True
+                if cambio:
+                    st.session_state.dosis_key += 1
+                    st.rerun()
     except: st.plotly_chart(fig, use_container_width=True)
 
 # =============================================================================
@@ -331,7 +355,6 @@ if len(cols_1) > 1:
     st.plotly_chart(f_c1, use_container_width=True)
 else: 
     st.info("Datos insuficientes para la Matriz 1.")
-
 
 st.markdown("---")
 st.markdown("### 🏋️‍♂️ Matriz 2: Variables de Rendimiento Físico y Evaluaciones")
