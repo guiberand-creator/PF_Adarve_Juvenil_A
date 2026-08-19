@@ -256,7 +256,7 @@ df_dosis = cargar_matriz_completa()
 st.markdown("""
     <div>
         <h1 style="margin-bottom: 0px;">DOSIS - RESPUESTA</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;">Análisis integral de Carga y matrices de correlación separadas.</p>
+        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;"></p>
     </div>
 """, unsafe_allow_html=True)
 
