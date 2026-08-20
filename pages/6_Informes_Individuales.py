@@ -749,25 +749,25 @@ with tab_tests:
                 if sub_mov == "Dorsiflexión":
                     val_verde, val_amarillo = 12, 10
                     agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'DORSIFLEX_D')
-                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers+text', name='Derecha', line=dict(color=PRIMARY, width=3), text=[f"{v:.1f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=PRIMARY)))
+                    if not agg.empty: fig_m.add_trace(go.Bar(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Derecha', marker_color=PRIMARY, text=[f"{v:.1f}" for v in agg['Mean']], textposition='outside', textfont=dict(color='white')))
                     agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'DORSIFLEX_I')
-                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers+text', name='Izquierda', line=dict(color=TEAM, width=3), text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='top center', textfont=dict(color=TEAM)))
+                    if not agg_i.empty: fig_m.add_trace(go.Bar(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Izquierda', marker_color=TEAM, text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='outside', textfont=dict(color='white')))
                 elif sub_mov == "Rotación Interna":
                     val_verde, val_amarillo = 35, 30
                     agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'ROT_INT_D')
-                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers+text', name='Derecha', line=dict(color=PRIMARY, width=3), text=[f"{v:.1f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=PRIMARY)))
+                    if not agg.empty: fig_m.add_trace(go.Bar(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Derecha', marker_color=PRIMARY, text=[f"{v:.1f}" for v in agg['Mean']], textposition='outside', textfont=dict(color='white')))
                     agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'ROT_INT_I')
-                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers+text', name='Izquierda', line=dict(color=TEAM, width=3), text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='top center', textfont=dict(color=TEAM)))
+                    if not agg_i.empty: fig_m.add_trace(go.Bar(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Izquierda', marker_color=TEAM, text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='outside', textfont=dict(color='white')))
                 elif sub_mov == "Flexión Cadera":
                     val_verde, val_amarillo = 80, 75
                     agg = calc_mean_std(df_j_mov, 'Fecha_dt', 'FLEX_CAD_D')
-                    if not agg.empty: fig_m.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers+text', name='Derecha', line=dict(color=PRIMARY, width=3), text=[f"{v:.1f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=PRIMARY)))
+                    if not agg.empty: fig_m.add_trace(go.Bar(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Derecha', marker_color=PRIMARY, text=[f"{v:.1f}" for v in agg['Mean']], textposition='outside', textfont=dict(color='white')))
                     agg_i = calc_mean_std(df_j_mov, 'Fecha_dt', 'FLEX_CAD_I')
-                    if not agg_i.empty: fig_m.add_trace(go.Scatter(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True), mode='lines+markers+text', name='Izquierda', line=dict(color=TEAM, width=3), text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='top center', textfont=dict(color=TEAM)))
+                    if not agg_i.empty: fig_m.add_trace(go.Bar(x=agg_i['Fecha'], y=agg_i['Mean'], error_y=dict(type='data', array=agg_i['Std'], visible=True, color='rgba(255,255,255,0.4)'), name='Izquierda', marker_color=TEAM, text=[f"{v:.1f}" for v in agg_i['Mean']], textposition='outside', textfont=dict(color='white')))
                 
                 all_vals = []
-                if 'agg' in locals() and not agg.empty: all_vals.extend(agg['Mean'].tolist())
-                if 'agg_i' in locals() and not agg_i.empty: all_vals.extend(agg_i['Mean'].tolist())
+                if 'agg' in locals() and not agg.empty: all_vals.extend((agg['Mean'] + agg['Std']).tolist())
+                if 'agg_i' in locals() and not agg_i.empty: all_vals.extend((agg_i['Mean'] + agg_i['Std']).tolist())
                 max_y_axis = max(all_vals + [val_verde]) + 10 if all_vals else val_verde + 10
 
                 fig_m.add_hrect(y0=0, y1=val_amarillo, fillcolor="rgba(239, 68, 68, 0.12)", line_width=0, layer="below")
@@ -775,6 +775,7 @@ with tab_tests:
                 fig_m.add_hrect(y0=val_verde, y1=max_y_axis, fillcolor="rgba(34, 197, 94, 0.12)", line_width=0, layer="below")
                 
                 fig_m.update_layout(
+                    barmode='group',
                     shapes=[dict(type="line", xref="paper", x0=0, x1=1, yref="y", y0=val_verde, y1=val_verde, line=dict(color="#22c55e", width=1.5, dash="dash"))],
                     height=340, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color=TEXT), yaxis=dict(range=[0, max_y_axis])
                 )
@@ -785,11 +786,7 @@ with tab_tests:
             if not df_j_vam.empty:
                 agg = calc_mean_std(df_j_vam, 'Fecha_dt', 'VAM')
                 fig_v = go.Figure()
-                fig_v.add_trace(go.Scatter(
-                    x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True),
-                    mode='lines+markers+text', name='VAM', line=dict(color=PRIMARY, width=3),
-                    text=[f"{v:.2f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=PRIMARY)
-                ))
+                fig_v.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers+text', name='VAM', line=dict(color=PRIMARY, width=3), text=[f"{v:.2f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=PRIMARY)))
                 
                 ref_vam_val = None
                 if df_ref_vam is not None and not df_ref_vam.empty:
@@ -862,11 +859,7 @@ with tab_tests:
                         df_t = df_j_s[df_j_s['Tipo_Norm'] == t_norm]
                         agg = calc_mean_std(df_t, 'Fecha_dt', 'Altura')
                         if not agg.empty: 
-                            fig_s.add_trace(go.Scatter(
-                                x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True),
-                                mode='lines+markers+text', name=col_name, line=dict(color=c_color, width=3), marker=dict(size=8),
-                                text=[f"{v:.1f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=c_color)
-                            ))
+                            fig_s.add_trace(go.Scatter(x=agg['Fecha'], y=agg['Mean'], error_y=dict(type='data', array=agg['Std'], visible=True), mode='lines+markers+text', name=col_name, line=dict(color=c_color, width=3), marker=dict(size=8), text=[f"{v:.1f}" for v in agg['Mean']], textposition='top center', textfont=dict(color=c_color)))
                     
                     fig_s.add_hline(y=38.5, line_dash="dash", line_color=PRIMARY, annotation_text="Ref CMJ")
                     fig_s.add_hline(y=21.0, line_dash="dash", line_color=WARNING, annotation_text="Ref slCMJ")
@@ -881,18 +874,8 @@ with tab_tests:
                     agg_dri = calc_mean_std(df_j_dri, 'Fecha_dt', 'DRI')
                     agg_dj = calc_mean_std(df_j_dri, 'Fecha_dt', 'Altura')
                     
-                    if not agg_dri.empty: 
-                        fig_dri.add_trace(go.Bar(
-                            x=agg_dri['Fecha'], y=agg_dri['Mean'], error_y=dict(type='data', array=agg_dri['Std'], visible=True),
-                            name='Índice DRI', marker_color=PRIMARY,
-                            text=[f"{v:.2f}" for v in agg_dri['Mean']], textposition='outside', textfont=dict(color='white')
-                        ), secondary_y=False)
-                    if not agg_dj.empty: 
-                        fig_dri.add_trace(go.Scatter(
-                            x=agg_dj['Fecha'], y=agg_dj['Mean'], error_y=dict(type='data', array=agg_dj['Std'], visible=True),
-                            mode='lines+markers+text', name='Altura DJ (cm)', line=dict(color=TEAM, width=3, dash='dot'), marker=dict(size=8),
-                            text=[f"{v:.1f}" for v in agg_dj['Mean']], textposition='top center', textfont=dict(color=TEAM)
-                        ), secondary_y=True)
+                    if not agg_dri.empty: fig_dri.add_trace(go.Bar(x=agg_dri['Fecha'], y=agg_dri['Mean'], error_y=dict(type='data', array=agg_dri['Std'], visible=True), name='Índice DRI', marker_color=PRIMARY, text=[f"{v:.2f}" for v in agg_dri['Mean']], textposition='outside', textfont=dict(color='white')), secondary_y=False)
+                    if not agg_dj.empty: fig_dri.add_trace(go.Scatter(x=agg_dj['Fecha'], y=agg_dj['Mean'], error_y=dict(type='data', array=agg_dj['Std'], visible=True), mode='lines+markers+text', name='Altura DJ (cm)', line=dict(color=TEAM, width=3, dash='dot'), marker=dict(size=8), text=[f"{v:.1f}" for v in agg_dj['Mean']], textposition='top center', textfont=dict(color=TEAM)), secondary_y=True)
                     
                     fig_dri.update_yaxes(title_text="Índice DRI", secondary_y=False, showgrid=True, gridcolor=BORDER, zeroline=False, rangemode='tozero')
                     fig_dri.update_yaxes(title_text="Altura DJ (cm)", secondary_y=True, showgrid=False, zeroline=False, rangemode='tozero')
@@ -910,18 +893,8 @@ with tab_tests:
                 mean_eq_pb = df_fts['Press_Banca'].mean() if df_fts is not None and not df_fts.empty else 0
                 mean_eq_dom = df_fts['Dominada'].mean() if df_fts is not None and not df_fts.empty else 0
 
-                if not agg_pb.empty: 
-                    fig_ts.add_trace(go.Scatter(
-                        x=agg_pb['Fecha'], y=agg_pb['Mean'], error_y=dict(type='data', array=agg_pb['Std'], visible=True),
-                        mode='lines+markers+text', name='Press Banca', line=dict(color=PRIMARY, width=3),
-                        text=[f"{v:.0f}" for v in agg_pb['Mean']], textposition='top center', textfont=dict(color=PRIMARY)
-                    ))
-                if not agg_dom.empty: 
-                    fig_ts.add_trace(go.Scatter(
-                        x=agg_dom['Fecha'], y=agg_dom['Mean'], error_y=dict(type='data', array=agg_dom['Std'], visible=True),
-                        mode='lines+markers+text', name='Dominadas', line=dict(color=TEAM, width=3),
-                        text=[f"{v:.0f}" for v in agg_dom['Mean']], textposition='top center', textfont=dict(color=TEAM)
-                    ))
+                if not agg_pb.empty: fig_ts.add_trace(go.Scatter(x=agg_pb['Fecha'], y=agg_pb['Mean'], error_y=dict(type='data', array=agg_pb['Std'], visible=True), mode='lines+markers+text', name='Press Banca', line=dict(color=PRIMARY, width=3), text=[f"{v:.0f}" for v in agg_pb['Mean']], textposition='top center', textfont=dict(color=PRIMARY)))
+                if not agg_dom.empty: fig_ts.add_trace(go.Scatter(x=agg_dom['Fecha'], y=agg_dom['Mean'], error_y=dict(type='data', array=agg_dom['Std'], visible=True), mode='lines+markers+text', name='Dominadas', line=dict(color=TEAM, width=3), text=[f"{v:.0f}" for v in agg_dom['Mean']], textposition='top center', textfont=dict(color=TEAM)))
                 
                 fig_ts.add_hline(y=mean_eq_pb, line_dash="dash", line_color=PRIMARY, opacity=0.5, annotation_text="Media Eq PB")
                 fig_ts.add_hline(y=mean_eq_dom, line_dash="dash", line_color=TEAM, opacity=0.5, annotation_text="Media Eq Dom")
@@ -937,22 +910,9 @@ with tab_tests:
                 agg_dec = calc_mean_std(df_j_campo, 'Fecha_dt', 'DEC_MAX')
                 
                 fig_vel = make_subplots(specs=[[{"secondary_y": True}]])
-                if not agg_v.empty: 
-                    fig_vel.add_trace(go.Scatter(
-                        x=agg_v['Fecha'], y=agg_v['Mean'], error_y=dict(type='data', array=agg_v['Std'], visible=True),
-                        mode='lines+markers+text', name='V_MAX (km/h)', line=dict(color=PRIMARY, width=3),
-                        text=[f"{v:.1f}" for v in agg_v['Mean']], textposition='top center', textfont=dict(color=PRIMARY)
-                    ), secondary_y=False)
-                if not agg_ac.empty: 
-                    fig_vel.add_trace(go.Scatter(
-                        x=agg_ac['Fecha'], y=agg_ac['Mean'], mode='lines+markers+text', name='Acel Max (m/s²)', line=dict(color=GOOD, width=2, dash='dot'),
-                        text=[f"{v:.2f}" for v in agg_ac['Mean']], textposition='top right', textfont=dict(color=GOOD)
-                    ), secondary_y=True)
-                if not agg_dec.empty: 
-                    fig_vel.add_trace(go.Scatter(
-                        x=agg_dec['Fecha'], y=agg_dec['Mean'], mode='lines+markers+text', name='Decel Max (m/s²)', line=dict(color=WARNING, width=2, dash='dot'),
-                        text=[f"{v:.2f}" for v in agg_dec['Mean']], textposition='bottom right', textfont=dict(color=WARNING)
-                    ), secondary_y=True)
+                if not agg_v.empty: fig_vel.add_trace(go.Scatter(x=agg_v['Fecha'], y=agg_v['Mean'], error_y=dict(type='data', array=agg_v['Std'], visible=True), mode='lines+markers+text', name='V_MAX (km/h)', line=dict(color=PRIMARY, width=3), text=[f"{v:.1f}" for v in agg_v['Mean']], textposition='top center', textfont=dict(color=PRIMARY)), secondary_y=False)
+                if not agg_ac.empty: fig_vel.add_trace(go.Scatter(x=agg_ac['Fecha'], y=agg_ac['Mean'], mode='lines+markers+text', name='Acel Max (m/s²)', line=dict(color=GOOD, width=2, dash='dot'), text=[f"{v:.2f}" for v in agg_ac['Mean']], textposition='top right', textfont=dict(color=GOOD)), secondary_y=True)
+                if not agg_dec.empty: fig_vel.add_trace(go.Scatter(x=agg_dec['Fecha'], y=agg_dec['Mean'], mode='lines+markers+text', name='Decel Max (m/s²)', line=dict(color=WARNING, width=2, dash='dot'), text=[f"{v:.2f}" for v in agg_dec['Mean']], textposition='bottom right', textfont=dict(color=WARNING)), secondary_y=True)
                 
                 ref_vmax, ref_acmax, ref_decmax = None, None, None
                 if df_ref_campo is not None and not df_ref_campo.empty:
