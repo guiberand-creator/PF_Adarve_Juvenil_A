@@ -431,7 +431,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 pest_sel = st.session_state['pestaña_activa']
 
 # =============================================================================
-# ÁREA 1: MOVILIDAD (SIN LUMBAR)
+# ÁREA 1: MOVILIDAD (CORREGIDO REFERENCIA A 80° EN FLEXIÓN CADERA)
 # =============================================================================
 if pest_sel == "🩺 Movilidad":
     if df_mov is None or df_ref_mov is None:
@@ -454,7 +454,7 @@ if pest_sel == "🩺 Movilidad":
             elif abs(rot_d - rot_i) >= 5: alertas_jugador.append("Asimetría Rot. Cadera")
 
             flx_d, flx_i = row['FLEX_CAD_D'], row['FLEX_CAD_I']
-            if flx_d < 45 or flx_i < 45: alertas_jugador.append("Flexión Cadera")
+            if flx_d < 80 or flx_i < 80: alertas_jugador.append("Flexión Cadera")
             elif abs(flx_d - flx_i) >= 5: alertas_jugador.append("Asimetría Flex. Cadera")
 
             if alertas_jugador: dict_alertas[nombre] = alertas_jugador
@@ -480,7 +480,7 @@ if pest_sel == "🩺 Movilidad":
 
         if bloque_seleccionado == "Dorsiflexión Tobillo": col_d, col_i, val_verde, unidad = 'DORSIFLEX_D', 'DORSIFLEX_I', 12, 'cm'
         elif bloque_seleccionado == "Rotación Interna Cadera": col_d, col_i, val_verde, unidad = 'ROT_INT_D', 'ROT_INT_I', 35, '°'
-        else: col_d, col_i, val_verde, unidad = 'FLEX_CAD_D', 'FLEX_CAD_I', 45, '°'
+        else: col_d, col_i, val_verde, unidad = 'FLEX_CAD_D', 'FLEX_CAD_I', 80, '°'
 
         fig_barras = go.Figure()
         fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Derecha (D)', marker_color='#3b82f6', text=df_fecha_mov[col_d], textposition='outside', textfont=dict(color='white', size=11)))
@@ -622,7 +622,7 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                         st.plotly_chart(fig_p, use_container_width=True)
 
 # =============================================================================
-# ÁREA 4: DINAMOMETRÍA (CON PICO DE FUERZA Y RATIOS RECUPERADOS)
+# ÁREA 4: DINAMOMETRÍA (CON PICO DE FUERZA Y RATIOS INTEGRALES)
 # =============================================================================
 elif pest_sel == "⚙️ Dinamometría":
     if df_dina is None or df_dina.empty:
@@ -884,7 +884,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 st.plotly_chart(fig_r_aa, use_container_width=True)
 
 # =============================================================================
-# ÁREA 5: SALTOS (RECUPERADAS TODAS LAS SECCIONES AVANZADAS)
+# ÁREA 5: SALTOS (TODAS LAS SECCIONES COMPLETAS)
 # =============================================================================
 elif pest_sel == "🚀 Saltos (CMJ)":
     if df_saltos is not None and not df_saltos.empty:
