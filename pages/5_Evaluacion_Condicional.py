@@ -431,7 +431,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 pest_sel = st.session_state['pestaña_activa']
 
 # =============================================================================
-# ÁREA 1: MOVILIDAD (CORREGIDO REFERENCIA A 80° EN FLEXIÓN CADERA)
+# ÁREA 1: MOVILIDAD (CON BANDAS DE COLOR DE FONDO SEGÚN TABLA DE RANGOS)
 # =============================================================================
 if pest_sel == "🩺 Movilidad":
     if df_mov is None or df_ref_mov is None:
@@ -478,19 +478,41 @@ if pest_sel == "🩺 Movilidad":
         st.markdown("<br><hr>", unsafe_allow_html=True)
         bloque_seleccionado = st.selectbox("Selec. Articulación para inspeccionar en gráfico:", ["Dorsiflexión Tobillo", "Rotación Interna Cadera", "Flexión Cadera"])
 
-        if bloque_seleccionado == "Dorsiflexión Tobillo": col_d, col_i, val_verde, unidad = 'DORSIFLEX_D', 'DORSIFLEX_I', 12, 'cm'
-        elif bloque_seleccionado == "Rotación Interna Cadera": col_d, col_i, val_verde, unidad = 'ROT_INT_D', 'ROT_INT_I', 35, '°'
-        else: col_d, col_i, val_verde, unidad = 'FLEX_CAD_D', 'FLEX_CAD_I', 80, '°'
+        if bloque_seleccionado == "Dorsiflexión Tobillo": 
+            col_d, col_i, val_verde, val_amarillo, unidad = 'DORSIFLEX_D', 'DORSIFLEX_I', 12, 10, 'cm'
+        elif bloque_seleccionado == "Rotación Interna Cadera": 
+            col_d, col_i, val_verde, val_amarillo, unidad = 'ROT_INT_D', 'ROT_INT_I', 35, 30, '°'
+        else: 
+            col_d, col_i, val_verde, val_amarillo, unidad = 'FLEX_CAD_D', 'FLEX_CAD_I', 80, 75, '°'
 
         fig_barras = go.Figure()
         fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Derecha (D)', marker_color='#3b82f6', text=df_fecha_mov[col_d], textposition='outside', textfont=dict(color='white', size=11)))
         fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_i], name='Izquierda (I)', marker_color='#10b981', text=df_fecha_mov[col_i], textposition='outside', textfont=dict(color='white', size=11)))
+        
         max_y = max(df_fecha_mov[col_d].max(), df_fecha_mov[col_i].max())
+        max_y_axis = max(max_y + 5, val_verde + 5)
 
-        fig_barras.add_shape(type="line", x0=-0.5, x1=len(df_fecha_mov)-0.5, y0=val_verde, y1=val_verde, line=dict(color="#22c55e", width=2, dash="dash"))
+        # BANDAS DE COLOR SEGÚN TABLA DE RANGOS DE REFERENCIA
+        # 1. Zona Roja (< val_amarillo)
+        fig_barras.add_hrect(
+            y0=0, y1=val_amarillo,
+            fillcolor="rgba(239, 68, 68, 0.12)", line_width=0, layer="below"
+        )
+        # 2. Zona Amarilla (val_amarillo a val_verde)
+        fig_barras.add_hrect(
+            y0=val_amarillo, y1=val_verde,
+            fillcolor="rgba(245, 158, 11, 0.12)", line_width=0, layer="below"
+        )
+        # 3. Zona Verde (> val_verde)
+        fig_barras.add_hrect(
+            y0=val_verde, y1=max_y_axis,
+            fillcolor="rgba(34, 197, 94, 0.12)", line_width=0, layer="below"
+        )
+
+        fig_barras.add_shape(type="line", x0=-0.5, x1=len(df_fecha_mov)-0.5, y0=val_verde, y1=val_verde, line=dict(color="#22c55e", width=1.5, dash="dash"))
         
         fig_barras = aplicar_estilo_shadcn(fig_barras)
-        fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max(max_y + 5, val_verde + 5)]), height=460, margin=dict(l=20, r=20, t=50, b=100))
+        fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max_y_axis]), height=460, margin=dict(l=20, r=20, t=50, b=100))
         st.plotly_chart(fig_barras, use_container_width=True)
 
 # =============================================================================
@@ -571,7 +593,8 @@ elif pest_sel == "🫁 VAM / Aeróbico":
         with col_filtro:
             pos_seleccionada = st.selectbox("⚽ Filtrar por Demarcación:", opciones_pos)
 
-        pos_a_mostrar = posiciones_unicas if pos_seleccionada == "Todas las Demarcaciones" else [pos_seleccionada]
+        pos_a_mostrar = posiciones_unicas if pos_seleccionada == "Todas las Demarcaciones" else [posiciones_unicas[0]] if pos_seleccionada != "Todas las Demarcaciones" else []
+        if pos_seleccionada != "Todas las Demarcaciones": pos_a_mostrar = [pos_seleccionada]
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -622,7 +645,7 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                         st.plotly_chart(fig_p, use_container_width=True)
 
 # =============================================================================
-# ÁREA 4: DINAMOMETRÍA (CON PICO DE FUERZA Y RATIOS INTEGRALES)
+# ÁREA 4: DINAMOMETRÍA
 # =============================================================================
 elif pest_sel == "⚙️ Dinamometría":
     if df_dina is None or df_dina.empty:
@@ -884,7 +907,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 st.plotly_chart(fig_r_aa, use_container_width=True)
 
 # =============================================================================
-# ÁREA 5: SALTOS (TODAS LAS SECCIONES COMPLETAS)
+# ÁREA 5: SALTOS
 # =============================================================================
 elif pest_sel == "🚀 Saltos (CMJ)":
     if df_saltos is not None and not df_saltos.empty:
