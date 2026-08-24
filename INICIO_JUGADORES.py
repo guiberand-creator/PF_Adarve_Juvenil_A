@@ -37,6 +37,9 @@ GOOD = "#22c55e"
 WARNING = "#f59e0b"          
 
 def inject_v0_css():
+
+    [data-testid="stSidebarNav"] { display: none !important; }
+    
     st.markdown(f"""
         <style>
         .stApp {{ background: {BG}; }}
