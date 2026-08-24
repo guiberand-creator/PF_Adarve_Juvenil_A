@@ -46,16 +46,11 @@ def inject_v0_css():
         /* OCULTAR NAVEGACIÓN AUTOMÁTICA DEL SIDEBAR PARA JUGADORES */
         [data-testid="stSidebarNav"] {{ display: none !important; }}
         
-        /* HEROCARD Y LOGIN CARD */
+        /* HEROCARD */
         .pd-hero {{
             background: radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%), linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
             border: 1px solid {BORDER}; border-radius: 18px; padding: 1.5rem 1.75rem; width: 100%; height: 330px;
             box-sizing: border-box; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; justify-content: space-between; margin-top: 0px !important;
-        }}
-        .login-card {{
-            background: radial-gradient(1200px 240px at 12% -40%, {PRIMARY_SOFT}, transparent 60%), linear-gradient(180deg, {SURFACE_2} 0%, {SURFACE} 100%);
-            border: 1px solid {BORDER}; border-radius: 20px; padding: 2.5rem; text-align: center;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.5); max-width: 480px; margin: 2rem auto;
         }}
         .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
         .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; margin-bottom: 1.5rem; }}
@@ -149,14 +144,13 @@ if not st.session_state['jugador_autenticado']:
     
     with col_c2:
         st.markdown(f"""
-            <div class="login-card">
-                <img src="{url_escudo_oficial}" style="width:70px; margin-bottom: 15px;">
-                <h1 style="font-size:1.8rem; font-weight:800; margin-bottom: 5px; color:{TEXT};">PORTAL JUGADORES</h1>
-                <p style="color:{MUTED}; font-size:0.9rem; margin-bottom: 25px;">Adarve DH &middot; Rendimiento Individual</p>
+            <div style="text-align: center; margin-bottom: 15px;">
+                <img src="{url_escudo_oficial}" style="width:80px; margin-bottom: 15px;">
+                <h1 style="font-size:2rem; font-weight:800; margin-bottom: 0px; color:{TEXT};">PORTAL JUGADORES</h1>
             </div>
         """, unsafe_allow_html=True)
         
-        pin_ingresado = st.text_input("🔑 Introduce tu Clave / PIN personal:", type="password", key="input_pin_jugador")
+        pin_ingresado = st.text_input("Introduce tu contraseña:", type="password", key="input_pin_jugador")
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("ACCEDER A MI INFORME", type="primary", use_container_width=True):
