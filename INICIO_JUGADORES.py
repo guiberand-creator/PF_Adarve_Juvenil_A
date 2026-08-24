@@ -37,14 +37,14 @@ GOOD = "#22c55e"
 WARNING = "#f59e0b"          
 
 def inject_v0_css():
-
-    [data-testid="stSidebarNav"] { display: none !important; }
-    
     st.markdown(f"""
         <style>
         .stApp {{ background: {BG}; }}
         .block-container {{ padding-top: 1.5rem !important; padding-bottom: 3rem !important; padding-left: 2rem !important; padding-right: 2rem !important; max-width: 100% !important; }}
         div[data-testid="column"] {{ display: flex; flex-direction: column; justify-content: flex-start; }}
+        
+        /* OCULTAR NAVEGACIÓN AUTOMÁTICA DEL SIDEBAR PARA JUGADORES */
+        [data-testid="stSidebarNav"] {{ display: none !important; }}
         
         /* HEROCARD Y LOGIN CARD */
         .pd-hero {{
@@ -138,7 +138,7 @@ if os.path.exists(_ruta_escudo_oficial):
         url_escudo_oficial = f"data:image/png;base64,{base64.b64encode(_f.read()).decode()}"
 
 # =============================================================================
-# 2. CONTROL DE ACCESO PARA JUGADORES (LOGIN IDÉNTICO)
+# 2. CONTROL DE ACCESO PARA JUGADORES
 # =============================================================================
 if 'jugador_autenticado' not in st.session_state:
     st.session_state['jugador_autenticado'] = None
