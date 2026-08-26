@@ -108,8 +108,6 @@ def obtener_datos_partidos():
         
         def parsear_resultado(row):
             res_raw = str(row.get('Resultado', '')).strip()
-            condicion = str(row.get('Casa/fuera', '')).strip().lower()
-            
             if not res_raw or res_raw.lower() in ['', 'nan', 'none', 'null', '-', 'na']:
                 return None
                 
@@ -117,14 +115,9 @@ def obtener_datos_partidos():
             if not match:
                 return None
                 
-            g1 = int(match.group(1))
-            g2 = int(match.group(2))
+            g_adarve = int(match.group(1))
+            g_rival = int(match.group(2))
             
-            if 'casa' in condicion or 'local' in condicion:
-                g_adarve, g_rival = g1, g2
-            else:
-                g_adarve, g_rival = g2, g1
-                
             if g_adarve > g_rival:
                 return 'V'
             elif g_adarve < g_rival:
@@ -139,8 +132,8 @@ def obtener_datos_partidos():
         
         racha = []
         if not df_jugados.empty:
-            # Orden cronológico de derecha a izquierda: el más reciente a la izquierda, el más antiguo a la derecha
-            ultimos_5 = df_jugados.tail(5).iloc[::-1]
+            # Cronológico de izquierda a derecha (antiguo ➔ reciente)
+            ultimos_5 = df_jugados.tail(5)
             racha = ultimos_5['Resultado_Signo'].tolist()
             
         proximo_partido = None
