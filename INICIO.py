@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import os
 import base64
+import re
 from utils import aplicar_estilos_globales
 
 # -----------------------------------------------------------------------------
@@ -99,25 +100,53 @@ def obtener_datos_partidos():
     try:
         df = pd.read_csv(url_csv)
         df.columns = df.columns.str.strip()
-        if 'Resultado' not in df.columns: return None, [], "No se encuentra la columna 'Resultado'."
+        if 'Resultado' not in df.columns or 'Casa/fuera' not in df.columns: 
+            return None, [], "No se encuentran las columnas 'Resultado' o 'Casa/fuera'."
+        
         df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
         df = df.sort_values(by='Fecha').reset_index(drop=True)
-        df['Resultado'] = df['Resultado'].fillna('')
-        df['Resultado_Clean'] = df['Resultado'].astype(str).str.strip().str.lower()
-        nulos_python = ['', 'nan', 'none', 'null', '-', 'na']
-        df_jugados = df[~df['Resultado_Clean'].isin(nulos_python)]
-        df_pendientes = df[df['Resultado_Clean'].isin(nulos_python)]
+        
+        def parsear_resultado(row):
+            res_raw = str(row.get('Resultado', '')).strip()
+            condicion = str(row.get('Casa/fuera', '')).strip().lower()
+            
+            if not res_raw or res_raw.lower() in ['', 'nan', 'none', 'null', '-', 'na']:
+                return None
+                
+            match = re.search(r'(\d+)\s*[-:\s_xX]\s*(\d+)', res_raw)
+            if not match:
+                return None
+                
+            g1 = int(match.group(1))
+            g2 = int(match.group(2))
+            
+            if 'casa' in condicion or 'local' in condicion:
+                g_adarve, g_rival = g1, g2
+            else:
+                g_adarve, g_rival = g2, g1
+                
+            if g_adarve > g_rival:
+                return 'V'
+            elif g_adarve < g_rival:
+                return 'D'
+            else:
+                return 'E'
+
+        df['Resultado_Signo'] = df.apply(parsear_resultado, axis=1)
+        
+        df_jugados = df[df['Resultado_Signo'].notna()]
+        df_pendientes = df[df['Resultado_Signo'].isna()]
+        
         racha = []
         if not df_jugados.empty:
-            ultimos_5 = df_jugados.tail(5)['Resultado_Clean'].tolist()
-            for r in ultimos_5:
-                r_str = str(r)
-                if 'victoria' in r_str: racha.append('V')
-                elif 'empate' in r_str: racha.append('E')
-                elif 'derrota' in r_str: racha.append('D')
+            # Orden cronológico de derecha a izquierda: el más reciente a la izquierda, el más antiguo a la derecha
+            ultimos_5 = df_jugados.tail(5).iloc[::-1]
+            racha = ultimos_5['Resultado_Signo'].tolist()
+            
         proximo_partido = None
         if not df_pendientes.empty:
             prox = df_pendientes.iloc[0]
+            nulos_python = ['', 'nan', 'none', 'null', '-', 'na']
             escudo_url = str(prox.get('Escudos', '')).strip()
             if escudo_url.lower() in nulos_python: escudo_url = None
             proximo_partido = {
