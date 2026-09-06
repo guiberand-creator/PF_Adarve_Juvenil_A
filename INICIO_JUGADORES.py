@@ -1193,7 +1193,7 @@ with tab_gps:
                 mean_pos = df_matches_pos[cols_all_gps].mean()
                 std_pos = df_matches_pos[cols_all_gps].std().replace({0: 1, np.nan: 1})
                 
-                df_opt_base = df_matches_jug[df_matches_jug['Minutos'] > 60].sort_values('Fecha_dt', ascending=True).tail(4)
+                df_opt_base = df_matches_jug[df_matches_jug['Minutos'] >= 60].sort_values('Fecha_dt', ascending=True).tail(4)
                 if df_opt_base.empty: df_opt_base = df_matches_jug.sort_values('Fecha_dt', ascending=True).tail(4)
                 mean_opt = df_opt_base[cols_all_gps].mean()
                 
