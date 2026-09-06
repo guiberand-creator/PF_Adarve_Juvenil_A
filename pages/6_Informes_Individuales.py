@@ -382,7 +382,6 @@ def cargar_todo_informes():
                 return pd.merge(df_base, df_u, on='Nombre_Norm', how='left')
             return df_base
 
-        # Movilidad sin Lumbar
         if df_mov is not None and not df_mov.empty:
             df_m_last = df_mov.sort_values('Fecha_dt').copy()
             mov_cols = [c for c in ['DORSIFLEX_D', 'DORSIFLEX_I', 'ROT_INT_D', 'ROT_INT_I', 'FLEX_CAD_D', 'FLEX_CAD_I'] if c in df_m_last.columns]
@@ -594,7 +593,7 @@ if not df_p_jug.empty:
     df_p_jug['Label'] = labels
 
 minutos_totales_partido = 0
-fecha_inicio_liga = pd.to_datetime("2026-09-06")
+fecha_inicio_liga = pd.to_datetime("2026-09-05")
 if not df_rpe.empty:
     df_rpe_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_totales_partido = int(df_rpe_m['Minutos'].sum())
