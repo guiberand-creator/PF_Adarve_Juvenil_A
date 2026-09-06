@@ -645,7 +645,7 @@ if not df_p_jug.empty:
     df_p_jug['Label'] = labels
 
 minutos_totales_partido = 0
-fecha_inicio_liga = pd.to_datetime("2026-09-06")
+fecha_inicio_liga = pd.to_datetime("2026-09-05")
 if not df_rpe.empty:
     df_rpe_m = df_rpe[(df_rpe['Nombre_Norm'] == jug_norm) & (df_rpe['Tipo_Sesion'].str.lower().str.contains('partido')) & (df_rpe['Fecha_dt'] >= fecha_inicio_liga)]
     minutos_totales_partido = int(df_rpe_m['Minutos'].sum())
