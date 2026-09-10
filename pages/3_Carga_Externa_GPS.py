@@ -269,9 +269,9 @@ df_master['Valido_Media'] = validez
 df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 
 # =============================================================================
-# CÁLCULO DE CARGA (UA) PONDERADO
+# CÁLCULO DE CARGA (sRPE)
 # =============================================================================
-df_master['Carga_UA'] = (df_master['Dist_Total'] + (df_master['Dist_18'] * 2) + (df_master['Dist_25'] * 4) + ((df_master['Accels'] + df_master['Decels']) * 1.5)) * df_master['RPE_G']
+df_master['Carga_UA'] = df_master['Minutos_RPE'] * df_master['RPE_G']
 
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
 
@@ -282,38 +282,39 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
     is_plus = '+1' in t or '+2' in t
-    is_minus = '-4' in t or '-3' in t or '-2' in t or '-1' in t
+    is_minus = '-4' in t or '-3' in t or '-2' in t or '-1' in t or '4' in t or '3' in t or '2' in t or '1' in t
     
     if not (is_plus or is_minus): return (0, 0)
     
     if metrica == 'Dist_Total':
-        if '-4' in t: return (45, 55)
-        if '-3' in t: return (55, 70)
-        if '-2' in t: return (20, 30)
-        if '-1' in t: return (30, 40)
+        if '4' in t: return (45, 55)
+        if '3' in t: return (50, 65)
+        if '2' in t: return (10, 20)  # MD-2 Día OFF / Muy leve
+        if '1' in t: return (20, 30)  # MD-1 Activación / Intro al partido
         if is_plus: return (20, 30) if jugo_60 else (55, 65)
     elif metrica == 'Dist_18':
-        if '-4' in t: return (55, 65)
-        if '-3' in t: return (50, 65)
-        if '-2' in t or '-1' in t: return (20, 30)
-        if is_plus: return (0, 40) if jugo_60 else (40, 50)
+        if '4' in t: return (25, 40)  # Trabajo de fuerza / espacio reducido
+        if '3' in t: return (55, 70)  # Calibrado a 1h de campo en MD-3
+        if '2' in t: return (0, 10)
+        if '1' in t: return (15, 25)
+        if is_plus: return (0, 30) if jugo_60 else (40, 50)
     elif metrica == 'Dist_25':
-        if '-4' in t: return (0, 20)
-        if '-3' in t: return (50, 90)
-        if '-2' in t: return (5, 15)
-        if '-1' in t: return (0, 5)
-        if is_plus: return (0, 10) if jugo_60 else (40, 50)
+        if '4' in t: return (0, 15)
+        if '3' in t: return (40, 75)
+        if '2' in t: return (0, 5)
+        if '1' in t: return (5, 15)
+        if is_plus: return (0, 10) if jugo_60 else (30, 45)
     elif metrica in ['Accels', 'Decels']:
-        if '-4' in t: return (60, 70)
-        if '-3' in t: return (50, 65)
-        if '-2' in t: return (20, 40)
-        if '-1' in t: return (10, 20)
+        if '4' in t: return (60, 75)  # Alto en MD-4 por aceleraciones/frenadas en espacio reducido
+        if '3' in t: return (50, 65)
+        if '2' in t: return (0, 15)
+        if '1' in t: return (15, 30)
         if is_plus: return (10, 30) if jugo_60 else (60, 70) 
     elif metrica == 'Player_Load':
-        if '-4' in t: return (55, 65)
-        if '-3' in t: return (50, 65)
-        if '-2' in t: return (20, 40)
-        if '-1' in t: return (20, 30)
+        if '4' in t: return (55, 65)
+        if '3' in t: return (50, 65)
+        if '2' in t: return (10, 20)
+        if '1' in t: return (20, 30)
         if is_plus: return (20, 30) if jugo_60 else (55, 65)
     return (0, 0) 
 
@@ -323,41 +324,9 @@ metricas_todas = ['Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'Sprints', 'Acc
 
 fallbacks_profesionales = {
     'Dist_Total': 10000, 'Dist_18': 800, 'Dist_25': 250, 'Dist_28': 100, 
-    'Sprints': 20, 'Accels': 50, 'Decels': 50, 'Acc_Max': 4.5, 'Dec_Max': 4.5, 
+    'Sprints': 20, 'Accels': 50, 'Decels': 50, 'Acc_Max': 4.5, 'Dec_Max': -4.5, 
     'Top_Speed': 31, 'Player_Load': 1000
 }
-
-target_refs_global = {}
-if not df_partidos.empty:
-    ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
-    df_ult_4 = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
-    for m in metricas_todas: 
-        target_refs_global[m] = (df_ult_4[m].mean() + df_ult_4[m].max()) / 2 if not df_ult_4.empty else fallbacks_profesionales[m]
-else:
-    for m in metricas_todas: target_refs_global[m] = fallbacks_profesionales[m]
-
-for m in metricas_todas:
-    if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
-
-for m in metricas_todas:
-    if m in ['Dist_28', 'Sprints']:
-        df_master[f'Target_Min_Pct_{m}'] = 100
-        df_master[f'Target_Max_Pct_{m}'] = 100
-        df_master[f'Target_Min_{m}'] = target_refs_global[m]
-        df_master[f'Target_Max_{m}'] = target_refs_global[m]
-        df_master[f'Target_{m}'] = target_refs_global[m]
-    elif m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
-        df_master[f'Target_Min_Pct_{m}'] = 0
-        df_master[f'Target_Max_Pct_{m}'] = 0
-        df_master[f'Target_Min_{m}'] = 0
-        df_master[f'Target_Max_{m}'] = 0
-        df_master[f'Target_{m}'] = 0
-    else:
-        df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
-        df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
-        df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
-        df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
-        df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
@@ -385,6 +354,56 @@ with col_f3:
     else:
         jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
     jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos)
+
+# RECALCULAR TARGETS 100% CON LA FÓRMULA DE CONTEXTO DURO: (MEDIA + MÁXIMO) / 2
+target_refs_global = {}
+if not df_partidos.empty:
+    ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
+    df_ref_base = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
+    
+    if jug_sel != "Todos":
+        df_ref_base = df_ref_base[df_ref_base['Nombre'] == jug_sel]
+    elif pos_sel != "Equipo Completo":
+        df_ref_base = df_ref_base[df_ref_base['Posicion'] == pos_sel]
+        
+    for m in metricas_todas:
+        if not df_ref_base.empty and df_ref_base[m].mean() != 0:
+            if m == 'Dec_Max':
+                # Para desaceleración máxima (valores negativos), el pico más exigente es el mínimo
+                pico_max = df_ref_base[m].min()
+                media_m = df_ref_base[m].mean()
+                target_refs_global[m] = (media_m + pico_max) / 2
+            else:
+                pico_max = df_ref_base[m].max()
+                media_m = df_ref_base[m].mean()
+                target_refs_global[m] = (media_m + pico_max) / 2
+        else:
+            target_refs_global[m] = fallbacks_profesionales[m]
+else:
+    for m in metricas_todas: target_refs_global[m] = fallbacks_profesionales[m]
+
+for m in metricas_todas:
+    if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
+
+for m in metricas_todas:
+    if m in ['Dist_28', 'Sprints']:
+        df_master[f'Target_Min_Pct_{m}'] = 100
+        df_master[f'Target_Max_Pct_{m}'] = 100
+        df_master[f'Target_Min_{m}'] = target_refs_global[m]
+        df_master[f'Target_Max_{m}'] = target_refs_global[m]
+        df_master[f'Target_{m}'] = target_refs_global[m]
+    elif m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
+        df_master[f'Target_Min_Pct_{m}'] = 0
+        df_master[f'Target_Max_Pct_{m}'] = 0
+        df_master[f'Target_Min_{m}'] = 0
+        df_master[f'Target_Max_{m}'] = 0
+        df_master[f'Target_{m}'] = 0
+    else:
+        df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
+        df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
+        df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
+        df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
+        df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
 
 # APLICAR FILTROS GLOBALES
 df_sesion = df_master[df_master['Fecha'] == fecha_sel]
@@ -427,7 +446,7 @@ if jug_sel != "Todos":
     df_sem_prev = df_sem_prev[df_sem_prev['Nombre'] == jug_sel]
     df_28d = df_28d[df_28d['Nombre'] == jug_sel]
 
-# --- 1. ALERTAS MICROCICLO ---
+# --- 1. ALERTAS MICROCICLO EVALUADAS DÍA A DÍA (SIN FALSOS POSITIVOS DE DÍAS FUTUROS) ---
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
@@ -441,11 +460,15 @@ metricas_alerta = {
 jugadores_vmax_peligro = []
 alertas_metricas = {k: [] for k in metricas_alerta.keys()}
 
+evaluar_vmax_semana = any(k in str(t).lower() for t in df_sem['Tipo_Dia_Oficial'].unique() for k in ['-3', '3', '-2', '2', '-1', '1', 'partido'])
+
 for jug in df_sem['Nombre'].unique():
     df_j = df_sem[df_sem['Nombre'] == jug]
-    hits_vmax = df_j['Hit_90'].sum()
-    if hits_vmax < 2:
-        jugadores_vmax_peligro.append((jug, hits_vmax))
+    
+    if evaluar_vmax_semana:
+        hits_vmax = df_j['Hit_90'].sum()
+        if hits_vmax < 1:
+            jugadores_vmax_peligro.append((jug, hits_vmax))
         
     for m_key in metricas_alerta.keys():
         expected_min = df_j[f'Target_Min_Pct_{m_key}'].sum()
@@ -454,7 +477,7 @@ for jug in df_sem['Nombre'].unique():
         ref_partido = target_refs_global[m_key]
         actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
         
-        if expected_min > 0 and actual_pct < expected_min:
+        if expected_min > 0 and actual_pct < (expected_min * 0.80):
             texto_alerta = f"{actual_pct:.0f}% / {expected_min:.0f}-{expected_max:.0f}%"
             alertas_metricas[m_key].append((jug, texto_alerta))
 
@@ -523,7 +546,7 @@ duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS']
 
 # --- HISTÓRICO 28 DÍAS DINÁMICO ---
 opciones_grafico = {
-    'Carga General (UA)': 'Carga_UA',
+    'Carga General (sRPE)': 'Carga_UA',
     'Dist. Total': 'Dist_Total',
     'Dist. >18': 'Dist_18',
     'Dist. >25': 'Dist_25',
@@ -569,7 +592,6 @@ with c_hist:
         else:
             df_agg = df_hist_eq.groupby('Fecha').agg({m_graf: 'mean', f'Target_{m_graf}': 'mean', 'Tipo_Dia_Oficial': 'first'}).reset_index()
 
-        # INCORPORAR LOS ESCUDOS A LA GRÁFICA DE BARRAS
         if not df_calendario.empty:
             df_agg = pd.merge(df_agg, df_calendario[['Fecha', 'Escudo']], on='Fecha', how='left')
         else:
@@ -577,7 +599,7 @@ with c_hist:
 
         fig_hist = go.Figure()
         colores_barras = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_agg['Tipo_Dia_Oficial']]
-        textos_barras = ['' for t in df_agg['Tipo_Dia_Oficial']] # Sin la letra 'P'
+        textos_barras = ['' for t in df_agg['Tipo_Dia_Oficial']]
 
         fig_hist.add_trace(go.Bar(
             x=df_agg['Fecha'], y=df_agg[m_graf],
@@ -606,10 +628,10 @@ with c_hist:
                 hist_images.append(dict(
                     source=row['Escudo'],
                     x=row['Fecha'],
-                    y=row[m_graf] / 2, # Posición en el medio de la barra
+                    y=row[m_graf] / 2,
                     xref="x", yref="y",
-                    sizex=0.8, # Funciona perfecto al forzar el xaxis a 'category'
-                    sizey=max_y_hist * 0.35, # Escudo grande para que se vea claro
+                    sizex=0.8,
+                    sizey=max_y_hist * 0.35,
                     xanchor="center", yanchor="middle"
                 ))
 
@@ -753,10 +775,10 @@ if not df_sesion_tabla.empty:
         pct_fill = min((valor_abs / max_escala) * 100, 100)
         pct_target = min((target_90 / max_escala) * 100, 100)
         t_val = f"{valor_real:.1f}" if es_decimal else f"{valor_real:.0f}"
-        c_barra = "#E74C3C" if valor_abs >= target_90 and target_90 > 0 else "#2ECC71"
+        color_target_achieved = "#2ECC71" if target_90 > 0 and valor_abs >= target_90 else "#A0AEC0"
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
-            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{c_barra}; border-radius:2px; z-index:2;"></div>
+            <div style="position:absolute; left:0; top:0; height:100%; width:{pct_fill}%; background-color:{color_target_achieved}; border-radius:2px; z-index:2;"></div>
             <div style="position:absolute; left:{pct_target}%; top:-2px; height:22px; width:2px; background-color:#F1C40F; z-index:3;"></div>
             <div style="position:absolute; left:4px; top:1px; font-size:11px; font-weight:bold; color:white; z-index:4; text-shadow:1px 1px 1px black;">{t_val}</div>
         </div>
@@ -815,7 +837,7 @@ if not df_sesion_tabla.empty:
                 pct_max = (v_abs / max_h * 100) if max_h > 0 else 0
                 
                 html += f"<td style='padding:5px; border-left:1px solid #333;'>{dibujar_barra_pico(val, v_abs, t_90, max_h, es_dec)}</td>"
-                color_pct = "#E74C3C" if pct_max >= 90 else "#2ECC71"
+                color_pct = "#2ECC71" if pct_max >= 90 else "#A0AEC0"
                 html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
             
             elif m in ['Dist_28', 'Sprints']:
