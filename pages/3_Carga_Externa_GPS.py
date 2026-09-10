@@ -329,6 +329,48 @@ fallbacks_profesionales = {
 }
 
 # =============================================================================
+# CÁLCULO DE REFERENCIAS 100% POR DEMARCACIÓN TÁCTICA (CONTEXTO DURO)
+# =============================================================================
+dict_ref_posicion = {}
+if not df_partidos.empty:
+    ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
+    df_ref_partidos = df_partidos[df_partidos['Fecha'].isin(ultimos_4_fechas)]
+    
+    for pos_tag in df_master['Posicion'].unique():
+        df_p_pos = df_ref_partidos[df_ref_partidos['Posicion'] == pos_tag]
+        dict_ref_posicion[pos_tag] = {}
+        for m in metricas_todas:
+            if not df_p_pos.empty and df_p_pos[m].mean() != 0:
+                if m == 'Dec_Max':
+                    dict_ref_posicion[pos_tag][m] = (df_p_pos[m].mean() + df_p_pos[m].min()) / 2
+                else:
+                    dict_ref_posicion[pos_tag][m] = (df_p_pos[m].mean() + df_p_pos[m].max()) / 2
+            else:
+                dict_ref_posicion[pos_tag][m] = fallbacks_profesionales[m]
+
+# Asignar a cada fila en df_master los objetivos en metros/unidades según su posición individual
+def calc_target_min(row, m):
+    pos = row['Posicion']
+    ref_100 = dict_ref_posicion.get(pos, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
+    if m in ['Dist_28', 'Sprints']: return ref_100
+    if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']: return 0
+    pct_min = get_target_range(m, row['Tipo_Dia_Oficial'], row['Jugo_60_Ultimo_Partido'])[0]
+    return ref_100 * (pct_min / 100)
+
+def calc_target_max(row, m):
+    pos = row['Posicion']
+    ref_100 = dict_ref_posicion.get(pos, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
+    if m in ['Dist_28', 'Sprints']: return ref_100
+    if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']: return 0
+    pct_max = get_target_range(m, row['Tipo_Dia_Oficial'], row['Jugo_60_Ultimo_Partido'])[1]
+    return ref_100 * (pct_max / 100)
+
+for m in metricas_todas:
+    df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: calc_target_min(r, m), axis=1)
+    df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: calc_target_max(r, m), axis=1)
+    df_master[f'Target_{m}'] = (df_master[f'Target_Min_{m}'] + df_master[f'Target_Max_{m}']) / 2
+
+# =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
 # =============================================================================
 st.markdown("""
@@ -355,7 +397,7 @@ with col_f3:
         jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
     jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos)
 
-# RECALCULAR TARGETS 100% CON LA FÓRMULA DE CONTEXTO DURO: (MEDIA + MÁXIMO) / 2
+# REFERENCIA GLOBAL DE CABECERA/BULLETS SEGÚN DESPLEGABLES SUPERIORES
 target_refs_global = {}
 if not df_partidos.empty:
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
@@ -369,43 +411,15 @@ if not df_partidos.empty:
     for m in metricas_todas:
         if not df_ref_base.empty and df_ref_base[m].mean() != 0:
             if m == 'Dec_Max':
-                # Para desaceleración máxima (valores negativos), el pico más exigente es el mínimo
-                pico_max = df_ref_base[m].min()
-                media_m = df_ref_base[m].mean()
-                target_refs_global[m] = (media_m + pico_max) / 2
+                target_refs_global[m] = (df_ref_base[m].mean() + df_ref_base[m].min()) / 2
             else:
-                pico_max = df_ref_base[m].max()
-                media_m = df_ref_base[m].mean()
-                target_refs_global[m] = (media_m + pico_max) / 2
+                target_refs_global[m] = (df_ref_base[m].mean() + df_ref_base[m].max()) / 2
         else:
             target_refs_global[m] = fallbacks_profesionales[m]
 else:
     for m in metricas_todas: target_refs_global[m] = fallbacks_profesionales[m]
 
-for m in metricas_todas:
-    if target_refs_global[m] == 0: target_refs_global[m] = fallbacks_profesionales[m]
-
-for m in metricas_todas:
-    if m in ['Dist_28', 'Sprints']:
-        df_master[f'Target_Min_Pct_{m}'] = 100
-        df_master[f'Target_Max_Pct_{m}'] = 100
-        df_master[f'Target_Min_{m}'] = target_refs_global[m]
-        df_master[f'Target_Max_{m}'] = target_refs_global[m]
-        df_master[f'Target_{m}'] = target_refs_global[m]
-    elif m in ['Acc_Max', 'Dec_Max', 'Top_Speed']:
-        df_master[f'Target_Min_Pct_{m}'] = 0
-        df_master[f'Target_Max_Pct_{m}'] = 0
-        df_master[f'Target_Min_{m}'] = 0
-        df_master[f'Target_Max_{m}'] = 0
-        df_master[f'Target_{m}'] = 0
-    else:
-        df_master[f'Target_Min_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[0], axis=1)
-        df_master[f'Target_Max_Pct_{m}'] = df_master.apply(lambda r: get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])[1], axis=1)
-        df_master[f'Target_Min_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Min_Pct_{m}'] / 100), axis=1)
-        df_master[f'Target_Max_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (r[f'Target_Max_Pct_{m}'] / 100), axis=1)
-        df_master[f'Target_{m}'] = df_master.apply(lambda r: target_refs_global[m] * (sum(get_target_range(m, r['Tipo_Dia_Oficial'], r['Jugo_60_Ultimo_Partido'])) / 200), axis=1)
-
-# APLICAR FILTROS GLOBALES
+# APLICAR FILTROS GLOBALES DE PANTALLA
 df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
@@ -471,14 +485,18 @@ for jug in df_sem['Nombre'].unique():
             jugadores_vmax_peligro.append((jug, hits_vmax))
         
     for m_key in metricas_alerta.keys():
-        expected_min = df_j[f'Target_Min_Pct_{m_key}'].sum()
-        expected_max = df_j[f'Target_Max_Pct_{m_key}'].sum()
+        expected_min = df_j[f'Target_Min_{m_key}'].sum()
+        expected_max = df_j[f'Target_Max_{m_key}'].sum()
         actual_abs = df_j[m_key].sum()
-        ref_partido = target_refs_global[m_key]
-        actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
         
-        if expected_min > 0 and actual_pct < (expected_min * 0.80):
-            texto_alerta = f"{actual_pct:.0f}% / {expected_min:.0f}-{expected_max:.0f}%"
+        pos_jug = df_j['Posicion'].iloc[0] if not df_j.empty else 'Sin Posición'
+        ref_partido = dict_ref_posicion.get(pos_jug, fallbacks_profesionales).get(m_key, fallbacks_profesionales[m_key])
+        
+        if expected_min > 0 and actual_abs < (expected_min * 0.80):
+            actual_pct = (actual_abs / ref_partido * 100) if ref_partido > 0 else 0
+            exp_pct_min = (expected_min / ref_partido * 100) if ref_partido > 0 else 0
+            exp_pct_max = (expected_max / ref_partido * 100) if ref_partido > 0 else 0
+            texto_alerta = f"{actual_pct:.0f}% / {exp_pct_min:.0f}-{exp_pct_max:.0f}%"
             alertas_metricas[m_key].append((jug, texto_alerta))
 
 total_avisos_micro = len(jugadores_vmax_peligro) + sum(len(lista) for lista in alertas_metricas.values())
@@ -841,7 +859,8 @@ if not df_sesion_tabla.empty:
                 html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
             
             elif m in ['Dist_28', 'Sprints']:
-                t_ref = target_refs_global[m]
+                pos_jug = pos
+                t_ref = dict_ref_posicion.get(pos_jug, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
                 diff_text = ""
                 if val < t_ref:
                     diff = t_ref - val
