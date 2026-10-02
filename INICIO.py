@@ -199,14 +199,18 @@ def analizar_datos_completos():
         df_well['Fecha_Dia'] = df_well['Fecha_Real'].dt.date
         df_well['Nombre_Clean'] = df_well['NOMBRE Y APELLIDOS'].fillna('Anónimo').astype(str).str.strip()
         
-        # CÓDIGO MEJORADO (Toma la plantilla real de Posiciones.xlsx):
-ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
-if os.path.exists(ruta_posiciones):
-    df_pos_plantilla = pd.read_excel(ruta_posiciones)
-    # Formatea nombres para que coincidan (ej. espacios en lugar de guiones bajos si aplica)
-    plantilla_completa = sorted(df_pos_plantilla['Jugador'].dropna().astype(str).str.strip().tolist())
-else:
-    plantilla_completa = sorted(list(set(df_rpe['Nombre_Clean'].unique()).union(set(df_well['Nombre_Clean'].unique()))))
+        # Cargar plantilla oficial desde Posiciones.xlsx para evitar mostrar jugadores eliminados
+        ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
+        if os.path.exists(ruta_posiciones):
+            try:
+                df_pos_plantilla = pd.read_excel(ruta_posiciones)
+                df_pos_plantilla.columns = df_pos_plantilla.columns.str.strip()
+                col_jugador = 'Jugador' if 'Jugador' in df_pos_plantilla.columns else df_pos_plantilla.columns[0]
+                plantilla_completa = sorted(df_pos_plantilla[col_jugador].dropna().astype(str).str.strip().tolist())
+            except Exception:
+                plantilla_completa = sorted(list(set(df_rpe['Nombre_Clean'].unique()).union(set(df_well['Nombre_Clean'].unique()))))
+        else:
+            plantilla_completa = sorted(list(set(df_rpe['Nombre_Clean'].unique()).union(set(df_well['Nombre_Clean'].unique()))))
         
         # --- PROCESAMIENTO WELLNESS ---
         ultima_fecha_well = df_well['Fecha_Dia'].max()
