@@ -232,11 +232,12 @@ if not df_rpe.empty:
         lambda r: 'Partido' if r['Fecha'] in fechas_partidos_cal or 'partido' in str(r['Tipo_Dia_Oficial']).lower() else r['Tipo_Dia_Oficial'], axis=1
     )
     
-    df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']]
+    df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']].drop_duplicates(subset=['Fecha', 'Nombre_Cruce'], keep='last')
     df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
     
     df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
+    df_master['Minutos_RPE'] = np.where(df_master['Minutos_RPE'] > 0, df_master['Minutos_RPE'], df_master['Duracion_GPS'])
 else:
     df_master = df_gps.copy()
     df_master['Tipo_Dia_Oficial'] = df_master['Fecha'].apply(lambda f: 'Partido' if f in fechas_partidos_cal else 'Entreno')
@@ -578,10 +579,8 @@ opciones_grafico = {
     'Player Load': 'Player_Load'
 }
 
-if pos_sel == "Equipo Completo" and jug_sel == "Todos":
-    df_hist_eq = df_28d[df_28d['Valido_Media']==True].copy()
-else:
-    df_hist_eq = df_28d.copy()
+# Criterio unificado: filtrar siempre por Valido_Media (partidos >= 60 min, entrenos normales)
+df_hist_eq = df_28d[df_28d['Valido_Media'] == True].copy()
 
 df_vmax_hoy = df_sesion.merge(vmax_hist, on='Nombre', how='left')
 df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_vmax_hoy['Top_Speed']/df_vmax_hoy['Vmax_4_semanas'])*100, 0)
@@ -672,11 +671,12 @@ with c_info:
         else: st.caption("Ninguno")
 
 # =============================================================================
-# 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO)
+# 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO - CRITERIO UNIFICADO)
 # =============================================================================
-medias_sesion = {m: df_sesion[m].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
-target_programado_min = {m: df_sesion[f'Target_Min_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
-target_programado_max = {m: df_sesion[f'Target_Max_{m}'].mean() if not df_sesion.empty else 0.0 for m in metricas_todas}
+df_sesion_validos = df_sesion[df_sesion['Valido_Media'] == True] if not df_sesion.empty else df_sesion
+medias_sesion = {m: df_sesion_validos[m].mean() if not df_sesion_validos.empty else 0.0 for m in metricas_todas}
+target_programado_min = {m: df_sesion_validos[f'Target_Min_{m}'].mean() if not df_sesion_validos.empty else 0.0 for m in metricas_todas}
+target_programado_max = {m: df_sesion_validos[f'Target_Max_{m}'].mean() if not df_sesion_validos.empty else 0.0 for m in metricas_todas}
 
 def pintar_bullet(metrica, nombre_mostrar, row_col):
     val = medias_sesion.get(metrica, 0)
