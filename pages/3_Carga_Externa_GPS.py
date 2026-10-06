@@ -81,7 +81,7 @@ def obtener_rpe_maestro():
 
         df_rpe['Fecha'] = pd.to_datetime(df_rpe[col_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
         df_rpe['Nombre_Cruce'] = df_rpe[col_n].fillna('Anónimo').astype(str).str.strip().str.lower()
-        df_rpe['Tipo_Dia_Oficial'] = df_rpe[col_t].fillna('Entreno').astype(str).str.strip().str.title()
+        df_rpe['Tipo_Dia_Oficial'] = df_rpe[col_t].fillna('Entreno').astype(str).str.strip()
         
         if col_min: df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe[col_min], errors='coerce').fillna(0)
         else: df_rpe['Minutos_RPE'] = 0
@@ -211,7 +211,7 @@ def obtener_calendario_partidos():
         return pd.DataFrame()
 
 # =============================================================================
-# 3. PROCESAMIENTO Y MODELO DE JUEGO (DETERMINACIÓN DOBLE DE PARTIDO)
+# 3. PROCESAMIENTO Y MODELO DE JUEGO
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
@@ -258,10 +258,10 @@ for _, row in df_master.iterrows():
         ultimos_mins_partido[jugador] = mins
         validez.append(mins >= 60)
         jugo_mas_60.append(mins >= 60)
-    elif '+1' in tipo or '+2' in tipo:
-        ult_mins = ultimos_mins_partido.get(jugador, 0)
-        validez.append(ult_mins < 60)
-        jugo_mas_60.append(ult_mins >= 60)
+    elif 'compensatorio' in tipo or '+1' in tipo or '+2' in tipo:
+        # En sesiones compensatorias solo hay GPS de suplentes (<60 min)
+        validez.append(True)
+        jugo_mas_60.append(False)
     else:
         validez.append(True)
         jugo_mas_60.append(False)
@@ -270,7 +270,7 @@ df_master['Valido_Media'] = validez
 df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 
 # =============================================================================
-# CÁLCULO DE CARGA (sRPE)
+# CÁLCULO DE CARGA (sRPE) Y RANGOS OBJETIVO
 # =============================================================================
 df_master['Carga_UA'] = df_master['Minutos_RPE'] * df_master['RPE_G']
 
@@ -282,41 +282,57 @@ if st.session_state.fecha_maestra not in fechas_disp:
 def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
-    is_plus = '+1' in t or '+2' in t
-    is_minus = '-4' in t or '-3' in t or '-2' in t or '-1' in t or '4' in t or '3' in t or '2' in t or '1' in t
     
-    if not (is_plus or is_minus): return (0, 0)
+    # 1. SI LA SESIÓN ES COMPENSATORIA O D+1 PARA JUGADORES QUE NO JUGARON >60 MIN
+    if 'compensatorio' in t or (('+1' in t or '+2' in t) and not jugo_60):
+        if metrica == 'Dist_Total': return (55, 65)
+        elif metrica == 'Dist_18': return (40, 50)
+        elif metrica == 'Dist_25': return (30, 45)
+        elif metrica in ['Accels', 'Decels']: return (60, 70)
+        elif metrica == 'Player_Load': return (55, 65)
+        return (0, 0)
+
+    # 2. DÍAS +1 O +2 PARA REGENERATIVO DE TITULARES
+    if ('+1' in t or '+2' in t) and jugo_60:
+        if metrica == 'Dist_Total': return (20, 30)
+        elif metrica == 'Dist_18': return (0, 30)
+        elif metrica == 'Dist_25': return (0, 10)
+        elif metrica in ['Accels', 'Decels']: return (10, 30)
+        elif metrica == 'Player_Load': return (20, 30)
+        return (0, 0)
+
+    # 3. DÍAS PREVIOS AL PARTIDO (MD-4, MD-3, MD-2, MD-1)
+    is_4 = '-4' in t or 'md-4' in t or '4' in t
+    is_3 = '-3' in t or 'md-3' in t or '3' in t
+    is_2 = '-2' in t or 'md-2' in t or '2' in t
+    is_1 = '-1' in t or 'md-1' in t or '1' in t
     
     if metrica == 'Dist_Total':
-        if '4' in t: return (45, 55)
-        if '3' in t: return (50, 65)
-        if '2' in t: return (10, 20)  # MD-2 Día OFF / Muy leve
-        if '1' in t: return (20, 30)  # MD-1 Activación / Intro al partido
-        if is_plus: return (20, 30) if jugo_60 else (55, 65)
+        if is_4: return (45, 55)
+        if is_3: return (50, 65)
+        if is_2: return (10, 20)
+        if is_1: return (20, 30)
     elif metrica == 'Dist_18':
-        if '4' in t: return (25, 40)  # Trabajo de fuerza / espacio reducido
-        if '3' in t: return (55, 70)  # Calibrado a 1h de campo en MD-3
-        if '2' in t: return (0, 10)
-        if '1' in t: return (15, 25)
-        if is_plus: return (0, 30) if jugo_60 else (40, 50)
+        if is_4: return (25, 40)
+        if is_3: return (55, 70)
+        if is_2: return (0, 10)
+        if is_1: return (15, 25)
     elif metrica == 'Dist_25':
-        if '4' in t: return (0, 15)
-        if '3' in t: return (40, 75)
-        if '2' in t: return (0, 5)
-        if '1' in t: return (5, 15)
-        if is_plus: return (0, 10) if jugo_60 else (30, 45)
+        if is_4: return (0, 15)
+        if is_3: return (40, 75)
+        if is_2: return (0, 5)
+        if is_1: return (5, 15)
     elif metrica in ['Accels', 'Decels']:
-        if '4' in t: return (60, 75)  # Alto en MD-4 por aceleraciones/frenadas en espacio reducido
-        if '3' in t: return (50, 65)
-        if '2' in t: return (0, 15)
-        if '1' in t: return (15, 30)
-        if is_plus: return (10, 30) if jugo_60 else (60, 70) 
+        if is_4: return (60, 75)
+        if is_3: return (50, 65)
+        if is_2: return (0, 15)
+        if is_1: return (15, 30)
     elif metrica == 'Player_Load':
-        if '4' in t: return (55, 65)
-        if '3' in t: return (50, 65)
-        if '2' in t: return (10, 20)
-        if '1' in t: return (20, 30)
-        if is_plus: return (20, 30) if jugo_60 else (55, 65)
+        if is_4: return (55, 65)
+        if is_3: return (50, 65)
+        if is_2: return (10, 20)
+        if is_1: return (20, 30)
+        
     return (0, 0) 
 
 df_partidos = df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]
@@ -330,7 +346,7 @@ fallbacks_profesionales = {
 }
 
 # =============================================================================
-# CÁLCULO DE REFERENCIAS 100% POR DEMARCACIÓN TÁCTICA (CONTEXTO DURO)
+# CÁLCULO DE REFERENCIAS 100% POR DEMARCACIÓN TÁCTICA
 # =============================================================================
 dict_ref_posicion = {}
 if not df_partidos.empty:
@@ -349,7 +365,6 @@ if not df_partidos.empty:
             else:
                 dict_ref_posicion[pos_tag][m] = fallbacks_profesionales[m]
 
-# Asignar a cada fila en df_master los objetivos en metros/unidades según su posición individual
 def calc_target_min(row, m):
     pos = row['Posicion']
     ref_100 = dict_ref_posicion.get(pos, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
@@ -398,7 +413,6 @@ with col_f3:
         jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
     jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos)
 
-# REFERENCIA GLOBAL DE CABECERA/BULLETS SEGÚN DESPLEGABLES SUPERIORES
 target_refs_global = {}
 if not df_partidos.empty:
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
@@ -420,12 +434,10 @@ if not df_partidos.empty:
 else:
     for m in metricas_todas: target_refs_global[m] = fallbacks_profesionales[m]
 
-# APLICAR FILTROS GLOBALES DE PANTALLA
 df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
-# CÁLCULO DE MICROCICLO ACTUAL Y ANTERIOR
 df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
 if not df_partidos_prev.empty:
     last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
@@ -461,7 +473,6 @@ if jug_sel != "Todos":
     df_sem_prev = df_sem_prev[df_sem_prev['Nombre'] == jug_sel]
     df_28d = df_28d[df_28d['Nombre'] == jug_sel]
 
-# --- 1. ALERTAS MICROCICLO EVALUADAS DÍA A DÍA (SIN FALSOS POSITIVOS DE DÍAS FUTUROS) ---
 vmax_hist = df_28d.groupby('Nombre')['Top_Speed'].max().reset_index().rename(columns={'Top_Speed': 'Vmax_4_semanas'})
 df_sem = df_sem.merge(vmax_hist, on='Nombre', how='left')
 df_sem['Pct_Vmax'] = np.where(df_sem['Vmax_4_semanas'] > 0, (df_sem['Top_Speed'] / df_sem['Vmax_4_semanas']) * 100, 0)
@@ -524,7 +535,6 @@ with st.expander(f"🚨 ALERTAS MICROCICLO ({str_fechas_micro}) - {total_avisos_
     with cols_alertas[5]: st.markdown(generar_lista_html("🔋 Desac.", alertas_metricas['Decels']), unsafe_allow_html=True)
     with cols_alertas[6]: st.markdown(generar_lista_html("🔋 Load", alertas_metricas['Player_Load']), unsafe_allow_html=True)
 
-# --- 2. ALERTAS MESOCICLO ---
 alertas_meso = []
 metricas_meso = {
     'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18 km/h', 'Dist_25': 'Dist. >25 km/h', 'Dist_28': 'Dist. >28 km/h',
@@ -563,7 +573,6 @@ st.markdown("---")
 tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper() if not df_master[df_master['Fecha'] == fecha_sel].empty else "ENTRENO"
 duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()) if not df_sesion.empty else 0
 
-# --- HISTÓRICO 28 DÍAS DINÁMICO ---
 opciones_grafico = {
     'Carga General (sRPE)': 'Carga_UA',
     'Dist. Total': 'Dist_Total',
@@ -579,7 +588,6 @@ opciones_grafico = {
     'Player Load': 'Player_Load'
 }
 
-# Criterio unificado: filtrar siempre por Valido_Media (partidos >= 60 min, entrenos normales)
 df_hist_eq = df_28d[df_28d['Valido_Media'] == True].copy()
 
 df_vmax_hoy = df_sesion.merge(vmax_hist, on='Nombre', how='left')
@@ -671,7 +679,7 @@ with c_info:
         else: st.caption("Ninguno")
 
 # =============================================================================
-# 5. BULLET CHARTS (MEDIA DE SESIÓN VS RANGO PROGRAMADO - CRITERIO UNIFICADO)
+# 5. BULLET CHARTS
 # =============================================================================
 df_sesion_validos = df_sesion[df_sesion['Valido_Media'] == True] if not df_sesion.empty else df_sesion
 medias_sesion = {m: df_sesion_validos[m].mean() if not df_sesion_validos.empty else 0.0 for m in metricas_todas}
