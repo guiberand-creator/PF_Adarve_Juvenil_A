@@ -244,16 +244,32 @@ else:
     # 8. PANEL GRÁFICO DINÁMICO ADAPTATIVO
     # ==========================================
     if not df_cruzado.empty:
+        # Generar anotaciones superiores con la media de Wellness en negrita y color condicional
+        anotaciones_media_wellness = []
+        for _, r_ann in df_cruzado.iterrows():
+            w_avg = r_ann['WELLNESS_TOTAL']
+            z_val = r_ann['Z_SCORE_WELLNESS']
+            color_w = "#2ECC71" if w_avg >= 3.0 else "#E74C3C"
+            y_pos = max(z_val, 0)
+            anotaciones_media_wellness.append(dict(
+                x=r_ann['JUGADOR'],
+                y=y_pos,
+                text=f"<b>{w_avg:.1f}</b>",
+                showarrow=False,
+                font=dict(color=color_w, size=13),
+                yanchor="bottom",
+                yshift=4
+            ))
+
         if tiene_saltos_hoy:
             col_g1, col_g2 = st.columns(2)
             
             with col_g1:
                 fig_bar = go.Figure()
-                textos_well_saltos = [f"W: {w:.1f} (Z: {z:.1f})" for w, z in zip(df_cruzado['WELLNESS_TOTAL'], df_cruzado['Z_SCORE_WELLNESS'])]
                 fig_bar.add_trace(go.Bar(
                     x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
                     name='Wellness (15s móvil)', marker_color='#00A8E8',
-                    text=textos_well_saltos, textposition='auto', hoverinfo='skip'
+                    text=df_cruzado['Z_SCORE_WELLNESS'].round(1), textposition='auto', hoverinfo='skip'
                 ))
                 fig_bar.add_trace(go.Bar(
                     x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_SALTO'],
@@ -264,8 +280,9 @@ else:
                 fig_bar.update_layout(
                     title="Estado Percibido (Wellness) vs Fatiga Neuromuscular (Drop Jump)",
                     xaxis_title="Jugadores analizados", yaxis_title="Z-Score", barmode='group',
-                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(range=[-3.1, 3.1]),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), height=500
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(range=[-3.1, 3.5]),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), height=500,
+                    annotations=anotaciones_media_wellness
                 )
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
@@ -313,12 +330,10 @@ else:
                 elif -2.5 <= val < -1.5: colores_wellness_barras.append('#D35400')
                 elif val < -2.5: colores_wellness_barras.append('#B31F24')
                 else: colores_wellness_barras.append('#2ECC71')
-            
-            textos_wellness_barras = [f"W: {w:.1f} (Z: {z:.2f})" for w, z in zip(df_cruzado['WELLNESS_TOTAL'], df_cruzado['Z_SCORE_WELLNESS'])]
                     
             fig_bar_only.add_trace(go.Bar(
                 x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
-                marker_color=colores_wellness_barras, text=textos_wellness_barras,
+                marker_color=colores_wellness_barras, text=df_cruzado['Z_SCORE_WELLNESS'].round(2),
                 textposition='auto', name='Z-Score Wellness'
             ))
             fig_bar_only.add_shape(type="line", x0=-0.5, x1=len(df_cruzado)-0.5, y0=-1.5, y1=-1.5, line=dict(color="#D35400", width=1.5, dash="dash"))
@@ -328,7 +343,8 @@ else:
                 title=f"Desviación de Wellness Individual el {fecha_seleccionada.strftime('%d/%m/%Y')} (Sin test de salto registrado)",
                 xaxis_title="Plantilla Analizada", yaxis_title="Z-Score de Carga Interna (Wellness)",
                 template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                yaxis=dict(range=[min(df_cruzado['Z_SCORE_WELLNESS'].min() - 0.5, -3.0), max(df_cruzado['Z_SCORE_WELLNESS'].max() + 0.5, 3.0)]), height=500
+                yaxis=dict(range=[min(df_cruzado['Z_SCORE_WELLNESS'].min() - 0.5, -3.0), max(df_cruzado['Z_SCORE_WELLNESS'].max() + 0.8, 3.5)]), height=500,
+                annotations=anotaciones_media_wellness
             )
             st.plotly_chart(fig_bar_only, use_container_width=True)
     else:
@@ -341,7 +357,6 @@ else:
     st.markdown(f"### Molestias pre-sesión ({fecha_seleccionada.strftime('%d/%m/%Y')})")
     st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
 
-    # Consideramos disponible a cualquier jugador que NO haya marcado "no" en la disponibilidad
     df_disp = df_cruzado[~df_cruzado['DISPONIBLE'].str.startswith('no', na=False)].copy()
     total_disponibles = len(df_disp)
 
@@ -355,7 +370,6 @@ else:
         jugs_duele_todo = []
         jugs_con_alguna_molestia = []
 
-        # Conteo por jugador
         for _, r in df_disp.iterrows():
             j_nom = r['JUGADOR']
             z_resp = str(r['ZONA_DOLOR']).strip()
@@ -378,7 +392,6 @@ else:
         pct_alguna_molestia = (len(jugs_con_alguna_molestia) / total_disponibles) * 100
         pct_duele_todo = (len(jugs_duele_todo) / total_disponibles) * 100
 
-        # --- TARJETAS DESTACADAS DE ESTADO GENERAL (4 COLUMNAS) ---
         c_tot1, c_tot2, c_tot3, c_tot4 = st.columns(4)
         with c_tot1:
             st.metric("🏃 Plantilla Disponible Hoy", f"{total_disponibles} jugadores")
@@ -392,9 +405,6 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("#### Molestias Musculares: Zonas y jugadores afectados")
 
-        # --- LISTA UNIFICADA DE DESPLEGABLES ---
-
-        # 1. Sin molestias
         with st.expander(f"🟢 **Sin Molestias Musculares**: {pct_sin_molestia:.1f}% ({len(jugs_sin_molestia)} jug.)"):
             st.progress(min(pct_sin_molestia / 100.0, 1.0))
             if jugs_sin_molestia:
@@ -409,7 +419,6 @@ else:
             else:
                 st.caption("Ningún jugador ha reportado estar 100% libre de molestias.")
 
-        # 2. Las 5 Zonas Musculares
         for z in zonas_especificas:
             jugs = dict_conteo_zonas[z]
             num_j = len(jugs)
@@ -434,7 +443,6 @@ else:
                 else:
                     st.caption("Sin molestias registradas en esta zona.")
 
-        # 3. Me duele todo
         with st.expander(f"💥 **Fatiga Generalizada (Me Duele Todo)**: {pct_duele_todo:.1f}% ({len(jugs_duele_todo)} jug.)"):
             st.progress(min(pct_duele_todo / 100.0, 1.0))
             if jugs_duele_todo:
@@ -529,11 +537,3 @@ else:
         subset_wellness = ['SUEÑO', 'DOLOR MUSCULAR', 'ESTRÉS', 'CARGA ACUMULADA', 'MEDIA WELLNESS']
         
         df_estilizado = df_final.style.map(colorear_celdas_criticas, subset=subset_wellness)
-        if tiene_saltos_hoy:
-            df_estilizado = df_estilizado.map(colorear_dri_caida, subset=['DRI MEDIO'])
-            
-        df_estilizado = df_estilizado.map(colorear_molestias_activas, subset=['ZONA DE MOLESTIA']).format({
-            'SUEÑO': "{:.1f}", 'DOLOR MUSCULAR': "{:.1f}", 'ESTRÉS': "{:.1f}", 'CARGA ACUMULADA': "{:.1f}", 'MEDIA WELLNESS': "{:.1f}"
-        })
-        
-        st.dataframe(df_estilizado, use_container_width=True, height=450)
