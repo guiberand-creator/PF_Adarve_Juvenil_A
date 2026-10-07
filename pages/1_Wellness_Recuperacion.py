@@ -249,10 +249,11 @@ else:
             
             with col_g1:
                 fig_bar = go.Figure()
+                textos_well_saltos = [f"W: {w:.1f} (Z: {z:.1f})" for w, z in zip(df_cruzado['WELLNESS_TOTAL'], df_cruzado['Z_SCORE_WELLNESS'])]
                 fig_bar.add_trace(go.Bar(
                     x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
                     name='Wellness (15s móvil)', marker_color='#00A8E8',
-                    text=df_cruzado['Z_SCORE_WELLNESS'].round(1), textposition='auto', hoverinfo='skip'
+                    text=textos_well_saltos, textposition='auto', hoverinfo='skip'
                 ))
                 fig_bar.add_trace(go.Bar(
                     x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_SALTO'],
@@ -312,10 +313,12 @@ else:
                 elif -2.5 <= val < -1.5: colores_wellness_barras.append('#D35400')
                 elif val < -2.5: colores_wellness_barras.append('#B31F24')
                 else: colores_wellness_barras.append('#2ECC71')
+            
+            textos_wellness_barras = [f"W: {w:.1f} (Z: {z:.2f})" for w, z in zip(df_cruzado['WELLNESS_TOTAL'], df_cruzado['Z_SCORE_WELLNESS'])]
                     
             fig_bar_only.add_trace(go.Bar(
                 x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
-                marker_color=colores_wellness_barras, text=df_cruzado['Z_SCORE_WELLNESS'].round(2),
+                marker_color=colores_wellness_barras, text=textos_wellness_barras,
                 textposition='auto', name='Z-Score Wellness'
             ))
             fig_bar_only.add_shape(type="line", x0=-0.5, x1=len(df_cruzado)-0.5, y0=-1.5, y1=-1.5, line=dict(color="#D35400", width=1.5, dash="dash"))
