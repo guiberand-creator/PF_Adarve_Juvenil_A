@@ -262,4 +262,302 @@ else:
             ))
 
         min_z_val = df_cruzado['Z_SCORE_WELLNESS'].min()
-        max_z_val = df_
+        max_z_val = df_cruzado['Z_SCORE_WELLNESS'].max()
+
+        if tiene_saltos_hoy:
+            col_g1, col_g2 = st.columns(2)
+            
+            with col_g1:
+                fig_bar = go.Figure()
+                textos_z_score_well = [f"Z: {z:.1f}" for z in df_cruzado['Z_SCORE_WELLNESS']]
+                fig_bar.add_trace(go.Bar(
+                    x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
+                    name='Wellness (15s móvil)', marker_color='#00A8E8',
+                    text=textos_z_score_well, textposition='auto', hoverinfo='skip'
+                ))
+                fig_bar.add_trace(go.Bar(
+                    x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_SALTO'],
+                    name='Salto DRI (4s móvil)', marker_color='#FFC107',
+                    text=[f"Z: {z:.1f}" if pd.notna(z) else "" for z in df_cruzado['Z_SCORE_SALTO']],
+                    textposition='auto', hoverinfo='skip'
+                ))
+                fig_bar.add_shape(type="line", x0=-0.5, x1=len(df_cruzado)-0.5, y0=-1.5, y1=-1.5, line=dict(color="#B31F24", width=2, dash="dash"))
+                fig_bar.update_layout(
+                    title="Estado Percibido (Wellness) vs Fatiga Neuromuscular (Drop Jump)",
+                    xaxis_title="Jugadores analizados", yaxis_title="Z-Score", barmode='group',
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    yaxis=dict(range=[min(min_z_val - 0.6, -3.2), max(max_z_val + 1.2, 4.0)]),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), height=500,
+                    annotations=anotaciones_media_wellness
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+            with col_g2:
+                fig_scatter = go.Figure()
+                textos_hover_scatter = []
+                for _, row in df_cruzado.iterrows():
+                    estado_txt = "🚑 Enfermería" if row['DISPONIBLE'] == 'no' else "🟢 Disponible"
+                    hover_html = (
+                        f"<b>Jugador:</b> {row['JUGADOR']}<br>"
+                        f"<b>Wellness Z-Score (15s):</b> {round(row['Z_SCORE_WELLNESS'], 2)}<br>"
+                        f"<b>Salto Z-Score (4s):</b> {round(row['Z_SCORE_SALTO'], 2) if pd.notna(row['Z_SCORE_SALTO']) else '-'}<br>"
+                        f"<b>Molestia:</b> {row['ZONA_DOLOR']}<br>"
+                        f"<b>Estado:</b> {estado_txt}"
+                    )
+                    textos_hover_scatter.append(hover_html)
+                    
+                fig_scatter.add_trace(go.Scatter(
+                    x=df_cruzado['Z_SCORE_WELLNESS'], y=df_cruzado['Z_SCORE_SALTO'],
+                    mode='markers+text', text=df_cruzado['JUGADOR'], textposition='top center',
+                    hovertext=textos_hover_scatter, hoverinfo='text',
+                    marker=dict(size=14, color=np.where(df_cruzado['Z_SCORE_SALTO'] < -1.5, '#B31F24', '#00A8E8'), line=dict(width=1.5, color='white')),
+                    name='Jugador'
+                ))
+                fig_scatter.add_vline(x=0, line_dash="dash", line_color="rgba(255,255,255,0.25)", line_width=1)
+                fig_scatter.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.25)", line_width=1)
+                fig_scatter.add_annotation(x=1.6, y=1.6, text="🟢 RECUPERADO", showarrow=False, font=dict(color="#2ECC71", size=10, weight="bold"))
+                fig_scatter.add_annotation(x=-1.6, y=1.6, text="🟡 FATIGA PERCIBIDA", showarrow=False, font=dict(color="#FFC107", size=10, weight="bold"))
+                fig_scatter.add_annotation(x=1.6, y=-1.6, text="🟠 RIESGO OCULTO (SNC)", showarrow=False, font=dict(color="#D35400", size=10, weight="bold"))
+                fig_scatter.add_annotation(x=-1.6, y=-1.6, text="🔴 FATIGA INTEGRAL", showarrow=False, font=dict(color="#B31F24", size=10, weight="bold"))
+                fig_scatter.update_layout(
+                    title="Matriz de Readiness",
+                    xaxis_title="← Más Fatiga Subjetiva | Wellness Z-Score | Más Frescura →",
+                    yaxis_title="← Fatiga Central (SNC) | Salto Z-Score (DRI) | SNC Óptimo →",
+                    template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(range=[-3.2, 3.2]), yaxis=dict(range=[-3.2, 3.2]),
+                    height=500, showlegend=False
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+                
+        else:
+            fig_bar_only = go.Figure()
+            colores_wellness_barras = []
+            for val in df_cruzado['Z_SCORE_WELLNESS']:
+                if -1.5 <= val <= 1.5: colores_wellness_barras.append('#00A8E8')
+                elif -2.5 <= val < -1.5: colores_wellness_barras.append('#D35400')
+                elif val < -2.5: colores_wellness_barras.append('#B31F24')
+                else: colores_wellness_barras.append('#2ECC71')
+            
+            textos_z_score_wellness = [f"Z: {z:.2f}" for z in df_cruzado['Z_SCORE_WELLNESS']]
+                    
+            fig_bar_only.add_trace(go.Bar(
+                x=df_cruzado['JUGADOR'], y=df_cruzado['Z_SCORE_WELLNESS'],
+                marker_color=colores_wellness_barras, text=textos_z_score_wellness,
+                textposition='auto', name='Z-Score Wellness'
+            ))
+            fig_bar_only.add_shape(type="line", x0=-0.5, x1=len(df_cruzado)-0.5, y0=-1.5, y1=-1.5, line=dict(color="#D35400", width=1.5, dash="dash"))
+            fig_bar_only.add_shape(type="line", x0=-0.5, x1=len(df_cruzado)-0.5, y0=-2.5, y1=-2.5, line=dict(color="#B31F24", width=1.5, dash="dot"))
+            
+            fig_bar_only.update_layout(
+                title=f"Desviación de Wellness Individual el {fecha_seleccionada.strftime('%d/%m/%Y')} (Sin test de salto registrado)",
+                xaxis_title="Plantilla Analizada", yaxis_title="Z-Score de Carga Interna (Wellness)",
+                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(range=[min(min_z_val - 0.6, -3.2), max(max_z_val + 1.2, 4.0)]), height=500,
+                annotations=anotaciones_media_wellness
+            )
+            st.plotly_chart(fig_bar_only, use_container_width=True)
+    else:
+        st.info("No hay registros de Wellness para este día.")
+
+    # ==========================================
+    # 9. DESGLOSE DE MOLESTIAS Y CARGA MUSCULAR (UNIFICADO)
+    # ==========================================
+    st.markdown("---")
+    st.markdown(f"### Molestias pre-sesión ({fecha_seleccionada.strftime('%d/%m/%Y')})")
+    st.caption("Solo se contabilizan los jugadores DISPONIBLES para entrenar hoy (excluyendo bajas/lesionados).")
+
+    df_disp = df_cruzado[~df_cruzado['DISPONIBLE'].str.startswith('no', na=False)].copy()
+    total_disponibles = len(df_disp)
+
+    if total_disponibles == 0:
+        st.warning("⚠️ No hay jugadores disponibles en la sesión seleccionada.")
+    else:
+        zonas_especificas = ['Cuadriceps', 'Pubis', 'Adductores', 'Isquios', 'Gemelos']
+        dict_conteo_zonas = {z: [] for z in zonas_especificas}
+        
+        jugs_sin_molestia = []
+        jugs_duele_todo = []
+        jugs_con_alguna_molestia = []
+
+        for _, r in df_disp.iterrows():
+            j_nom = r['JUGADOR']
+            z_resp = str(r['ZONA_DOLOR']).strip()
+            z_resp_low = z_resp.lower()
+
+            if 'nada' in z_resp_low or z_resp_low in ['ninguna', '', 'nan', 'none', '-']:
+                jugs_sin_molestia.append(j_nom)
+            else:
+                jugs_con_alguna_molestia.append(j_nom)
+                if 'todo' in z_resp_low:
+                    jugs_duele_todo.append(j_nom)
+                    for z in zonas_especificas:
+                        dict_conteo_zonas[z].append(j_nom)
+                else:
+                    for z in zonas_especificas:
+                        if z.lower() in z_resp_low:
+                            dict_conteo_zonas[z].append(j_nom)
+
+        pct_sin_molestia = (len(jugs_sin_molestia) / total_disponibles) * 100
+        pct_alguna_molestia = (len(jugs_con_alguna_molestia) / total_disponibles) * 100
+        pct_duele_todo = (len(jugs_duele_todo) / total_disponibles) * 100
+
+        c_tot1, c_tot2, c_tot3, c_tot4 = st.columns(4)
+        with c_tot1:
+            st.metric("🏃 Plantilla Disponible Hoy", f"{total_disponibles} jugadores")
+        with c_tot2:
+            st.metric("🟢 Sin Molestias", f"{pct_sin_molestia:.1f}%", f"{len(jugs_sin_molestia)} jugadores")
+        with c_tot3:
+            st.metric("⚠️ Con Alguna Molestia", f"{pct_alguna_molestia:.1f}%", f"{len(jugs_con_alguna_molestia)} jugadores", delta_color="inverse")
+        with c_tot4:
+            st.metric("💥 Me Duele Todo", f"{pct_duele_todo:.1f}%", f"{len(jugs_duele_todo)} jugadores", delta_color="inverse")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### Molestias Musculares: Zonas y jugadores afectados")
+
+        with st.expander(f"🟢 **Sin Molestias Musculares**: {pct_sin_molestia:.1f}% ({len(jugs_sin_molestia)} jug.)"):
+            st.progress(min(pct_sin_molestia / 100.0, 1.0))
+            if jugs_sin_molestia:
+                col_j1, col_j2 = st.columns(2)
+                mitad_j = (len(jugs_sin_molestia) + 1) // 2
+                with col_j1:
+                    for j_nom in jugs_sin_molestia[:mitad_j]:
+                        st.markdown(f"• **{j_nom}**")
+                with col_j2:
+                    for j_nom in jugs_sin_molestia[mitad_j:]:
+                        st.markdown(f"• **{j_nom}**")
+            else:
+                st.caption("Ningún jugador ha reportado estar 100% libre de molestias.")
+
+        for z in zonas_especificas:
+            jugs = dict_conteo_zonas[z]
+            num_j = len(jugs)
+            pct = (num_j / total_disponibles) * 100
+            
+            if pct == 0: icono = "🟢"
+            elif pct < 20: icono = "🟡"
+            elif pct < 40: icono = "🟠"
+            else: icono = "🔴"
+
+            with st.expander(f"{icono} **{z}**: {pct:.1f}% ({num_j} jug. afectados)"):
+                st.progress(min(pct / 100.0, 1.0))
+                if jugs:
+                    col_j1, col_j2 = st.columns(2)
+                    mitad_j = (len(jugs) + 1) // 2
+                    with col_j1:
+                        for j_nom in jugs[:mitad_j]:
+                            st.markdown(f"• **{j_nom}**")
+                    with col_j2:
+                        for j_nom in jugs[mitad_j:]:
+                            st.markdown(f"• **{j_nom}**")
+                else:
+                    st.caption("Sin molestias registradas en esta zona.")
+
+        with st.expander(f"💥 **Fatiga Generalizada (Me Duele Todo)**: {pct_duele_todo:.1f}% ({len(jugs_duele_todo)} jug.)"):
+            st.progress(min(pct_duele_todo / 100.0, 1.0))
+            if jugs_duele_todo:
+                col_j1, col_j2 = st.columns(2)
+                mitad_j = (len(jugs_duele_todo) + 1) // 2
+                with col_j1:
+                    for j_nom in jugs_duele_todo[:mitad_j]:
+                        st.markdown(f"• 🔴 **{j_nom}**")
+                with col_j2:
+                    for j_nom in jugs_duele_todo[mitad_j:]:
+                        st.markdown(f"• 🔴 **{j_nom}**")
+            else:
+                st.caption("Ningún jugador ha marcado fatiga generalizada.")
+
+    # ==========================================
+    # 10. TABLA FIJA Y VISIBLE ADAPTATIVA E INTELIGENTE
+    # ==========================================
+    st.markdown("---")
+    st.markdown("### 📋 Desglose Analítico de Puntuaciones")
+    
+    if not df_cruzado.empty:
+        df_tabla = df_cruzado.copy()
+        
+        st.markdown("""
+            <style>
+            [data-testid="stDataFrame"] table { font-size: 14px !important; }
+            [data-testid="stDataFrame"] td { padding: 6px 10px !important; }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        def formatear_altura(row):
+            if pd.isna(row.get('Z_SCORE_SALTO')): return "-  ="
+            hoy = row.get('ALTURA_MEDIA_CM', 0)
+            return f"{hoy:.1f} 🔺" if row['Z_SCORE_SALTO'] > 0.1 else (f"{hoy:.1f} 🔻" if row['Z_SCORE_SALTO'] < -0.1 else f"{hoy:.1f} =")
+
+        def formatear_contacto(row):
+            if pd.isna(row.get('Z_SCORE_SALTO')): return "-  ="
+            hoy = row.get('TC_MEDIO_S', 0)
+            return f"{hoy:.3f} 🔺" if row['Z_SCORE_SALTO'] < -0.1 else (f"{hoy:.3f} 🔻" if row['Z_SCORE_SALTO'] > 0.1 else f"{hoy:.3f} =")
+
+        def formatear_dri(row):
+            if pd.isna(row.get('Z_SCORE_SALTO')): return "-  ="
+            hoy = row.get('DRI_MEDIO', 0)
+            return f"{hoy:.2f} 🔺" if row['Z_SCORE_SALTO'] > 0.1 else (f"{hoy:.2f} 🔻" if row['Z_SCORE_SALTO'] < -0.1 else f"{hoy:.2f} =")
+
+        df_tabla['ALTURA_TXT'] = df_tabla.apply(formatear_altura, axis=1)
+        df_tabla['CONTACTO_TXT'] = df_tabla.apply(formatear_contacto, axis=1)
+        df_tabla['DRI_TXT'] = df_tabla.apply(formatear_dri, axis=1)
+        
+        columnas_filtrar = ['JUGADOR', 'SUEÑO', 'DOLOR', 'ESTRÉS', 'CARGA', 'WELLNESS_TOTAL']
+        columnas_nombres = ['JUGADOR', 'SUEÑO', 'DOLOR MUSCULAR', 'ESTRÉS', 'CARGA ACUMULADA', 'MEDIA WELLNESS']
+        
+        if tiene_saltos_hoy:
+            columnas_filtrar += ['ALTURA_TXT', 'CONTACTO_TXT', 'DRI_TXT']
+            columnas_nombres += ['ALTURA (CM)', 'CONTACTO (S)', 'DRI MEDIO']
+            
+        columnas_filtrar += ['ZONA_DOLOR', 'DETALLE_DOLOR', 'Z_SCORE_SALTO']
+        columnas_nombres += ['ZONA DE MOLESTIA', 'DETALLE MOLESTIA', 'Z_SALTO_RAW']
+        
+        df_final = df_tabla[columnas_filtrar].copy()
+        df_final.columns = columnas_nombres
+        
+        def categorizar_alertas_cruzadas(row):
+            w_val = row['MEDIA WELLNESS']
+            z_salto = row.get('Z_SALTO_RAW')
+            if pd.isna(z_salto):
+                return "⚠️ Fatiga Subjetiva" if w_val < 3.0 else "🟢 Sin problemas"
+            if w_val < 3.0 and z_salto < -1.5: return "❌ Alerta Integral"
+            elif z_salto < -1.5: return "⚡ Alerta SNC (Neuromuscular)"
+            elif w_val < 3.0: return "⚠️ Fatiga Subjetiva"
+            return "🟢 Sin problemas"
+            
+        df_final['ESTADO'] = df_final.apply(categorizar_alertas_cruzadas, axis=1)
+        df_final = df_final.drop(columns=['Z_SALTO_RAW'])
+        df_final = df_final.sort_values(by='MEDIA WELLNESS', ascending=True).reset_index(drop=True)
+        
+        def colorear_celdas_criticas(val):
+            try:
+                if float(val) < 3.0: return 'background-color: rgba(179, 31, 36, 0.25); color: #FF8F8F; font-weight: bold;'
+            except ValueError: pass
+            return ''
+
+        def colorear_dri_caida(val):
+            if isinstance(val, str) and '🔻' in val: return 'background-color: rgba(179, 31, 36, 0.25); color: #FF8F8F; font-weight: bold;'
+            return ''
+
+        def colorear_molestias_activas(val):
+            if isinstance(val, str) and val.strip() != "" and "no me duele nada" not in val.lower() and val.lower() != "ninguna":
+                return 'background-color: rgba(179, 31, 36, 0.25); color: #FF8F8F; font-weight: bold;'
+            return ''
+
+        subset_wellness = ['SUEÑO', 'DOLOR MUSCULAR', 'ESTRÉS', 'CARGA ACUMULADA', 'MEDIA WELLNESS']
+        
+        df_estilizado = df_final.style
+        if hasattr(df_estilizado, 'map'):
+            df_estilizado = df_estilizado.map(colorear_celdas_criticas, subset=subset_wellness)
+            if tiene_saltos_hoy:
+                df_estilizado = df_estilizado.map(colorear_dri_caida, subset=['DRI MEDIO'])
+            df_estilizado = df_estilizado.map(colorear_molestias_activas, subset=['ZONA DE MOLESTIA'])
+        elif hasattr(df_estilizado, 'applymap'):
+            df_estilizado = df_estilizado.applymap(colorear_celdas_criticas, subset=subset_wellness)
+            if tiene_saltos_hoy:
+                df_estilizado = df_estilizado.applymap(colorear_dri_caida, subset=['DRI MEDIO'])
+            df_estilizado = df_estilizado.applymap(colorear_molestias_activas, subset=['ZONA DE MOLESTIA'])
+            
+        df_estilizado = df_estilizado.format({
+            'SUEÑO': "{:.1f}", 'DOLOR MUSCULAR': "{:.1f}", 'ESTRÉS': "{:.1f}", 'CARGA ACUMULADA': "{:.1f}", 'MEDIA WELLNESS': "{:.1f}"
+        })
+        
+        st.dataframe(df_estilizado, use_container_width=True, height=450)
