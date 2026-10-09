@@ -507,13 +507,16 @@ else:
             columnas_filtrar += ['ALTURA_TXT', 'CONTACTO_TXT', 'DRI_TXT']
             columnas_nombres += ['ALTURA (CM)', 'CONTACTO (S)', 'DRI MEDIO']
             
-        columnas_filtrar += ['ZONA_DOLOR', 'DETALLE_DOLOR', 'Z_SCORE_SALTO']
-        columnas_nombres += ['ZONA DE MOLESTIA', 'DETALLE MOLESTIA', 'Z_SALTO_RAW']
+        columnas_filtrar += ['ZONA_DOLOR', 'DETALLE_DOLOR', 'Z_SCORE_SALTO', 'DISPONIBLE']
+        columnas_nombres += ['ZONA DE MOLESTIA', 'DETALLE MOLESTIA', 'Z_SALTO_RAW', 'DISPONIBLE_RAW']
         
         df_final = df_tabla[columnas_filtrar].copy()
         df_final.columns = columnas_nombres
         
         def categorizar_alertas_cruzadas(row):
+            disp = str(row.get('DISPONIBLE_RAW', '')).strip().lower()
+            if disp.startswith('no'):
+                return "🚑 Enfermería"
             w_val = row['MEDIA WELLNESS']
             z_salto = row.get('Z_SALTO_RAW')
             if pd.isna(z_salto):
@@ -524,7 +527,7 @@ else:
             return "🟢 Sin problemas"
             
         df_final['ESTADO'] = df_final.apply(categorizar_alertas_cruzadas, axis=1)
-        df_final = df_final.drop(columns=['Z_SALTO_RAW'])
+        df_final = df_final.drop(columns=['Z_SALTO_RAW', 'DISPONIBLE_RAW'])
         df_final = df_final.sort_values(by='MEDIA WELLNESS', ascending=True).reset_index(drop=True)
         
         def colorear_celdas_criticas(val):
