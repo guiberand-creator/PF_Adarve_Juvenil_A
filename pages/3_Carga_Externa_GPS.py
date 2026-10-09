@@ -211,6 +211,39 @@ def obtener_calendario_partidos():
         return pd.DataFrame()
 
 # =============================================================================
+# HELPER CÁLCULO EWMA RATIO (AGUDO:CRÓNICO PONDERADO 7:21 DÍAS)
+# =============================================================================
+def calcular_acwr_ewma(df, metrica='Player_Load', dias_agudo=7, dias_cronico=21):
+    if df.empty or metrica not in df.columns: return pd.DataFrame()
+    
+    lista_dfs = []
+    fechas_min = pd.to_datetime(df['Fecha'].min())
+    fechas_max = pd.to_datetime(df['Fecha'].max())
+    fechas_completas = pd.date_range(start=fechas_min, end=fechas_max, freq='D')
+    
+    alpha_agudo = 2.0 / (dias_agudo + 1)
+    alpha_cronico = 2.0 / (dias_cronico + 1)
+    
+    for jug in df['Nombre'].unique():
+        df_j = df[df['Nombre'] == jug].copy()
+        df_j['Fecha_dt'] = pd.to_datetime(df_j['Fecha'])
+        
+        df_full = pd.DataFrame({'Fecha_dt': fechas_completas})
+        df_full = df_full.merge(df_j[['Fecha_dt', metrica, 'Nombre', 'Posicion']], on='Fecha_dt', how='left')
+        df_full['Nombre'] = jug
+        df_full[metrica] = df_full[metrica].fillna(0.0)
+        df_full['Fecha'] = df_full['Fecha_dt'].dt.strftime('%Y-%m-%d')
+        df_full['Posicion'] = df_full['Posicion'].ffill().bfill().fillna('Sin Posición')
+        
+        df_full['EWMA_Agudo'] = df_full[metrica].ewm(alpha=alpha_agudo, adjust=False).mean()
+        df_full['EWMA_Cronico'] = df_full[metrica].ewm(alpha=alpha_cronico, adjust=False).mean()
+        
+        df_full['ACWR'] = np.where(df_full['EWMA_Cronico'] > 1.0, df_full['EWMA_Agudo'] / df_full['EWMA_Cronico'], 0.0)
+        lista_dfs.append(df_full)
+        
+    return pd.concat(lista_dfs, ignore_index=True)
+
+# =============================================================================
 # 3. PROCESAMIENTO Y MODELO DE JUEGO
 # =============================================================================
 df_rpe = obtener_rpe_maestro()
@@ -259,7 +292,6 @@ for _, row in df_master.iterrows():
         validez.append(mins >= 60)
         jugo_mas_60.append(mins >= 60)
     elif 'compensatorio' in tipo or '+1' in tipo or '+2' in tipo:
-        # En sesiones compensatorias solo hay GPS de suplentes (<60 min)
         validez.append(True)
         jugo_mas_60.append(False)
     else:
@@ -283,7 +315,6 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     t = str(tipo_dia).lower()
     if 'partido' in t: return (100, 100)
     
-    # 1. SI LA SESIÓN ES COMPENSATORIA O D+1 PARA JUGADORES QUE NO JUGARON >60 MIN
     if 'compensatorio' in t or (('+1' in t or '+2' in t) and not jugo_60):
         if metrica == 'Dist_Total': return (55, 65)
         elif metrica == 'Dist_18': return (40, 50)
@@ -292,7 +323,6 @@ def get_target_range(metrica, tipo_dia, jugo_60):
         elif metrica == 'Player_Load': return (55, 65)
         return (0, 0)
 
-    # 2. DÍAS +1 O +2 PARA REGENERATIVO DE TITULARES
     if ('+1' in t or '+2' in t) and jugo_60:
         if metrica == 'Dist_Total': return (20, 30)
         elif metrica == 'Dist_18': return (0, 30)
@@ -301,7 +331,6 @@ def get_target_range(metrica, tipo_dia, jugo_60):
         elif metrica == 'Player_Load': return (20, 30)
         return (0, 0)
 
-    # 3. DÍAS PREVIOS AL PARTIDO (MD-4, MD-3, MD-2, MD-1)
     is_4 = '-4' in t or 'md-4' in t or '4' in t
     is_3 = '-3' in t or 'md-3' in t or '3' in t
     is_2 = '-2' in t or 'md-2' in t or '2' in t
@@ -913,6 +942,129 @@ if not df_sesion_tabla.empty:
     st.markdown(html, unsafe_allow_html=True)
 else:
     st.info("No hay datos para esta fecha.")
+
+# =============================================================================
+# 6.B RATIO AGUDO:CRÓNICO PONDERADO (ACWR EWMA 7:21 DÍAS)
+# =============================================================================
+st.markdown("---")
+st.markdown("### Ratio Agudo:Crónico PONDERADO (EWMA 7:21 Días)")
+st.caption("Carga Aguda (7d) vs Carga Crónica (21d) con ponderación exponencial. Los días recientes tienen mayor peso fisiológico.")
+
+opciones_metrica_acwr = {
+    'Player Load': 'Player_Load',
+    'Distancia Total (m)': 'Dist_Total',
+    'Distancia > 18 km/h (m)': 'Dist_18',
+    'Aceleraciones': 'Accels',
+    'Desaceleraciones': 'Decels'
+}
+
+col_ac1, col_ac2 = st.columns([2, 2])
+with col_ac1:
+    metrica_acwr_lbl = st.selectbox("🎯 Métrica para Ratio ACWR:", list(opciones_metrica_acwr.keys()), key="sel_metrica_acwr")
+with col_ac2:
+    jugadores_acwr_opt = ["Vista Plantilla (Foto 2)"] + sorted(list(df_master['Nombre'].unique()))
+    jugador_acwr_sel = st.selectbox("👤 Modo de Visualización:", jugadores_acwr_opt, key="sel_jugador_acwr")
+
+metrica_acwr_key = opciones_metrica_acwr[metrica_acwr_lbl]
+df_acwr_total = calcular_acwr_ewma(df_master, metrica=metrica_acwr_key, dias_agudo=7, dias_cronico=21)
+
+if not df_acwr_total.empty:
+    if jugador_acwr_sel == "Vista Plantilla (Foto 2)":
+        df_acwr_fecha = df_acwr_total[df_acwr_total['Fecha'] == fecha_sel].sort_values(by='ACWR', ascending=True)
+        
+        colores_acwr_bars = []
+        for r in df_acwr_fecha['ACWR']:
+            if 0.8 <= r <= 1.3: colores_acwr_bars.append('#2ECC71')
+            elif 1.3 < r <= 1.5: colores_acwr_bars.append('#F1C40F')
+            elif r > 1.5: colores_acwr_bars.append('#E74C3C')
+            else: colores_acwr_bars.append('#3498DB')
+
+        fig_team_acwr = go.Figure()
+        fig_team_acwr.add_trace(go.Bar(
+            x=df_acwr_fecha['Nombre'],
+            y=df_acwr_fecha['ACWR'],
+            marker_color=colores_acwr_bars,
+            text=[f"{r:.2f}" for r in df_acwr_fecha['ACWR']],
+            textposition='outside',
+            name='ACWR EWMA (7:21)'
+        ))
+
+        fig_team_acwr.add_hline(y=0.8, line=dict(color='#2ECC71', width=1.5, dash='dash'), annotation_text="0.8 Mín. Óptimo", annotation_position="bottom right")
+        fig_team_acwr.add_hline(y=1.3, line=dict(color='#2ECC71', width=1.5, dash='dash'), annotation_text="1.3 Máx. Óptimo", annotation_position="top right")
+        fig_team_acwr.add_hline(y=1.5, line=dict(color='#E74C3C', width=1.5, dash='dot'), annotation_text="1.5 Riesgo Alto (Sobrecarga)", annotation_position="top right")
+
+        max_acwr_fecha = df_acwr_fecha['ACWR'].max() if not df_acwr_fecha.empty else 1.5
+        fig_team_acwr.update_layout(
+            title=f"ACWR EWMA (7:21) por Jugador en la Sesión ({fecha_sel}) - {metrica_acwr_lbl}",
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(title="Ratio ACWR", range=[0, max(max_acwr_fecha * 1.25, 1.8)]),
+            xaxis=dict(tickangle=-45),
+            height=400
+        )
+        st.plotly_chart(fig_team_acwr, use_container_width=True)
+        
+        c_ley1, c_ley2, c_ley3, c_ley4 = st.columns(4)
+        with c_ley1: st.markdown("<div style='background-color:rgba(46, 204, 113, 0.2); padding:8px; border-left:4px solid #2ECC71; color:white; font-size:12px;'>🟢 <b>0.8 - 1.3:</b> Rango Óptimo</div>", unsafe_allow_html=True)
+        with c_ley2: st.markdown("<div style='background-color:rgba(241, 196, 15, 0.2); padding:8px; border-left:4px solid #F1C40F; color:white; font-size:12px;'>🟡 <b>1.31 - 1.50:</b> Tolerable Puntualmente</div>", unsafe_allow_html=True)
+        with c_ley3: st.markdown("<div style='background-color:rgba(231, 76, 60, 0.2); padding:8px; border-left:4px solid #E74C3C; color:white; font-size:12px;'>🔴 <b>> 1.50:</b> Fuera de Rango → Ajustar Carga</div>", unsafe_allow_html=True)
+        with c_ley4: st.markdown("<div style='background-color:rgba(52, 152, 219, 0.2); padding:8px; border-left:4px solid #3498DB; color:white; font-size:12px;'>🔵 <b>< 0.80:</b> Subcarga / Desentrenamiento</div>", unsafe_allow_html=True)
+
+    else:
+        df_p_acwr = df_acwr_total[df_acwr_total['Nombre'] == jugador_acwr_sel].sort_values(by='Fecha_dt')
+        
+        fig_p_timeline = go.Figure()
+
+        fig_p_timeline.add_trace(go.Bar(
+            x=df_p_acwr['Fecha'],
+            y=df_p_acwr[metrica_acwr_key],
+            name='Carga Diaria',
+            marker_color='#3498DB',
+            opacity=0.6,
+            yaxis='y1'
+        ))
+
+        fig_p_timeline.add_trace(go.Scatter(
+            x=df_p_acwr['Fecha'],
+            y=df_p_acwr['EWMA_Cronico'],
+            name='Carga Crónica (EWMA 21d)',
+            fill='tozeroy',
+            fillcolor='rgba(155, 89, 182, 0.2)',
+            line=dict(color='#9B59B6', width=2),
+            yaxis='y1'
+        ))
+
+        colors_acwr_points = []
+        for r in df_p_acwr['ACWR']:
+            if 0.8 <= r <= 1.3: colors_acwr_points.append('#2ECC71')
+            elif 1.3 < r <= 1.5: colors_acwr_points.append('#F1C40F')
+            elif r > 1.5: colors_acwr_points.append('#E74C3C')
+            else: colors_acwr_points.append('#3498DB')
+
+        fig_p_timeline.add_trace(go.Scatter(
+            x=df_p_acwr['Fecha'],
+            y=df_p_acwr['ACWR'],
+            name='Ratio ACWR (EWMA 7:21)',
+            mode='lines+markers',
+            line=dict(color='#E74C3C', width=2.5),
+            marker=dict(size=7, color=colors_acwr_points, line=dict(width=1, color='white')),
+            yaxis='y2'
+        ))
+
+        max_acwr_p = df_p_acwr['ACWR'].max() if not df_p_acwr.empty else 1.5
+        fig_p_timeline.update_layout(
+            title=f"Evolución Agudo:Crónico EWMA (7:21 Días) - {jugador_acwr_sel} ({metrica_acwr_lbl})",
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(title="Fecha", showgrid=False, tickangle=-45),
+            yaxis=dict(title=f"Carga Diaria / Crónica ({metrica_acwr_lbl})", showgrid=True, gridcolor='rgba(255,255,255,0.1)', side='left'),
+            yaxis2=dict(title="Ratio ACWR", overlaying='y', side='right', range=[0, max(max_acwr_p * 1.25, 2.0)], showgrid=False),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=480
+        )
+        st.plotly_chart(fig_p_timeline, use_container_width=True)
 
 # =============================================================================
 # 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS) CON INTERACCIÓN DIRECTA
