@@ -42,12 +42,16 @@ if os.path.exists(_ruta_logo):
     """, unsafe_allow_html=True)
 
 # =============================================================================
-# VARIABLES GLOBALES DE SESIÓN (MEMORIA DEL RADAR)
+# VARIABLES GLOBALES DE SESIÓN (MEMORIA DEL RADAR Y FILTROS)
 # =============================================================================
 if 'partidos_radar' not in st.session_state:
     st.session_state.partidos_radar = []
 if 'grafico_key' not in st.session_state:
     st.session_state.grafico_key = 0
+if 'hist_grafico_key' not in st.session_state:
+    st.session_state.hist_grafico_key = 0
+if 'fecha_hist_pulsada' not in st.session_state:
+    st.session_state.fecha_hist_pulsada = None
 if 'fecha_maestra' not in st.session_state:
     st.session_state.fecha_maestra = None
 
@@ -213,7 +217,7 @@ def obtener_calendario_partidos():
 # =============================================================================
 # HELPER CÁLCULO EWMA RATIO (AGUDO:CRÓNICO PONDERADO 7:21 DÍAS)
 # =============================================================================
-def calcular_acwr_ewma(df, metrica='Player_Load', dias_agudo=7, dias_cronico=21):
+def calcular_acwr_ewma(df, metrica='Dist_25', dias_agudo=7, dias_cronico=21):
     if df.empty or metrica not in df.columns: return pd.DataFrame()
     
     lista_dfs = []
@@ -301,9 +305,8 @@ for _, row in df_master.iterrows():
 df_master['Valido_Media'] = validez
 df_master['Jugo_60_Ultimo_Partido'] = jugo_mas_60
 
-# =============================================================================
-# CÁLCULO DE CARGA (sRPE) Y RANGOS OBJETIVO
-# =============================================================================
+# CÁLCULO DE CARGA (sRPE) Y MÉTRICAS COMBINADAS
+df_master['Acc_Dec'] = df_master['Accels'] + df_master['Decels']
 df_master['Carga_UA'] = df_master['Minutos_RPE'] * df_master['RPE_G']
 
 fechas_disp = sorted(df_master['Fecha'].unique(), reverse=True)
@@ -426,6 +429,7 @@ st.markdown("""
 
 def actualizar_fecha_manual():
     st.session_state.fecha_maestra = st.session_state.widget_fecha
+    st.session_state.fecha_hist_pulsada = None
 
 idx_fecha_seleccionada = fechas_disp.index(st.session_state.fecha_maestra) if st.session_state.fecha_maestra in fechas_disp else 0
 
@@ -602,6 +606,7 @@ st.markdown("---")
 tipo_sesion = str(df_master[df_master['Fecha'] == fecha_sel]['Tipo_Dia_Oficial'].iloc[0]).upper() if not df_master[df_master['Fecha'] == fecha_sel].empty else "ENTRENO"
 duracion_sesion = int(df_master[df_master['Fecha'] == fecha_sel]['Duracion_GPS'].max()) if not df_sesion.empty else 0
 
+# --- HISTÓRICO 28 DÍAS DINÁMICO CON FILTRO POR TIPO DE SESIÓN ---
 opciones_grafico = {
     'Carga General (sRPE)': 'Carga_UA',
     'Dist. Total': 'Dist_Total',
@@ -624,17 +629,23 @@ df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_v
 media_vmax_sesion = df_vmax_hoy['Porcentaje_Vmax'].mean() if not df_vmax_hoy.empty else 0
 alcanzan_90 = df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
 
-c_dur, c_hist, c_info = st.columns([1.5, 3, 2])
+c_dur, c_hist, c_info = st.columns([1.5, 3.2, 1.8])
 with c_dur:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Duración de la sesión</p>", unsafe_allow_html=True)
     st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
 with c_hist:
-    c_h1, c_h2, c_h3 = st.columns([1.8, 2.2, 3]) 
+    c_h1, c_h2, c_h3 = st.columns([1.6, 2.2, 2.2]) 
     with c_h1: 
         st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Histórico sesiones (28d)</p></div>", unsafe_allow_html=True)
     with c_h2: 
         metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
+    with c_h3:
+        tipos_disp = ["Todos los tipos"] + sorted([str(t) for t in df_28d['Tipo_Dia_Oficial'].dropna().unique() if str(t).strip() != ''])
+        filtro_tipo_sesion = st.selectbox("Tipo de Sesión", tipos_disp, label_visibility="collapsed", key="sel_filtro_tipo_sesion_hist")
+
+    if filtro_tipo_sesion != "Todos los tipos":
+        df_hist_eq = df_hist_eq[df_hist_eq['Tipo_Dia_Oficial'] == filtro_tipo_sesion]
     
     m_graf = opciones_grafico[metrica_grafico]
     
@@ -654,10 +665,15 @@ with c_hist:
         fig_hist = go.Figure()
         colores_barras = ['#FF9F1C' if 'partido' in str(t).lower() else '#555555' for t in df_agg['Tipo_Dia_Oficial']]
         textos_barras = ['' for t in df_agg['Tipo_Dia_Oficial']]
+        bordes_barras = ['#00A8E8' if row_f == fecha_sel else 'rgba(0,0,0,0)' for row_f in df_agg['Fecha']]
+        anchos_bordes = [3 if row_f == fecha_sel else 0 for row_f in df_agg['Fecha']]
 
         fig_hist.add_trace(go.Bar(
             x=df_agg['Fecha'], y=df_agg[m_graf],
-            marker_color=colores_barras, text=textos_barras, textposition='outside', textfont=dict(color="white", size=10)
+            customdata=df_agg['Fecha'],
+            marker_color=colores_barras,
+            marker_line=dict(color=bordes_barras, width=anchos_bordes),
+            text=textos_barras, textposition='outside', textfont=dict(color="white", size=10)
         ))
 
         if m_graf != 'Carga_UA':
@@ -696,7 +712,36 @@ with c_hist:
             yaxis=dict(visible=False), 
             plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False
         )
-        st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+
+        hist_key = f"hist_chart_{st.session_state.hist_grafico_key}"
+        try:
+            seleccion_hist = st.plotly_chart(
+                fig_hist, 
+                use_container_width=True, 
+                config={'displayModeBar': False}, 
+                on_select="rerun", 
+                selection_mode=["points"], 
+                key=hist_key
+            )
+            if seleccion_hist and hasattr(seleccion_hist, 'selection'):
+                puntos_h = getattr(seleccion_hist.selection, 'points', [])
+                if puntos_h:
+                    p = puntos_h[0]
+                    cd = p.get('customdata')
+                    fecha_click = cd[0] if isinstance(cd, list) else (cd if cd else p.get('x'))
+                    if fecha_click and fecha_click in fechas_disp:
+                        if st.session_state.fecha_hist_pulsada == fecha_click:
+                            st.session_state.fecha_hist_pulsada = None
+                            st.session_state.fecha_maestra = fechas_disp[0] if fechas_disp else None
+                        else:
+                            st.session_state.fecha_hist_pulsada = fecha_click
+                            st.session_state.fecha_maestra = fecha_click
+                        st.session_state.hist_grafico_key += 1
+                        st.rerun()
+        except Exception:
+            st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info(f"No hay sesiones de tipo '{filtro_tipo_sesion}' en los últimos 28 días.")
 
 with c_info:
     st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Velocidad Máxima HOY (>90%)</p>", unsafe_allow_html=True)
@@ -951,16 +996,16 @@ st.markdown("### Ratio Agudo:Crónico PONDERADO (EWMA 7:21 Días)")
 st.caption("Carga Aguda (7d) vs Carga Crónica (21d) con ponderación exponencial. Los días recientes tienen mayor peso fisiológico.")
 
 opciones_metrica_acwr = {
+    'Distancia > 25 km/h (m)': 'Dist_25',
     'Player Load': 'Player_Load',
     'Distancia Total (m)': 'Dist_Total',
     'Distancia > 18 km/h (m)': 'Dist_18',
-    'Aceleraciones': 'Accels',
-    'Desaceleraciones': 'Decels'
+    'Aceleraciones + Desaceleraciones': 'Acc_Dec'
 }
 
 col_ac1, col_ac2 = st.columns([2, 2])
 with col_ac1:
-    metrica_acwr_lbl = st.selectbox("🎯 Métrica para Ratio ACWR:", list(opciones_metrica_acwr.keys()), key="sel_metrica_acwr")
+    metrica_acwr_lbl = st.selectbox("🎯 Métrica para Ratio ACWR:", list(opciones_metrica_acwr.keys()), index=0, key="sel_metrica_acwr")
 with col_ac2:
     jugadores_acwr_opt = ["Vista Plantilla (Foto 2)"] + sorted(list(df_master['Nombre'].unique()))
     jugador_acwr_sel = st.selectbox("👤 Modo de Visualización:", jugadores_acwr_opt, key="sel_jugador_acwr")
