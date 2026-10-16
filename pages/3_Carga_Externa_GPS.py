@@ -431,6 +431,13 @@ def actualizar_fecha_manual():
     st.session_state.fecha_maestra = st.session_state.widget_fecha
     st.session_state.fecha_hist_pulsada = None
 
+# Sincronización bidireccional segura antes de instanciar el selectbox
+if 'widget_fecha' in st.session_state:
+    if st.session_state.widget_fecha != st.session_state.fecha_maestra:
+        st.session_state.widget_fecha = st.session_state.fecha_maestra
+else:
+    st.session_state.widget_fecha = st.session_state.fecha_maestra
+
 idx_fecha_seleccionada = fechas_disp.index(st.session_state.fecha_maestra) if st.session_state.fecha_maestra in fechas_disp else 0
 
 col_f1, col_f2, col_f3 = st.columns(3)
@@ -727,17 +734,25 @@ with c_hist:
                 puntos_h = getattr(seleccion_hist.selection, 'points', [])
                 if puntos_h:
                     p = puntos_h[0]
-                    cd = p.get('customdata')
-                    fecha_click = cd[0] if isinstance(cd, list) else (cd if cd else p.get('x'))
-                    if fecha_click and fecha_click in fechas_disp:
-                        if st.session_state.fecha_hist_pulsada == fecha_click:
-                            st.session_state.fecha_hist_pulsada = None
-                            st.session_state.fecha_maestra = fechas_disp[0] if fechas_disp else None
-                        else:
-                            st.session_state.fecha_hist_pulsada = fecha_click
-                            st.session_state.fecha_maestra = fecha_click
-                        st.session_state.hist_grafico_key += 1
-                        st.rerun()
+                    fecha_raw = p.get('x')
+                    if not fecha_raw and p.get('customdata'):
+                        cd = p.get('customdata')
+                        fecha_raw = cd[0] if isinstance(cd, list) else cd
+                    
+                    if fecha_raw:
+                        fecha_click = str(fecha_raw).split(' ')[0].split('T')[0].strip()
+                        if fecha_click in fechas_disp:
+                            if st.session_state.get('fecha_hist_pulsada') == fecha_click:
+                                st.session_state.fecha_hist_pulsada = None
+                                nueva_fecha = fechas_disp[0] if fechas_disp else None
+                            else:
+                                st.session_state.fecha_hist_pulsada = fecha_click
+                                nueva_fecha = fecha_click
+                            
+                            if nueva_fecha != st.session_state.fecha_maestra:
+                                st.session_state.fecha_maestra = nueva_fecha
+                                st.session_state.hist_grafico_key += 1
+                                st.rerun()
         except Exception:
             st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
     else:
