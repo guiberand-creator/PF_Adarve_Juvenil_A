@@ -210,18 +210,12 @@ df_dosis = cargar_matriz_completa()
 # =============================================================================
 # 3. INTERFAZ Y FILTROS
 # =============================================================================
-render_html("""
-    <div>
-        <h1 style="margin-bottom: 0px; color: white;">DOSIS - RESPUESTA</h1>
-        <p style="color: #A0AEC0; font-size: 14px; margin-top: 5px;"></p>
-    </div>
-""")
+st.title("DOSIS - RESPUESTA")
+st.markdown("---")
 
 if df_dosis.empty:
     st.info("🚧 No hay suficientes datos coincidentes para construir la relación Dosis-Respuesta.")
     st.stop()
-
-st.markdown("---")
 
 c_f1, c_f2 = st.columns([1, 2.5])
 with c_f1:

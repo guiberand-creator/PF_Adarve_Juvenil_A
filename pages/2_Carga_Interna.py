@@ -75,12 +75,9 @@ df_raw, error_hoja = obtener_datos_carga_real()
 # ==============================================================================
 # 3. INTERFAZ GENERAL
 # ==============================================================================
-render_html("""
-    <div style="margin-bottom: 15px;">
-        <h1 style="margin-bottom: 0px; padding-bottom: 0px; font-weight: 800; letter-spacing: -0.5px;">CARGA INTERNA (RPE)</h1>
-        <p style="color: #94a3b8; font-size: 15px; margin-top: 5px;">Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.</p>
-    </div>
-""")
+st.title("CARGA INTERNA (RPE)")
+st.caption("Control de métricas de carga interna y percepción de esfuerzo del equipo ADARVE JUVENIL DH.")
+st.markdown("---")
 
 if error_hoja:
     st.error(f"Error de mapeo o conexión con Google Sheets: {error_hoja}")
