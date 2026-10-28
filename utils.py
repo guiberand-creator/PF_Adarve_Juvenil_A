@@ -1,9 +1,8 @@
 import streamlit as st
 import os
-import base64
 
 def aplicar_estilos_globales():
-    """Aplica las fuentes del club (Barlow Condensed y Aptos) a toda la página."""
+    """Aplica fuentes oficiales del club, limpia el menú y ajusta el sidebar."""
     st.markdown("""
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap');
@@ -18,31 +17,19 @@ def aplicar_estilos_globales():
                 font-family: 'Barlow Condensed', sans-serif !important;
             }
             
-            /* Ocultar elementos de Streamlit */
+            /* Ocultar elementos nativos de Streamlit */
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-        </style>
-    """, unsafe_allow_html=True)
 
-
-def aplicar_estilos_globales():
-    """
-    Aplica los estilos CSS globales de la aplicación.
-    """
-    st.markdown("""
-        <style>
-        /* Ajustes de interfaz limpia para el menú */
-        [data-testid="stSidebarNav"] {
-            padding-top: 10px;
-        }
+            /* Ajustes de interfaz limpia para el menú */
+            [data-testid="stSidebarNav"] {
+                padding-top: 10px;
+            }
         </style>
     """, unsafe_allow_html=True)
 
 def mostrar_sello_autor():
-    """
-    Renderiza el sello/logo del autor en la barra lateral usando
-    la función oficial nativa de Streamlit para garantizar compatibilidad total.
-    """
+    """Renderiza el sello/logo del autor en la barra lateral."""
     directorio_raiz = os.path.dirname(os.path.abspath(__file__))
     ruta_logo_png = os.path.join(directorio_raiz, "assets", "logo-guille_blanco.png")
 
@@ -62,27 +49,23 @@ def aplicar_diseno_responsive():
     <style>
     /* Ajustes específicos para móviles (< 768px) */
     @media (max-width: 768px) {
-        /* Evita que las imágenes se sobredimensionen */
         img {
             max-width: 100% !important;
             height: auto !important;
             object-fit: contain !important;
         }
 
-        /* Fuerza a que las columnas de Streamlit se apilen limpiamente */
         [data-testid="column"] {
             width: 100% !important;
             flex: 1 1 100% !important;
             min-width: 100% !important;
         }
 
-        /* Fuerza a los gráficos a no desbordar el ancho de pantalla */
         .js-plotly-plot, .plot-container {
             width: 100% !important;
             max-width: 100% !important;
         }
 
-        /* Tipografía más contenida */
         .stHeading h1 { font-size: 1.4rem !important; }
         .stHeading h2, .stHeading h3 { font-size: 1.1rem !important; }
         .stMarkdown p { font-size: 0.85rem !important; }
