@@ -11,18 +11,15 @@ import io
 import base64
 import re
 from datetime import datetime
-from utils import aplicar_diseno_responsive
+from utils import aplicar_diseno_responsive, aplicar_estilos_globales, mostrar_sello_sidebar, inyectar_css, render_html
 
 # =============================================================================
 # 1. CONFIGURACIÓN DE PÁGINA Y TEMAS V0
 # =============================================================================
+st.set_page_config(page_title="Player Performance Dashboard | Adarve DH", page_icon="⚡", layout="wide")
+aplicar_estilos_globales()
 aplicar_diseno_responsive()
-
-st.set_page_config(
-    page_title="Player Performance Dashboard | Adarve DH",
-    page_icon="⚡",
-    layout="wide"
-)
+mostrar_sello_sidebar()
 
 if 'logeado' not in st.session_state or not st.session_state['logeado']:
     st.error("⚠️ Acceso no autorizado. Por favor, inicia sesión en la página principal.")
@@ -41,8 +38,7 @@ GOOD = "#22c55e"
 WARNING = "#f59e0b"          
 
 def inject_v0_css():
-    st.markdown(f"""
-        <style>
+    inyectar_css(f"""
         .stApp {{ background: {BG}; }}
         .block-container {{ padding-top: 1.2rem !important; padding-bottom: 3rem !important; padding-left: 2rem !important; padding-right: 2rem !important; max-width: 100% !important; }}
         div[data-testid="column"] {{ display: flex; flex-direction: column; justify-content: flex-start; }}
@@ -51,7 +47,7 @@ def inject_v0_css():
             border: 1px solid {BORDER}; border-radius: 18px; padding: 1.5rem 1.75rem; width: 100%; height: 330px;
             box-sizing: border-box; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; justify-content: space-between; margin-top: 0px !important;
         }}
-        .pd-name {{ font-size: 2.3rem; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
+        .pd-name {{ font-size: 2.3rem; font-family: 'Barlow Condensed', sans-serif !important; font-weight: 800; line-height: 1.05; margin: 0; letter-spacing: -0.02em; color: {TEXT}; }}
         .pd-club {{ color: {MUTED}; font-size: 0.95rem; margin-top: 0.6rem; margin-bottom: 1.5rem; }}
         .pd-badge {{
             display: inline-flex; align-items: center; gap: 0.4rem; background: {PRIMARY_SOFT}; color: {PRIMARY};
@@ -66,7 +62,7 @@ def inject_v0_css():
         .pd-fact .v-green {{ color: #22c55e !important; }}
         .photo-v0 {{ height: 330px !important; width: 100% !important; max-width: 260px !important; object-fit: contain !important; display: block; margin: 0 auto; filter: drop-shadow(0px 10px 20px rgba(225, 29, 72, 0.25)); }}
         .photo-placeholder-v0 {{ height: 330px !important; width: 100% !important; max-width: 260px !important; border-radius: 16px; background: radial-gradient(120% 120% at 30% 20%, {SURFACE_2}, {SURFACE}); display: flex; align-items: center; justify-content: center; border: 1px solid {BORDER}; margin: 0 auto; }}
-        .pd-section-title {{ font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: {MUTED}; margin: 0.25rem 0 0.75rem; }}
+        .pd-section-title {{ font-family: 'Barlow Condensed', sans-serif !important; font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: {MUTED}; margin: 0.25rem 0 0.75rem; }}
         [data-testid="stMetricDelta"] svg {{ display: none; }}
         .stTabs [data-baseweb="tab-list"] {{ gap: 0.5rem; }}
         .stTabs [data-baseweb="tab"] {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 10px 10px 0 0; padding: 0.6rem 1.4rem; font-weight: 700; color: {MUTED}; }}
@@ -79,21 +75,13 @@ def inject_v0_css():
         div.stButton > button:hover {{ border-color: {PRIMARY}; background-color: {SURFACE}; }}
         div.stButton > button:active {{ background-color: {PRIMARY}; color: white; }}
 
-        .metric-row {{
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 0.45rem 0.75rem; border-bottom: 1px solid {BORDER}; font-size: 0.85rem;
-        }}
+        .metric-row {{ display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.75rem; border-bottom: 1px solid {BORDER}; font-size: 0.85rem; }}
         .metric-label {{ color: {MUTED}; font-weight: 600; }}
         .metric-val {{ color: {TEXT}; font-weight: 800; }}
         .metric-opt {{ color: {WARNING}; font-weight: 800; }}
 
-        .radar-match-header {{
-            display: flex; align-items: center; gap: 1.25rem;
-            background: {SURFACE_2}; border: 1px solid {BORDER};
-            border-radius: 14px; padding: 0.85rem 1.25rem; margin-bottom: 1rem;
-        }}
-        </style>
-    """, unsafe_allow_html=True)
+        .radar-match-header {{ display: flex; align-items: center; gap: 1.25rem; background: {SURFACE_2}; border: 1px solid {BORDER}; border-radius: 14px; padding: 0.85rem 1.25rem; margin-bottom: 1rem; }}
+    """)
 
 inject_v0_css()
 
@@ -102,23 +90,6 @@ def norm_nom(texto):
     return " ".join(str(texto).replace('_', ' ').strip().lower().split())
 
 _carpeta_pages = os.path.dirname(os.path.abspath(__file__))
-_ruta_logo_sidebar = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
-if os.path.exists(_ruta_logo_sidebar):
-    with open(_ruta_logo_sidebar, "rb") as _f:
-        b64_sidebar = base64.b64encode(_f.read()).decode()
-    st.sidebar.markdown(f"""
-        <style>
-        .footer-sello-unico {{
-            position: fixed; bottom: 20px; left: 10px; width: 260px;
-            text-align: center; z-index: 999; padding-top: 12px;
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-        }}
-        .footer-sello-unico img {{ width: 195px; height: auto; margin-bottom: 8px; }}
-        .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
-        </style>
-        <div class="footer-sello-unico"><img src="data:image/png;base64,{b64_sidebar}"><p>© 2026 All Rights Reserved</p></div>
-    """, unsafe_allow_html=True)
-
 _ruta_escudo_oficial = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "Imagen2.png"))
 url_escudo_oficial = ""
 if os.path.exists(_ruta_escudo_oficial):
@@ -439,7 +410,7 @@ def cargar_todo_informes():
             for _, r_rank in df_rank_base.iterrows():
                 dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
 
-    r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por positions.xlsx")
+    r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
     df_ref_vam = pd.read_excel(r_ref_vam) if os.path.exists(r_ref_vam) else pd.DataFrame()
     
     df_ref_campo = pd.DataFrame()
@@ -492,7 +463,7 @@ def get_logo(rival_str):
         if k in r_low or r_low in k: return v
     return "https://cdn-icons-png.flaticon.com/512/53/53283.png"
 
-# SELECTOR DE JUGADOR
+# SELECTOR DE JUGADOR CON SEPARACIÓN SUPERIOR
 lista_jugadores = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
 if not lista_jugadores and not df_cuest.empty:
     lista_jugadores = sorted(df_cuest['Nombre'].dropna().unique())
@@ -501,11 +472,15 @@ if not lista_jugadores:
     st.warning("⚠️ No se encontraron jugadores registrados en el sistema.")
     st.stop()
 
+# ESTE SALTO HTML PREVIENE QUE EL SELECTOR SE CORTE ARRIBA
+render_html("<div style='height: 1.5rem;'></div>")
+
 col_filtro, _ = st.columns([1.0, 3.9], gap="medium")
 with col_filtro:
     jugador_sel = st.selectbox("Selector oculto:", lista_jugadores, label_visibility="collapsed")
 
-st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+render_html("<div style='height: 0.5rem;'></div>")
+
 jug_norm = norm_nom(jugador_sel)
 match_pos = df_pos[df_pos['Nombre_Norm'] == jug_norm] if not df_pos.empty else pd.DataFrame()
 match_cuest = df_cuest[df_cuest['Nombre_Norm'] == jug_norm] if not df_cuest.empty else pd.DataFrame()
@@ -646,8 +621,8 @@ def _campograma_v0(pos_str, pierna_s, lado_s="", nombre_mostrar="PLAYER"):
 col_photo, col_hero, col_pitch = st.columns([1.0, 2.7, 1.1], gap="medium")
 
 with col_photo:
-    if url_foto_jugador and pd.notna(url_foto_jugador): st.markdown(f'<img src="{url_foto_jugador}" class="photo-v0">', unsafe_allow_html=True)
-    else: st.markdown(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>', unsafe_allow_html=True)
+    if url_foto_jugador and pd.notna(url_foto_jugador): render_html(f'<img src="{url_foto_jugador}" class="photo-v0">')
+    else: render_html(f'<div class="photo-placeholder-v0"><span style="font-size:3.2rem; font-weight:900; color:{PRIMARY};">AD</span></div>')
 
 with col_hero:
     pos_label_full = f"{posicion_str.upper()} {lado_str.upper()}".strip()
@@ -669,18 +644,18 @@ with col_hero:
             </div>
         </div>
     """
-    st.markdown(html_hero, unsafe_allow_html=True)
+    render_html(html_hero)
 
 with col_pitch:
     st.plotly_chart(_campograma_v0(posicion_str, pierna_str, lado_str, nombre_mostrar), use_container_width=True, config={"displayModeBar": False})
 
-st.markdown("<br>", unsafe_allow_html=True)
+render_html("<br>")
 
 tab_tests, tab_gps = st.tabs(["  Conditioning Tests  ", "  GPS & Match Output  "])
 
 # CONDITIONING TESTS (RADAR DE 8 DIMENSIONES SIN LUMBAR)
 with tab_tests:
-    st.markdown('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>', unsafe_allow_html=True)
+    render_html('<div class="pd-section-title">MEJORES REGISTROS TEMPORADA</div>')
     
     def get_best(df, col_jugador, jug_norm_val, col_val, filter_col=None, filter_val=None, exact=False):
         if df is None or df.empty or col_val not in df.columns or col_jugador not in df.columns: return None
@@ -730,7 +705,7 @@ with tab_tests:
     left_col, right_col = st.columns([1.5, 1], gap="large")
 
     with left_col:
-        st.markdown('<div class="pd-section-title">Evolución de tests en el tiempo</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">Evolución de tests en el tiempo</div>')
         test_categoria = st.selectbox("Selecciona Batería de Tests:", ["🩺 Movilidad", "🫁 VAM Aeróbico", "⚙️ Dinamometría", "🚀 Saltos & DRI", "🏋️ Tren Superior", "⚡ Velocidad en Campo"], label_visibility="collapsed")
         
         df_j_mov = df_mov[df_mov['Nombre_Norm'] == jug_norm].copy() if df_mov is not None and not df_mov.empty else pd.DataFrame()
@@ -943,7 +918,7 @@ with tab_tests:
             else: st.info("No hay datos de Velocidad en Campo.")
 
     with right_col:
-        st.markdown('<div class="pd-section-title">Perfil Z-Score &middot; Radar Completo</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">Perfil Z-Score &middot; Radar Completo</div>')
         
         all_dates = pd.Series(dtype='datetime64[ns]')
         if df_vam is not None and not df_vam.empty: all_dates = pd.concat([all_dates, df_vam['Fecha_dt']])
@@ -1076,7 +1051,7 @@ with tab_tests:
 # GPS DATA Y MATCH OUTPUT
 with tab_gps:
     if not df_p_jug.empty:
-        st.markdown('<div class="pd-section-title">GPS Totals (Season)</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">GPS Totals (Season)</div>')
         
         df_partidos = df_p_jug[df_p_jug['Is_Partido'] == True]
         max_dist_str = "-"
@@ -1106,7 +1081,7 @@ with tab_gps:
         
         df_matches_jug = df_p_jug[df_p_jug['Is_Partido'] == True].sort_values('Fecha_dt', ascending=True).reset_index(drop=True) if not df_p_jug.empty else pd.DataFrame()
         
-        st.markdown('<div class="pd-section-title">Rendimiento Competitivo en Partido (Match Output)</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">Rendimiento Competitivo en Partido (Match Output)</div>')
         
         if not df_matches_jug.empty and not df_matches_all.empty:
             options_match = []
@@ -1127,7 +1102,7 @@ with tab_gps:
                 selected_match_label = st.selectbox("Selecciona Partido:", options_match, index=len(options_match) - 1)
                 
             row_selected = dict_match_lookup[selected_match_label]
-            st.markdown("<br>", unsafe_allow_html=True)
+            render_html("<br>")
 
             col_radar_match, col_metrics_panel = st.columns([1.8, 1.2], gap="large")
 
@@ -1163,7 +1138,7 @@ with tab_gps:
                     r_loc = str(row_selected.get('Localizacion', '')).upper()
                     r_loc_str = f"({r_loc})" if r_loc else ""
 
-                    st.markdown(f"""
+                    render_html(f"""
                         <div class="radar-match-header">
                             <img src="{r_logo}" style="width:52px; height:52px; object-fit:contain;">
                             <div>
@@ -1171,7 +1146,7 @@ with tab_gps:
                                 <div style="font-size:0.85rem; color:{TEAM}; font-weight:700;">Fecha: {r_date}</div>
                             </div>
                         </div>
-                    """, unsafe_allow_html=True)
+                    """)
                     
                     fig_mr = go.Figure()
                     fig_mr.add_trace(go.Scatterpolar(r=z_pos, theta=theta_labels, fill="none", name="Media Posición (0)", line=dict(color=TEAM, width=2, dash='dash')))
@@ -1193,7 +1168,7 @@ with tab_gps:
                     st.plotly_chart(fig_mr, use_container_width=True, config={"displayModeBar": False})
 
                 with col_metrics_panel:
-                    st.markdown(f'<div class="pd-section-title">Valores Reales vs Perfil Óptimo</div>', unsafe_allow_html=True)
+                    render_html('<div class="pd-section-title">Valores Reales vs Perfil Óptimo</div>')
                     units_map = {'Dist_Total': 'm', 'Dist_18': 'm', 'Dist_25': 'm', 'Dist_28': 'm', 'N_Sprints': 'sp', 'N_Acc': 'acc', 'N_Dec': 'dec', 'AC_MAX': 'm/s²', 'DEC_MAX': 'm/s²', 'V_MAX': 'km/h', 'Player_Load': 'PL'}
 
                     for i, col_k in enumerate(cols_all_gps):
@@ -1209,7 +1184,7 @@ with tab_gps:
                             fmt_m = f"{val_m:.0f} {unit}"
                             fmt_opt = f"{val_opt:.0f} {unit}" if pd.notna(val_opt) else "-"
 
-                        st.markdown(f"""
+                        render_html(f"""
                             <div class="metric-row">
                                 <span class="metric-label">{lbl}</span>
                                 <div>
@@ -1217,11 +1192,11 @@ with tab_gps:
                                     <span class="metric-opt">{fmt_opt}</span>
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
+                        """)
             else: st.info("No hay datos suficientes de posición para calcular el radar.")
         else: st.info("Aún no hay registros de partidos para construir el perfil.")
 
-        st.markdown('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">Evolución GPS Panorámica: Intensidad vs Aceleraciones</div>')
         
         df_p_jug_chart = df_p_jug.sort_values('Fecha_dt', ascending=True)
         fig_gps_combined = make_subplots(specs=[[{"secondary_y": True}]])
@@ -1239,7 +1214,7 @@ with tab_gps:
         
         st.plotly_chart(fig_gps_combined, use_container_width=True, config={"displayModeBar": False})
 
-        st.markdown('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>', unsafe_allow_html=True)
+        render_html('<div class="pd-section-title">Registro Detallado Sesión a Sesión</div>')
         cols_table = ['Fecha', 'Tipo_Sesion', 'RPE_Score', 'Rival', 'Localizacion', 'Minutos', 'Dist_Total', 'Dist_18', 'Dist_25', 'Dist_28', 'N_Sprints', 'N_Acc', 'N_Dec', 'Acc_Dec', 'V_MAX', 'AC_MAX', 'DEC_MAX', 'Player_Load']
         cols_present = [c for c in cols_table if c in df_p_jug.columns]
         
