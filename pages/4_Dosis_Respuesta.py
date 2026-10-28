@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import os
 import glob
 import requests
 import io
 import plotly.express as px
 from datetime import datetime, timedelta
-from utils import aplicar_diseno_responsive
+import os
+from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_sello_sidebar
 
 # =============================================================================
 # 1. CONFIGURACIÓN Y SEGURIDAD
