@@ -439,7 +439,7 @@ def cargar_todo_informes():
             for _, r_rank in df_rank_base.iterrows():
                 dict_rankings_reales[r_rank['Nombre_Norm']] = f"#{r_rank['POSICION_GLOBAL']}"
 
-    r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por posiciones.xlsx")
+    r_ref_vam = os.path.join("data", "EVALUACIONES", "AEROBICO", "Referencia por positions.xlsx")
     df_ref_vam = pd.read_excel(r_ref_vam) if os.path.exists(r_ref_vam) else pd.DataFrame()
     
     df_ref_campo = pd.DataFrame()
