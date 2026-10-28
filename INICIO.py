@@ -6,7 +6,15 @@ from datetime import datetime
 import os
 import base64
 import re
-from utils import aplicar_estilos_globales
+import textwrap
+from utils import aplicar_estilos_globales, aplicar_diseno_responsive
+
+# ==========================================
+# 1. CONFIGURACIÓN INICIAL DE LA PÁGINA (DEBE SER EL PRIMER COMANDO)
+# ==========================================
+st.set_page_config(page_title="Adarve Juvenil DH App", layout="wide")
+aplicar_estilos_globales()
+aplicar_diseno_responsive()
 
 # -----------------------------------------------------------------------------
 # SELLO FIJO AL PIE DEL SIDEBAR (FORZADO A TAMAÑO REAL)
@@ -18,7 +26,7 @@ if os.path.exists(_ruta_logo):
     with open(_ruta_logo, "rb") as _f:
         _b64 = base64.b64encode(_f.read()).decode()
         
-    st.sidebar.markdown(f"""
+    st.sidebar.markdown(textwrap.dedent(f"""
         <style>
         .watermark-login {{ display: none !important; }}
 
@@ -53,14 +61,7 @@ if os.path.exists(_ruta_logo):
             <img src="data:image/png;base64,{_b64}">
             <p>© 2026 All Rights Reserved</p>
         </div>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# 1. CONFIGURACIÓN INICIAL DE LA PÁGINA
-# ==========================================
-st.set_page_config(page_title="Adarve Juvenil DH App", layout="wide")
-aplicar_estilos_globales()
-
+    """), unsafe_allow_html=True)
 
 # ==========================================
 # 2. FUNCIONES DE EXTRACCIÓN DE DATOS
@@ -199,7 +200,6 @@ def analizar_datos_completos():
         df_well['Fecha_Dia'] = df_well['Fecha_Real'].dt.date
         df_well['Nombre_Clean'] = df_well['NOMBRE Y APELLIDOS'].fillna('Anónimo').astype(str).str.strip()
         
-        # Cargar plantilla oficial desde Posiciones.xlsx para evitar mostrar jugadores eliminados
         ruta_posiciones = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
         if os.path.exists(ruta_posiciones):
             try:
@@ -240,7 +240,6 @@ def analizar_datos_completos():
                 df_w_validos['Well_Player_Mean'] = (v_sueno + v_dolor + v_estres + v_carga) / 4
                 well_medio_hoy = df_w_validos['Well_Player_Mean'].mean() if not df_w_validos.empty else 0.0
                 
-                # Guardar el Wellness exacto por jugador para el campograma
                 for _, r_w in df_w_validos.iterrows():
                     dict_wellness_jugadores[r_w['Nombre_Clean']] = r_w['Well_Player_Mean']
 
@@ -301,18 +300,17 @@ def analizar_datos_completos():
         return 0.0, "Sesión", [], 0, 0.0, [], [], 0, [], 22, {}
 
 # ==========================================
-# 3. SISTEMA DE LOGIN (ELIMINACIÓN RADICAL)
+# 3. SISTEMA DE LOGIN
 # ==========================================
 if 'logeado' not in st.session_state:
     st.session_state['logeado'] = False
 
 if not st.session_state['logeado']:
-    st.markdown("""
+    st.markdown(textwrap.dedent("""
         <style>
         [data-testid="stSidebar"] { display: none; } 
         [data-testid="collapsedControl"] { display: none; }
         
-        /* FULMINAR EL TEXTO DEL BOTÓN DE VISIBILIDAD DE CORZÓN */
         div[data-testid="stTextInputRootElement"] button {
             font-size: 0px !important;
             color: transparent !important;
@@ -323,7 +321,6 @@ if not st.session_state['logeado']:
             display: none !important;
         }
         
-        /* Asegurar que la caja e input queden limpios */
         div[data-testid="stTextInputRootElement"] input {
             color: #FFFFFF !important;
         }
@@ -332,7 +329,7 @@ if not st.session_state['logeado']:
             margin-top: 15px;
         }
         </style>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
     
     col_vacia1, col_centro, col_vacia2 = st.columns([1.2, 1.6, 1.2])
     with col_centro:
@@ -359,7 +356,7 @@ else:
 
     st.markdown("---") 
 
-    # --- PRÓXIMO PARTIDO Y CUMPLEAÑOS (MOVIDO ARRIBA) ---
+    # --- PRÓXIMO PARTIDO Y CUMPLEAÑOS ---
     col_partido, col_cumples = st.columns(2)
     
     with col_partido:
@@ -369,16 +366,17 @@ else:
         elif proximo_partido:
             html_racha = " - ".join([f'<span style="color: {"#50C878" if r=="V" else "gray" if r=="E" else "#FF6B6B"};">{r}</span>' for r in racha]) if racha else "<span style='color: gray;'>Sin datos previos</span>"
             img_escudo = f'<img src="{proximo_partido["escudo"]}" width="50" style="margin-bottom: 5px;">' if proximo_partido["escudo"] else ""
-            st.markdown(f"""
-            <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
-            <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
-            {img_escudo}
-            <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
-            <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
-            <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
-            </div></div>""", unsafe_allow_html=True)
+            st.markdown(textwrap.dedent(f"""
+                <div style="background-color: #1E2633; border-radius: 8px; padding: 15px; text-align: center; height: 100%;">
+                <p style="color: #6C8EBF; font-weight: bold; margin-bottom: 5px; font-size: 0.9em;">DIVISIÓN DE HONOR JUVENIL</p>
+                {img_escudo}
+                <h3 style="margin: 5px 0;">ADARVE JUVENIL DH <span style="font-weight: normal; font-size: 0.8em; color: gray;">vs</span> {proximo_partido["equipo"].upper()}</h3>
+                <p style="margin: 0; font-size: 0.9em;">📍 <strong>{proximo_partido["condicion"].upper()}</strong> | 📅 {proximo_partido["fecha"]}</p>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2C384A;">
+                <p style="margin: 0; font-size: 0.8em; color: gray;">RACHA ÚLTIMOS PARTIDOS</p>
+                <p style="margin: 5px 0 0 0; font-weight: bold; letter-spacing: 2px;">{html_racha}</p>
+                </div></div>
+            """), unsafe_allow_html=True)
         else: st.info("No hay próximos partidos programados en el calendario.")
         
     with col_cumples:
@@ -411,12 +409,12 @@ else:
             texto_well += f"✅ ¡Todos los cuestionarios al día!"
             
         st.markdown(
-            f"""
-            <div style="background-color: rgba(0, 168, 232, 0.05); padding: 20px; border-radius: 8px; border-left: 5px solid #00A8E8; min-height: 220px;">
-                <h5 style="margin: 0; color: #00A8E8; font-size: 0.9em; letter-spacing: 1px;">WELLNESS</h5>
-                <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_well}</p>
-            </div>
-            """, 
+            textwrap.dedent(f"""
+                <div style="background-color: rgba(0, 168, 232, 0.05); padding: 20px; border-radius: 8px; border-left: 5px solid #00A8E8; min-height: 220px;">
+                    <h5 style="margin: 0; color: #00A8E8; font-size: 0.9em; letter-spacing: 1px;">WELLNESS</h5>
+                    <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_well}</p>
+                </div>
+            """), 
             unsafe_allow_html=True
         )
         
@@ -429,12 +427,12 @@ else:
             texto_rpe += f"<br><br>✅ Cuestionarios al día"
             
         st.markdown(
-            f"""
-            <div style="background-color: rgba(255, 193, 7, 0.04); padding: 20px; border-radius: 8px; border-left: 5px solid #FFC107; min-height: 220px;">
-                <h5 style="margin: 0; color: #FFC107; font-size: 0.9em; letter-spacing: 1px;">CARGA INTERNA</h5>
-                <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_rpe}</p>
-            </div>
-            """, 
+            textwrap.dedent(f"""
+                <div style="background-color: rgba(255, 193, 7, 0.04); padding: 20px; border-radius: 8px; border-left: 5px solid #FFC107; min-height: 220px;">
+                    <h5 style="margin: 0; color: #FFC107; font-size: 0.9em; letter-spacing: 1px;">CARGA INTERNA</h5>
+                    <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_rpe}</p>
+                </div>
+            """), 
             unsafe_allow_html=True
         )
             
@@ -450,12 +448,12 @@ else:
             texto_enf = "Bajas actuales: <b>0</b><br><br>✅ ¡Toda la plantilla disponible!"
             
         st.markdown(
-            f"""
-            <div style="background-color: {bg_enf}; padding: 20px; border-radius: 8px; border-left: 5px solid {color_enf}; min-height: 220px;">
-                <h5 style="margin: 0; color: {color_enf}; font-size: 0.9em; letter-spacing: 1px;">ENFERMERÍA-OTROS</h5>
-                <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_enf}</p>
-            </div>
-            """, 
+            textwrap.dedent(f"""
+                <div style="background-color: {bg_enf}; padding: 20px; border-radius: 8px; border-left: 5px solid {color_enf}; min-height: 220px;">
+                    <h5 style="margin: 0; color: {color_enf}; font-size: 0.9em; letter-spacing: 1px;">ENFERMERÍA-OTROS</h5>
+                    <p style="margin: 15px 0 0 0; font-size: 0.95em; color: #CCCCCC; line-height: 1.4;">{texto_enf}</p>
+                </div>
+            """), 
             unsafe_allow_html=True
         )
 
