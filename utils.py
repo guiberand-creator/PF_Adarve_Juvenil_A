@@ -11,50 +11,63 @@ def render_html(codigo_html: str, container=None):
         c.markdown(codigo_html, unsafe_allow_html=True)
 
 def inyectar_css(css_codigo: str):
-    """Inyecta bloques CSS limpios."""
+    """Inyecta bloques CSS limpios garantizando que el navegador los interprete."""
     css_limpio = f"<style>\n{css_codigo.strip()}\n</style>"
     render_html(css_limpio)
 
 def aplicar_estilos_globales():
-    """Aplica fuentes oficiales protegiendo los iconos de Streamlit."""
+    """Aplica tipografía homogénea oficial del club a toda la aplicación
+    y protege de forma blindada los iconos nativos de Streamlit."""
     inyectar_css("""
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
-        /* Fuentes generales */
-        html, body, [data-testid="stAppViewContainer"], p, label {
-            font-family: 'Aptos', sans-serif !important;
+        /* 1. Tipografía Base y Contenido General en toda la App */
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"], p, span:not([class*="material"]):not([data-testid="stIconMaterial"]), div, label, button, input, select {
+            font-family: 'Aptos', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
         }
 
-        /* Títulos */
-        h1, h2, h3, h4, h5, h6 {
+        /* 2. Títulos homogéneos en todas las páginas */
+        h1, h2, h3, h4, h5, h6, .stHeading, [data-testid="stHeadingWithActionElements"] {
             font-family: 'Barlow Condensed', sans-serif !important;
+            letter-spacing: 0.5px !important;
+            font-weight: 700 !important;
         }
 
-        /* REGLA CRÍTICA: Proteger iconos nativos de Streamlit para evitar que aparezca 'keyboard_double_arrow_right' */
+        /* 3. REGLA BLINDADA: Proteger iconos nativos de Streamlit para evitar que aparezca 'keyboard_double_arrow_right' */
         [data-testid="stIconMaterial"], 
         .material-symbols-rounded, 
         [class*="material-symbols"], 
         [data-testid="collapsedControl"] span,
-        [data-testid="stSidebarCollapseButton"] span {
-            font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+        [data-testid="stSidebarCollapseButton"] span,
+        [data-testid="stSidebar"] button span {
+            font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
+            font-size: 24px !important;
+            letter-spacing: normal !important;
+            text-transform: none !important;
         }
         
-        /* Ocultar elementos nativos de Streamlit */
+        /* 4. Ocultar elementos nativos no deseados */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
 
-        /* Ajustes de interfaz limpia para el menú */
+        /* 5. Ajustes de interfaz limpia para el menú */
         [data-testid="stSidebarNav"] {
             padding-top: 10px;
         }
     """)
 
 def mostrar_sello_sidebar():
-    """Inserta el pie de página con el logo en el sidebar de forma limpia y universal."""
+    """Inserta el pie de página con el logo en el sidebar de forma limpia y universal,
+    sin que aparezca código CSS en pantalla."""
     directorio_raiz = os.path.dirname(os.path.abspath(__file__))
-    ruta_logo = os.path.join(directorio_raiz, "assets", "logo-guille_blanco.png")
+    # Busca el logo tanto si se llama desde la raíz (Inicio) como desde pages/
+    rutas_posibles = [
+        os.path.join(directorio_raiz, "assets", "logo-guille_blanco.png"),
+        os.path.join(directorio_raiz, "..", "assets", "logo-guille_blanco.png")
+    ]
+    ruta_logo = next((r for r in rutas_posibles if os.path.exists(r)), None)
 
-    if os.path.exists(ruta_logo):
+    if ruta_logo:
         with open(ruta_logo, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
             
@@ -85,6 +98,7 @@ def mostrar_sello_sidebar():
                 color: #CCCCCC !important;
                 margin: 2px 0 0 0 !important;
                 letter-spacing: 0.5px !important;
+                font-family: 'Aptos', 'Inter', sans-serif !important;
             }}
             </style>
             <div class="footer-sello-unico">
@@ -94,7 +108,8 @@ def mostrar_sello_sidebar():
         """, container=st.sidebar)
 
 def aplicar_diseno_responsive():
-    """Fuerza a que imágenes, columnas y gráficos se adapten al 100% de la pantalla móvil."""
+    """Fuerza a que imágenes, columnas y gráficos se adapten al 100% de la pantalla móvil
+    sin reducir el tamaño de títulos o tipografías en ordenadores de sobremesa."""
     inyectar_css("""
         @media (max-width: 768px) {
             img {
@@ -113,5 +128,9 @@ def aplicar_diseno_responsive():
                 width: 100% !important;
                 max-width: 100% !important;
             }
+
+            .stHeading h1 { font-size: 1.6rem !important; }
+            .stHeading h2, .stHeading h3 { font-size: 1.25rem !important; }
+            .stMarkdown p { font-size: 0.9rem !important; }
         }
     """)

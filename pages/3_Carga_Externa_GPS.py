@@ -12,34 +12,14 @@ from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_s
 # =============================================================================
 # 1. CONFIGURACIÓN Y SEGURIDAD
 # =============================================================================
+st.set_page_config(page_title="Carga Externa GPS - Adarve DH", layout="wide")
+aplicar_estilos_globales()
 aplicar_diseno_responsive()
+mostrar_sello_sidebar()
 
 if 'logeado' not in st.session_state or not st.session_state['logeado']:
     st.warning("⚠️ Por favor, inicia sesión en la página principal para acceder.")
     st.stop()
-
-_carpeta_pages = os.path.dirname(os.path.abspath(__file__))
-_ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
-
-if os.path.exists(_ruta_logo):
-    with open(_ruta_logo, "rb") as _f:
-        import base64
-        _b64 = base64.b64encode(_f.read()).decode()
-        
-    st.sidebar.markdown(f"""
-        <style>
-        .footer-sello-unico {{
-            position: fixed; bottom: 20px; left: 10px; width: 260px; text-align: center;
-            z-index: 999; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15);
-        }}
-        .footer-sello-unico img {{ width: 195px; height: auto; margin-bottom: 8px; }}
-        .footer-sello-unico p {{ font-size: 11px !important; color: #CCCCCC !important; margin: 2px 0 0 0 !important; letter-spacing: 0.5px; }}
-        </style>
-        <div class="footer-sello-unico">
-            <img src="data:image/png;base64,{_b64}">
-            <p>© 2026 All Rights Reserved</p>
-        </div>
-    """, unsafe_allow_html=True)
 
 # =============================================================================
 # VARIABLES GLOBALES DE SESIÓN (MEMORIA DEL RADAR Y FILTROS)

@@ -304,7 +304,6 @@ else:
     c1, c2, c3 = st.columns([1, 4.5, 1], vertical_alignment="center")
     with c1: st.image("assets/Imagen2.png", width=120) 
     with c2: 
-        # Título grande y prominente tanto en PC como en móviles
         render_html("<h1 style='text-align: center; margin: 0; color: white; font-size: 2.7rem; font-weight: 700; letter-spacing: 1.5px; line-height: 1.15;'>PREPARACIÓN FÍSICA TEMPORADA 2026/2027</h1>")
     with c3: st.image("assets/Imagen1.png", width=120)
 
