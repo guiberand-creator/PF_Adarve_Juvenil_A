@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
 import os
-from utils import aplicar_estilos_globales, aplicar_diseno_responsive
+from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_sello_sidebar
 
 # Al principio de la página
 aplicar_diseno_responsive()

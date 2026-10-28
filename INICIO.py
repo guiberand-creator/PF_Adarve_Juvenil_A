@@ -4,63 +4,18 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
 import os
-import base64
 import re
-from utils import aplicar_estilos_globales, aplicar_diseno_responsive, inyectar_css, render_html
+from utils import aplicar_estilos_globales, aplicar_diseno_responsive, inyectar_css, render_html, mostrar_sello_sidebar
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL DE LA PÁGINA (PRIMER COMANDO OBLIGATORIO)
+# 1. CONFIGURACIÓN INICIAL DE LA PÁGINA
 # ==========================================
 st.set_page_config(page_title="Adarve Juvenil DH App", layout="wide")
 aplicar_estilos_globales()
 aplicar_diseno_responsive()
+mostrar_sello_sidebar()
 
-# -----------------------------------------------------------------------------
-# SELLO FIJO AL PIE DEL SIDEBAR (FORZADO A TAMAÑO REAL)
-# -----------------------------------------------------------------------------
 _dir_raiz = os.path.dirname(os.path.abspath(__file__))
-_ruta_logo = os.path.join(_dir_raiz, "assets", "logo-guille_blanco.png")
-
-if os.path.exists(_ruta_logo):
-    with open(_ruta_logo, "rb") as _f:
-        _b64 = base64.b64encode(_f.read()).decode()
-        
-    render_html(f"""
-        <style>
-        .watermark-login {{ display: none !important; }}
-
-        .footer-sello-unico {{
-            position: fixed !important;
-            bottom: 20px !important;
-            left: 10px !important;
-            width: 260px !important;
-            text-align: center !important;
-            z-index: 99999 !important;
-            padding-top: 12px !important;
-            border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
-            background-color: transparent !important;
-        }}
-        .footer-sello-unico img {{
-            width: 195px !important;
-            max-width: 195px !important;
-            min-width: 195px !important;
-            height: auto !important;
-            margin-bottom: 8px !important;
-            display: inline-block !important;
-        }}
-        .footer-sello-unico p {{
-            font-size: 11px !important;
-            color: #CCCCCC !important;
-            margin: 2px 0 0 0 !important;
-            letter-spacing: 0.5px !important;
-        }}
-        </style>
-
-        <div class="footer-sello-unico">
-            <img src="data:image/png;base64,{_b64}">
-            <p>© 2026 All Rights Reserved</p>
-        </div>
-    """, container=st.sidebar)
 
 # ==========================================
 # 2. FUNCIONES DE EXTRACCIÓN DE DATOS
@@ -330,7 +285,7 @@ if not st.session_state['logeado']:
     
     col_vacia1, col_centro, col_vacia2 = st.columns([1.2, 1.6, 1.2])
     with col_centro:
-        render_html("<div style='margin-top: 70px; margin-bottom: 25px; text-align: center;'><h1 style='color: white; letter-spacing: 1px;'>ACCESO STAFF</h1></div>")
+        render_html("<div style='margin-top: 70px; margin-bottom: 25px; text-align: center;'><h1 style='color: white; font-size: 2.2rem; letter-spacing: 1px;'>ACCESO STAFF</h1></div>")
         
         clave_usuario = st.text_input("Contraseña", type="password", label_visibility="collapsed", placeholder="Escribe la contraseña aquí...")
         
@@ -346,9 +301,11 @@ if not st.session_state['logeado']:
 # 4. APP PRINCIPAL
 # ==========================================
 else:
-    c1, c2, c3 = st.columns([1, 4, 1], vertical_alignment="center")
+    c1, c2, c3 = st.columns([1, 4.5, 1], vertical_alignment="center")
     with c1: st.image("assets/Imagen2.png", width=120) 
-    with c2: render_html("<h1 style='text-align: center; margin: 0; color: white;'>PREPARACIÓN FÍSICA TEMPORADA 2026/2027</h1>")
+    with c2: 
+        # Título grande y prominente tanto en PC como en móviles
+        render_html("<h1 style='text-align: center; margin: 0; color: white; font-size: 2.7rem; font-weight: 700; letter-spacing: 1.5px; line-height: 1.15;'>PREPARACIÓN FÍSICA TEMPORADA 2026/2027</h1>")
     with c3: st.image("assets/Imagen1.png", width=120)
 
     st.markdown("---") 
