@@ -7,19 +7,23 @@ import io
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
-from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_sello_sidebar
+from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
+                   bloque_alerta, chips_html, nombre_bonito, nombre_corto, fecha_es, etiqueta_sesion, estilo_fig,
+                   mostrar_fig, barras_jugadores, mostrar_segun_pantalla, nombre_pulsado, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_FUERTE,
+                   NEUTRO_TEXTO, TEXTO, BORDE)
 
 # =============================================================================
 # 1. CONFIGURACIÓN Y SEGURIDAD
 # =============================================================================
-st.set_page_config(page_title="Carga Externa GPS - Adarve DH", layout="wide")
-aplicar_estilos_globales()
-aplicar_diseno_responsive()
-mostrar_sello_sidebar()
+configurar_pagina("Carga Externa GPS - Adarve DH")
+exigir_login_staff()
+movil = controles_sidebar()
 
-if 'logeado' not in st.session_state or not st.session_state['logeado']:
-    st.warning("⚠️ Por favor, inicia sesión en la página principal para acceder.")
-    st.stop()
+# Referencia "100%" de partido por demarcación (últimos 4 partidos con >= 60'):
+#   "media"      -> media de los partidos (RECOMENDADO; antes se usaba (media + máximo) / 2,
+#                   que sobrestima el partido tipo y hacía que casi todo saliera en subcarga)
+#   "media_max"  -> criterio anterior
+REF_MODO = "media"
 
 # =============================================================================
 # VARIABLES GLOBALES DE SESIÓN (MEMORIA DEL RADAR Y FILTROS)
@@ -38,18 +42,10 @@ if 'fecha_maestra' not in st.session_state:
 # =============================================================================
 # 2. MOTOR DE EXTRACCIÓN DE DATOS
 # =============================================================================
-def descargar_csv_drive(sheet_id, gid):
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            return pd.read_csv(io.StringIO(res.text))
-    except:
-        pass
-    return pd.DataFrame()
+def descargar_csv_drive(sheet_id, gid=None):
+    return descargar_sheet(sheet_id, gid)   # utils.py: tiempo límite + reintento
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=600)
 def obtener_rpe_maestro():
     df_rpe = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     if df_rpe.empty: return pd.DataFrame()
@@ -70,15 +66,15 @@ def obtener_rpe_maestro():
         if col_min: df_rpe['Minutos_RPE'] = pd.to_numeric(df_rpe[col_min], errors='coerce').fillna(0)
         else: df_rpe['Minutos_RPE'] = 0
         
-        val_c = pd.to_numeric(df_rpe[col_c], errors='coerce').fillna(0) if col_c else 0
-        val_m = pd.to_numeric(df_rpe[col_m], errors='coerce').fillna(0) if col_m else 0
-        df_rpe['RPE_G'] = (val_c + val_m) / 2
+        val_c = pd.to_numeric(df_rpe[col_c], errors='coerce') if col_c else pd.Series(np.nan, index=df_rpe.index)
+        val_m = pd.to_numeric(df_rpe[col_m], errors='coerce') if col_m else pd.Series(np.nan, index=df_rpe.index)
+        df_rpe['RPE_G'] = pd.concat([val_c, val_m], axis=1).mean(axis=1, skipna=True)
         
         return df_rpe.dropna(subset=['Fecha'])[['Fecha', 'Nombre_Cruce', 'Tipo_Dia_Oficial', 'Minutos_RPE', 'RPE_G']]
     except Exception as e:
         return pd.DataFrame()
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=600)
 def cargar_archivos_gps():
     ruta_gps = os.path.join("data", "GPS")
     if not os.path.exists(ruta_gps): return pd.DataFrame()
@@ -125,7 +121,7 @@ def cargar_archivos_gps():
             df_limpio['Fecha'] = pd.to_datetime(df_temp[col_fecha], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
             df_limpio['Nombre'] = df_temp[col_nombre].astype(str).str.strip()
             df_limpio['Nombre_Cruce'] = df_limpio['Nombre'].str.lower()
-            df_limpio['Posicion'] = df_temp[col_pos].astype(str) if col_pos else 'Sin Posición'
+            df_limpio['Posicion'] = df_temp[col_pos].astype(str).str.strip() if col_pos else 'Sin Posición'
             df_limpio['Duracion_GPS'] = df_temp[col_dur].apply(fix_num) if col_dur else 60.0
             
             df_limpio['Dist_Total'] = df_temp[col_dt].apply(fix_num) if col_dt else 0.0
@@ -150,10 +146,26 @@ def cargar_archivos_gps():
             df_final['Dist_18'] = df_final['Dist_18'] * 1000
             df_final['Dist_25'] = df_final['Dist_25'] * 1000
             df_final['Dist_28'] = df_final['Dist_28'] * 1000
+        # CORRECCIÓN: si el GPS no trae la posición ("nan"), se toma de data/Posiciones.xlsx
+        df_final['Posicion'] = df_final['Posicion'].replace({'nan': np.nan, 'None': np.nan, '': np.nan})
+        r_pos = os.path.join("data", "Posiciones.xlsx")
+        if os.path.exists(r_pos):
+            try:
+                dp = pd.read_excel(r_pos)
+                dp.columns = [str(c).strip() for c in dp.columns]
+                c_n = next((c for c in dp.columns if 'jugador' in c.lower() or 'nombre' in c.lower()), dp.columns[0])
+                c_p = next((c for c in dp.columns if 'posic' in c.lower()), None)
+                if c_p:
+                    mapa = {nombre_bonito(n).lower(): str(p).strip() for n, p in zip(dp[c_n], dp[c_p]) if pd.notna(p)}
+                    faltan = df_final['Posicion'].isna()
+                    df_final.loc[faltan, 'Posicion'] = df_final.loc[faltan, 'Nombre'].apply(lambda n: mapa.get(nombre_bonito(n).lower()))
+            except Exception:
+                pass
+        df_final['Posicion'] = df_final['Posicion'].fillna('Sin posición')
         return df_final
     return pd.DataFrame()
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=600)
 def obtener_calendario_partidos():
     df_cal = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
     if df_cal.empty: return pd.DataFrame()
@@ -233,6 +245,7 @@ def calcular_acwr_ewma(df, metrica='Dist_25', dias_agudo=7, dias_cronico=21):
 df_rpe = obtener_rpe_maestro()
 df_gps = cargar_archivos_gps()
 df_calendario = obtener_calendario_partidos()
+comprobar_descargas(obtener_rpe_maestro, obtener_calendario_partidos)
 
 if df_gps.empty:
     st.info("🚧 Aún no hay archivos de GPS en la carpeta `data/GPS`.")
@@ -252,13 +265,13 @@ if not df_rpe.empty:
     df_rpe_jugadores = df_rpe[['Fecha', 'Nombre_Cruce', 'Minutos_RPE', 'RPE_G']].drop_duplicates(subset=['Fecha', 'Nombre_Cruce'], keep='last')
     df_master = pd.merge(df_master, df_rpe_jugadores, on=['Fecha', 'Nombre_Cruce'], how='left')
     
-    df_master['RPE_G'] = df_master['RPE_G'].fillna(5) 
+    # CORRECCIÓN: si el jugador no rellenó el RPE se deja vacío (antes se inventaba un 5)
     df_master['Minutos_RPE'] = df_master['Minutos_RPE'].fillna(df_master['Duracion_GPS'])
     df_master['Minutos_RPE'] = np.where(df_master['Minutos_RPE'] > 0, df_master['Minutos_RPE'], df_master['Duracion_GPS'])
 else:
     df_master = df_gps.copy()
     df_master['Tipo_Dia_Oficial'] = df_master['Fecha'].apply(lambda f: 'Partido' if f in fechas_partidos_cal else 'Entreno')
-    df_master['RPE_G'] = 5
+    df_master['RPE_G'] = np.nan
     df_master['Minutos_RPE'] = df_master['Duracion_GPS']
 
 df_master = df_master.sort_values(by='Fecha')
@@ -301,7 +314,7 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     if 'compensatorio' in t or (('+1' in t or '+2' in t) and not jugo_60):
         if metrica == 'Dist_Total': return (55, 65)
         elif metrica == 'Dist_18': return (40, 50)
-        elif metrica == 'Dist_25': return (30, 45)
+        elif metrica in ['Dist_25', 'Dist_28', 'Sprints']: return (30, 45)
         elif metrica in ['Accels', 'Decels']: return (60, 70)
         elif metrica == 'Player_Load': return (55, 65)
         return (0, 0)
@@ -309,7 +322,7 @@ def get_target_range(metrica, tipo_dia, jugo_60):
     if ('+1' in t or '+2' in t) and jugo_60:
         if metrica == 'Dist_Total': return (20, 30)
         elif metrica == 'Dist_18': return (0, 30)
-        elif metrica == 'Dist_25': return (0, 10)
+        elif metrica in ['Dist_25', 'Dist_28', 'Sprints']: return (0, 10)
         elif metrica in ['Accels', 'Decels']: return (10, 30)
         elif metrica == 'Player_Load': return (20, 30)
         return (0, 0)
@@ -329,7 +342,7 @@ def get_target_range(metrica, tipo_dia, jugo_60):
         if is_3: return (55, 70)
         if is_2: return (0, 10)
         if is_1: return (15, 25)
-    elif metrica == 'Dist_25':
+    elif metrica in ['Dist_25', 'Dist_28', 'Sprints']:   # >28 km/h y sprints siguen los % de >25 km/h
         if is_4: return (0, 15)
         if is_3: return (40, 75)
         if is_2: return (0, 5)
@@ -360,6 +373,12 @@ fallbacks_profesionales = {
 # =============================================================================
 # CÁLCULO DE REFERENCIAS 100% POR DEMARCACIÓN TÁCTICA
 # =============================================================================
+def referencia_partido(serie, m):
+    if REF_MODO == "media":
+        return serie.mean()
+    extremo = serie.min() if m == 'Dec_Max' else serie.max()
+    return (serie.mean() + extremo) / 2
+
 dict_ref_posicion = {}
 if not df_partidos.empty:
     ultimos_4_fechas = sorted(df_partidos['Fecha'].unique(), reverse=True)[:4]
@@ -370,17 +389,13 @@ if not df_partidos.empty:
         dict_ref_posicion[pos_tag] = {}
         for m in metricas_todas:
             if not df_p_pos.empty and df_p_pos[m].mean() != 0:
-                if m == 'Dec_Max':
-                    dict_ref_posicion[pos_tag][m] = (df_p_pos[m].mean() + df_p_pos[m].min()) / 2
-                else:
-                    dict_ref_posicion[pos_tag][m] = (df_p_pos[m].mean() + df_p_pos[m].max()) / 2
+                dict_ref_posicion[pos_tag][m] = referencia_partido(df_p_pos[m], m)
             else:
                 dict_ref_posicion[pos_tag][m] = fallbacks_profesionales[m]
 
 def calc_target_min(row, m):
     pos = row['Posicion']
     ref_100 = dict_ref_posicion.get(pos, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
-    if m in ['Dist_28', 'Sprints']: return ref_100
     if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']: return 0
     pct_min = get_target_range(m, row['Tipo_Dia_Oficial'], row['Jugo_60_Ultimo_Partido'])[0]
     return ref_100 * (pct_min / 100)
@@ -388,7 +403,6 @@ def calc_target_min(row, m):
 def calc_target_max(row, m):
     pos = row['Posicion']
     ref_100 = dict_ref_posicion.get(pos, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
-    if m in ['Dist_28', 'Sprints']: return ref_100
     if m in ['Acc_Max', 'Dec_Max', 'Top_Speed']: return 0
     pct_max = get_target_range(m, row['Tipo_Dia_Oficial'], row['Jugo_60_Ultimo_Partido'])[1]
     return ref_100 * (pct_max / 100)
@@ -401,11 +415,7 @@ for m in metricas_todas:
 # =============================================================================
 # 4. INTERFAZ: CABECERA Y FILTROS INTERACTIVOS
 # =============================================================================
-st.markdown("""
-    <div style="margin-bottom: 5px;">
-        <h1 style="margin-bottom: 0px; padding-bottom: 0px;">SESSION DASHBOARD (GPS)</h1>
-    </div>
-""", unsafe_allow_html=True)
+st.title("CARGA EXTERNA (GPS)")
 
 def actualizar_fecha_manual():
     st.session_state.fecha_maestra = st.session_state.widget_fecha
@@ -422,7 +432,7 @@ idx_fecha_seleccionada = fechas_disp.index(st.session_state.fecha_maestra) if st
 
 col_f1, col_f2, col_f3 = st.columns(3)
 with col_f1: 
-    fecha_sel = st.selectbox("📅 Select Date:", fechas_disp, index=idx_fecha_seleccionada, key="widget_fecha", on_change=actualizar_fecha_manual)
+    fecha_sel = st.selectbox("📅 Fecha:", fechas_disp, index=idx_fecha_seleccionada, key="widget_fecha", on_change=actualizar_fecha_manual, format_func=fecha_es)
 with col_f2:
     posiciones_validas = [str(p) for p in df_master['Posicion'].unique() if str(p).lower() != 'nan']
     pos_sel = st.selectbox("⚽ Posición:", ["Equipo Completo"] + sorted(posiciones_validas))
@@ -431,7 +441,7 @@ with col_f3:
         jugadores_validos = sorted([str(j) for j in df_master['Nombre'].unique() if str(j).lower() != 'nan'])
     else:
         jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
-    jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos)
+    jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos, format_func=lambda x: x if x == "Todos" else nombre_bonito(x))
 
 target_refs_global = {}
 if not df_partidos.empty:
@@ -445,10 +455,7 @@ if not df_partidos.empty:
         
     for m in metricas_todas:
         if not df_ref_base.empty and df_ref_base[m].mean() != 0:
-            if m == 'Dec_Max':
-                target_refs_global[m] = (df_ref_base[m].mean() + df_ref_base[m].min()) / 2
-            else:
-                target_refs_global[m] = (df_ref_base[m].mean() + df_ref_base[m].max()) / 2
+            target_refs_global[m] = referencia_partido(df_ref_base[m], m)
         else:
             target_refs_global[m] = fallbacks_profesionales[m]
 else:
@@ -458,15 +465,17 @@ df_sesion = df_master[df_master['Fecha'] == fecha_sel]
 fecha_datetime = datetime.strptime(fecha_sel, '%Y-%m-%d').date()
 df_fechas = pd.to_datetime(df_master['Fecha']).dt.date
 
-df_partidos_prev = df_master[(df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido')) & (df_fechas < fecha_datetime)]
-if not df_partidos_prev.empty:
-    last_match_date = pd.to_datetime(df_partidos_prev['Fecha']).dt.date.max()
+# MICROCICLO = del día siguiente al último partido hasta la fecha elegida.
+# CORRECCIÓN: los partidos se toman del CALENDARIO del Drive (antes solo contaban los partidos con GPS,
+# así que si un partido no se había grabado el microciclo empezaba semanas atrás).
+fechas_partido = set(pd.to_datetime(list(fechas_partidos_cal), errors='coerce').dropna().date) if fechas_partidos_cal else set()
+fechas_partido |= set(pd.to_datetime(df_master[df_master['Tipo_Dia_Oficial'].str.lower().str.contains('partido', na=False)]['Fecha']).dt.date)
+partidos_previos = sorted(f for f in fechas_partido if f < fecha_datetime)
+if partidos_previos:
+    last_match_date = partidos_previos[-1]
     fecha_inicio_sem = last_match_date + timedelta(days=1)
-    
-    df_partidos_prev2 = df_partidos_prev[pd.to_datetime(df_partidos_prev['Fecha']).dt.date < last_match_date]
-    if not df_partidos_prev2.empty:
-        prev_match_date = pd.to_datetime(df_partidos_prev2['Fecha']).dt.date.max()
-        fecha_inicio_sem_prev = prev_match_date + timedelta(days=1)
+    if len(partidos_previos) >= 2:
+        fecha_inicio_sem_prev = partidos_previos[-2] + timedelta(days=1)
     else:
         fecha_inicio_sem_prev = last_match_date - timedelta(days=6)
     fecha_fin_sem_prev = last_match_date
@@ -535,25 +544,19 @@ total_avisos_micro = len(jugadores_vmax_peligro) + sum(len(lista) for lista in a
 
 st.markdown("<br>", unsafe_allow_html=True)
 str_fechas_micro = f"Desde {fecha_inicio_sem.strftime('%d/%m')} hasta {fecha_datetime.strftime('%d/%m')}"
-with st.expander(f"🚨 ALERTAS MICROCICLO ({str_fechas_micro}) - {total_avisos_micro} Avisos", expanded=False):
-    cols_alertas = st.columns(7)
-    def generar_lista_html(titulo, lista, es_vmax=False):
-        html = f"<div style='font-size: 16px; margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 4px; color: white;'>{titulo}</div>"
-        if not lista: html += "<div style='font-size: 15px; color: #2ECC71;'>✅ Todo OK</div>"
-        else:
-            color_texto = "#E74C3C" if es_vmax else "#F39C12"
-            for item in lista:
-                val_str = f"{item[1]}v" if es_vmax else item[1]
-                html += f"<div style='font-size: 15px; color: {color_texto}; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' title='{item[0]}'>• {item[0]} ({val_str})</div>"
-        return html
-
-    with cols_alertas[0]: st.markdown(generar_lista_html("🏃 Riesgo Vmax", jugadores_vmax_peligro, True), unsafe_allow_html=True)
-    with cols_alertas[1]: st.markdown(generar_lista_html("🔋 Dist. Total", alertas_metricas['Dist_Total']), unsafe_allow_html=True)
-    with cols_alertas[2]: st.markdown(generar_lista_html("🔋 Dist. >18", alertas_metricas['Dist_18']), unsafe_allow_html=True)
-    with cols_alertas[3]: st.markdown(generar_lista_html("🔋 Dist. >25", alertas_metricas['Dist_25']), unsafe_allow_html=True)
-    with cols_alertas[4]: st.markdown(generar_lista_html("🔋 Acel.", alertas_metricas['Accels']), unsafe_allow_html=True)
-    with cols_alertas[5]: st.markdown(generar_lista_html("🔋 Desac.", alertas_metricas['Decels']), unsafe_allow_html=True)
-    with cols_alertas[6]: st.markdown(generar_lista_html("🔋 Load", alertas_metricas['Player_Load']), unsafe_allow_html=True)
+with st.expander(f"🚨 ALERTAS MICROCICLO ({str_fechas_micro}) · {total_avisos_micro} avisos", expanded=False):
+    st.caption("Jugadores por debajo del 80% del mínimo programado acumulado en el microciclo (valor real / rango objetivo, en % del partido).")
+    bloque_alerta("🏃 Sin estímulo de velocidad (ningún día ≥ 90% de su Vmax)", [j for j, _ in jugadores_vmax_peligro], ROJO,
+                  vacio="✅ Todos han tenido estímulo de velocidad")
+    hay_alguna = False
+    for m_key, m_tit in [('Dist_Total', 'Dist. total'), ('Dist_18', 'Dist. >18 km/h'), ('Dist_25', 'Dist. >25 km/h'),
+                         ('Accels', 'Aceleraciones'), ('Decels', 'Desaceleraciones'), ('Player_Load', 'Player Load')]:
+        lista = alertas_metricas[m_key]
+        if lista:
+            hay_alguna = True
+            bloque_alerta(f"🔋 {m_tit} · {len(lista)}", [j for j, _ in lista], AZUL, sufijos=dict(lista))
+    if not hay_alguna:
+        st.caption("✅ Ninguna métrica de volumen por debajo de lo programado.")
 
 alertas_meso = []
 metricas_meso = {
@@ -578,7 +581,7 @@ for m_key, m_name in metricas_meso.items():
         if (m0_actual > m0_tmax) and (m1_actual > m1_tmax):
             alertas_meso.append(f"📈 <b>SOBRECARGA en {m_name}:</b> El acumulado ha superado el máximo programado durante 2 microciclos consecutivos.")
 
-with st.expander(f"📅 ALERTAS MESOCICLO (Tendencia 2 Microciclos Consecutivos) - {len(alertas_meso)} Avisos", expanded=False):
+with st.expander(f"📅 ALERTAS MESOCICLO (2 microciclos seguidos fuera de rango) · {len(alertas_meso)} avisos", expanded=False):
     if not alertas_meso:
         st.markdown("<div style='font-size: 14px; color: #2ECC71; font-weight: bold;'>✅ El equipo se mantiene estable. Ninguna métrica de carga acumula 2 microciclos seguidos fuera de rango.</div>", unsafe_allow_html=True)
     else:
@@ -616,15 +619,18 @@ df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_v
 media_vmax_sesion = df_vmax_hoy['Porcentaje_Vmax'].mean() if not df_vmax_hoy.empty else 0
 alcanzan_90 = df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
 
-c_dur, c_hist, c_info = st.columns([1.5, 3.2, 1.8])
-with c_dur:
-    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Duración de la sesión</p>", unsafe_allow_html=True)
-    st.markdown(f"<h1 style='color:white; font-size:55px; margin-top:0; margin-bottom:0px; line-height: 1;'>{duracion_sesion} min</h1>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color:white; font-size:55px; font-weight:normal; margin-top:-10px; margin-bottom:0px; line-height: 1;'>TIPO: {tipo_sesion}</p>", unsafe_allow_html=True)
+tarjetas_kpi([
+    {"titulo": "Tipo de sesión", "valor": etiqueta_sesion(tipo_sesion)},
+    {"titulo": "Duración", "valor": f"{duracion_sesion} min"},
+    {"titulo": "Vmax media de la sesión", "valor": f"{media_vmax_sesion:.0f}%", "sub": "% de la Vmax de cada jugador (28 días)",
+     "color": TEXTO if media_vmax_sesion >= 85 else NARANJA},
+    {"titulo": "Jugadores ≥ 90% Vmax", "valor": f"{len(alcanzan_90)}/{len(df_vmax_hoy)}"},
+])
+c_hist, c_info = st.columns([3.2, 1.3])
 with c_hist:
     c_h1, c_h2, c_h3 = st.columns([1.6, 2.2, 2.2]) 
     with c_h1: 
-        st.markdown("<div style='padding-top: 4px;'><p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Histórico sesiones (28d)</p></div>", unsafe_allow_html=True)
+        st.markdown("**Histórico 28 días**")
     with c_h2: 
         metrica_grafico = st.selectbox("Métrica", list(opciones_grafico.keys()), label_visibility="collapsed")
     with c_h3:
@@ -704,7 +710,7 @@ with c_hist:
         try:
             seleccion_hist = st.plotly_chart(
                 fig_hist, 
-                use_container_width=True, 
+                width="stretch", 
                 config={'displayModeBar': False}, 
                 on_select="rerun", 
                 selection_mode=["points"], 
@@ -734,17 +740,15 @@ with c_hist:
                                 st.session_state.hist_grafico_key += 1
                                 st.rerun()
         except Exception:
-            st.plotly_chart(fig_hist, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(fig_hist, width="stretch", config={'displayModeBar': False})
     else:
         st.info(f"No hay sesiones de tipo '{filtro_tipo_sesion}' en los últimos 28 días.")
 
 with c_info:
-    st.markdown("<p style='color:white; font-size:16px; font-weight:bold; margin-bottom:0;'>Velocidad Máxima HOY (>90%)</p>", unsafe_allow_html=True)
-    c_vmax = "#2ECC71" if media_vmax_sesion >= 90 else "#F1C40F" if media_vmax_sesion >= 85 else "#E74C3C"
-    st.markdown(f"<h2 style='color:{c_vmax}; margin-top:0;'>{media_vmax_sesion:.1f}% <span style='font-size:14px; color:#A0AEC0; font-weight:normal;'>media</span></h2>", unsafe_allow_html=True)
-    with st.expander("👁️ Jugadores al 90% hoy"):
+    with st.expander("👁️ Jugadores ≥ 90% Vmax hoy"):
         if not alcanzan_90.empty:
-            for _, r in alcanzan_90.iterrows(): st.markdown(f"<span style='color:#2ECC71; font-size:14px;'>• {r['Nombre']} ({r['Porcentaje_Vmax']:.1f}%)</span>", unsafe_allow_html=True)
+            render_html(chips_html(alcanzan_90['Nombre'].tolist(), VERDE,
+                                   {r['Nombre']: f"{r['Porcentaje_Vmax']:.0f}%" for _, r in alcanzan_90.iterrows()}))
         else: st.caption("Ninguno")
 
 # =============================================================================
@@ -763,9 +767,9 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     texto_val = f"{val:.1f}" if val < 100 else f"{val:.0f}"
     max_range = max(val, t_max) * 1.2 if max(val, t_max) > 0 else 10
     
-    color_bar = "#2ECC71"
-    if val < t_min: color_bar = "#3498DB"
-    elif val > t_max: color_bar = "#E74C3C"
+    color_bar = "rgba(148,163,184,0.55)"          # dentro del rango programado: neutro
+    if t_max > 0 and val < t_min: color_bar = AZUL  # por debajo
+    elif t_max > 0 and val > t_max: color_bar = ROJO  # por encima
     
     fig = go.Figure()
     fig.add_trace(go.Bar(x=[max_range], y=[0], orientation='h', marker=dict(color="rgba(255,255,255,0.1)"), hoverinfo="none", width=0.8))
@@ -789,25 +793,28 @@ def pintar_bullet(metrica, nombre_mostrar, row_col):
     )
     
     with row_col:
-        st.markdown(f"<p style='margin-bottom:5px; font-size:16px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"bullet_{metrica}")
+        st.markdown(f"<p style='margin-bottom:2px; font-size:14px; color:white; font-weight:bold;'>{nombre_mostrar}</p>", unsafe_allow_html=True)
+        fig.update_xaxes(fixedrange=True); fig.update_yaxes(fixedrange=True)
+        mostrar_fig(fig, key=f"bullet_{metrica}")
 
+st.caption("Media del grupo vs rango programado (franja verde entre líneas amarillas). "
+           "Gris = dentro del rango · azul = por debajo · rojo = por encima.")
 r1_1, r1_2, r1_3, r1_4 = st.columns(4)
-pintar_bullet('Dist_Total', 'Total Distance (m)', r1_1)
-pintar_bullet('Dist_18', 'Distance > 18 km/h', r1_2)
-pintar_bullet('Dist_25', 'Distance > 25 km/h', r1_3)
-pintar_bullet('Dist_28', 'Distance > 28 km/h', r1_4)
+pintar_bullet('Dist_Total', 'Distancia total (m)', r1_1)
+pintar_bullet('Dist_18', 'Distancia > 18 km/h', r1_2)
+pintar_bullet('Dist_25', 'Distancia > 25 km/h', r1_3)
+pintar_bullet('Dist_28', 'Distancia > 28 km/h', r1_4)
 r2_1, r2_2, r2_3, r2_4 = st.columns(4)
-pintar_bullet('Sprints', 'Total Sprints', r2_1)
-pintar_bullet('Accels', 'Accelerations', r2_2)
-pintar_bullet('Decels', 'Decelerations', r2_3)
+pintar_bullet('Sprints', 'Sprints', r2_1)
+pintar_bullet('Accels', 'Aceleraciones', r2_2)
+pintar_bullet('Decels', 'Desaceleraciones', r2_3)
 pintar_bullet('Player_Load', 'Player Load', r2_4)
 
 # =============================================================================
 # 6. TABLA INDIVIDUAL (ANÁLISIS POR CATEGORÍA TÁCTICA)
 # =============================================================================
 st.markdown("---")
-st.markdown("### Desglose de la sesión por jugador")
+st.markdown("### Desglose por jugador")
 
 metricas_tabla = {'Dist_Total': 'Dist. Total', 'Dist_18': 'Dist. >18', 'Dist_25': 'Dist. >25', 'Dist_28': 'Dist. >28', 'Sprints': 'Sprints', 'Accels': 'Acel.', 'Decels': 'Desac.', 'Acc_Max': 'Ac. Máx', 'Dec_Max': 'Dec. Máx', 'Top_Speed': 'V. Máx', 'Player_Load': 'Load'}
 df_sesion_tabla = df_sesion.copy()
@@ -816,7 +823,181 @@ orden_tactico = {'defensa central': 1, 'defensa lateral': 2, 'mediocentro': 3, '
 df_sesion_tabla['Peso_Pos'] = df_sesion_tabla['Posicion'].astype(str).str.lower().str.strip().map(orden_tactico).fillna(99)
 df_sesion_tabla = df_sesion_tabla.sort_values(['Peso_Pos', 'Nombre'])
 
+# ---------- Vista (tabla / comparativa) y filtros propios de este bloque ----------
+VISTA_TABLA, VISTA_COMP = "📋 Tabla de la sesión", "📊 Comparativa entre jugadores"
+vista_desglose = st.segmented_control("Vista", [VISTA_TABLA, VISTA_COMP], default=VISTA_TABLA, key="vista_desglose",
+                                      label_visibility="collapsed") or VISTA_TABLA
+es_comparativa = vista_desglose == VISTA_COMP
+
+def peso_pos(p):
+    return orden_tactico.get(str(p).lower().strip(), 99)
+pos_opts = sorted([p for p in df_master['Posicion'].dropna().astype(str).unique() if p.lower() not in ('nan', 'sin posición')],
+                  key=lambda p: (peso_pos(p), p))
+pos_tabla = st.pills("Posiciones", pos_opts, selection_mode="multi", key="pills_pos_tabla",
+                     help="Pulsa una o varias posiciones. Sin selección = todas.") or []
+pos_de = df_master.drop_duplicates('Nombre', keep='last').set_index('Nombre')['Posicion'].astype(str).to_dict()
+jug_pool = sorted(df_master[df_master['Posicion'].isin(pos_tabla)]['Nombre'].unique() if pos_tabla else df_master['Nombre'].unique(),
+                  key=lambda n: (peso_pos(pos_de.get(n, '')), nombre_bonito(n)))
+
+# Casillas de jugadores (todas marcadas por defecto)
+def _marcar(valor):
+    for n in jug_pool:
+        st.session_state[f"chk_jug_{n}"] = valor
+for n in jug_pool:
+    st.session_state.setdefault(f"chk_jug_{n}", True)
+n_marcados = sum(st.session_state[f"chk_jug_{n}"] for n in jug_pool)
+with st.expander(f"☑️ Jugadores ({n_marcados}/{len(jug_pool)} seleccionados)"):
+    b1, b2, _ = st.columns([1, 1, 3])
+    b1.button("Marcar todos", on_click=_marcar, args=(True,), key="chk_todos", width="stretch")
+    b2.button("Desmarcar todos", on_click=_marcar, args=(False,), key="chk_ninguno", width="stretch")
+    n_cols = 2 if movil else 4
+    cols_chk = st.columns(n_cols)
+    for i, n in enumerate(jug_pool):
+        cols_chk[i % n_cols].checkbox(nombre_bonito(n), key=f"chk_jug_{n}")
+jug_tabla = [n for n in jug_pool if st.session_state.get(f"chk_jug_{n}", True)]
+
+if pos_tabla:
+    df_sesion_tabla = df_sesion_tabla[df_sesion_tabla['Posicion'].isin(pos_tabla)]
+df_sesion_tabla = df_sesion_tabla[df_sesion_tabla['Nombre'].isin(jug_tabla)]
+
+if es_comparativa:
+    df_sesion_tabla = df_sesion_tabla.iloc[0:0]   # no se dibuja la tabla
+    metricas_comp = {'Distancia total (m)': 'Dist_Total', 'Distancia > 18 km/h (m)': 'Dist_18', 'Distancia > 25 km/h (m)': 'Dist_25',
+                     'Distancia > 28 km/h (m)': 'Dist_28', 'Sprints': 'Sprints', 'Aceleraciones': 'Accels', 'Desaceleraciones': 'Decels',
+                     'Acel + desacel': 'Acc_Dec', 'V. máx (km/h)': 'Top_Speed', 'Acel. máx (m/s²)': 'Acc_Max',
+                     'Decel. máx (m/s²)': 'Dec_Max', 'Player Load': 'Player_Load', 'Carga sRPE (UA)': 'Carga_UA'}
+    f_min = pd.to_datetime(df_master['Fecha']).min().date()
+    e1, e2 = st.columns([1.4, 1.6], vertical_alignment="bottom")
+    with e1:
+        metrica_comp_lbl = st.selectbox("Variable", list(metricas_comp.keys()), key="comp_metrica")
+    with e2:
+        rango_comp = st.date_input("Rango de fechas (media de las sesiones del rango; elige un solo día para ver una sesión)",
+                                   value=(max(f_min, fecha_datetime - timedelta(days=56)), fecha_datetime),
+                                   min_value=f_min, max_value=fecha_datetime, format="DD/MM/YYYY", key="comp_rango")
+    m_comp = metricas_comp[metrica_comp_lbl]
+    if isinstance(rango_comp, (list, tuple)) and len(rango_comp) == 2:
+        c_desde, c_hasta = rango_comp
+    else:
+        c_desde = rango_comp[0] if isinstance(rango_comp, (list, tuple)) else rango_comp; c_hasta = c_desde
+
+    dfc = df_master.copy()
+    dfc['Dia'] = pd.to_datetime(dfc['Fecha'])
+    dfc = dfc[(dfc['Dia'].dt.date >= c_desde) & (dfc['Dia'].dt.date <= c_hasta)]
+    dfc['Sesion'] = dfc['Tipo_Dia_Oficial'].apply(etiqueta_sesion)
+    tipos_opts = sorted(dfc['Sesion'].dropna().unique(), key=lambda t: (t != 'Partido', t))
+    if "comp_tipos" in st.session_state:
+        st.session_state["comp_tipos"] = [t for t in (st.session_state["comp_tipos"] or []) if t in tipos_opts]
+        tipos_sel = st.pills("Tipo de sesión", tipos_opts, selection_mode="multi", key="comp_tipos") or tipos_opts
+    else:
+        tipos_sel = st.pills("Tipo de sesión", tipos_opts, selection_mode="multi", default=tipos_opts, key="comp_tipos") or tipos_opts
+    dfc = dfc[dfc['Sesion'].isin(tipos_sel)]
+    if m_comp == 'Dec_Max':
+        dfc[m_comp] = dfc[m_comp].abs()   # frenada: se compara en valor absoluto (más alto = frenada más intensa)
+
+    # Media de la posición: con TODOS los jugadores de esa posición (aunque no estén marcados), para que sea una referencia estable
+    medias_pos = dfc.groupby('Posicion')[m_comp].mean().to_dict()
+    res = dfc[dfc['Nombre'].isin(jug_tabla)].groupby('Nombre').agg(Valor=(m_comp, 'mean'), N=(m_comp, 'count')).reset_index()
+    res['Posicion'] = res['Nombre'].map(pos_de).fillna('Sin posición')
+    res = res.dropna(subset=['Valor'])
+
+    if res.empty:
+        st.info("No hay sesiones con esos filtros.")
+    else:
+        res['Media_pos'] = res['Posicion'].map(medias_pos)
+        res['Dif'] = (res['Valor'] / res['Media_pos'] - 1) * 100
+        res['_p'] = res['Posicion'].apply(peso_pos)
+        res = res.sort_values(['_p', 'Posicion', 'Valor'], ascending=[True, True, False]).reset_index(drop=True)
+        # Posición en el eje: un hueco entre grupos de posición
+        xs, x, previa = [], 0, None
+        for pos_j in res['Posicion']:
+            if previa is not None and pos_j != previa:
+                x += 1
+            xs.append(x); x += 1; previa = pos_j
+        res['x'] = xs
+        UMBRAL = 15  # % respecto a la media de su posición para resaltar
+        colores = [NARANJA if d > UMBRAL else AZUL if d < -UMBRAL else "rgba(148,163,184,0.55)" for d in res['Dif'].fillna(0)]
+        txt_rango = fecha_es(c_desde) if c_desde == c_hasta else f"{fecha_es(c_desde, corta=True)}–{fecha_es(c_hasta, corta=True)}"
+        es_dec = m_comp in ('Acc_Max', 'Dec_Max', 'Top_Speed')
+        fmt = ".2f" if es_dec else ".0f"
+
+        def construir(vertical):
+            fig = go.Figure()
+            # sombreado + línea con la media de cada posición
+            for pos_j, g in res.groupby('Posicion', sort=False):
+                mp = medias_pos.get(pos_j)
+                if mp is None or pd.isna(mp): continue
+                a0, a1 = g['x'].min() - 0.45, g['x'].max() + 0.45
+                if vertical:
+                    fig.add_shape(type="rect", x0=a0, x1=a1, y0=0, y1=mp, fillcolor="rgba(148,163,184,0.10)", line_width=0, layer="below")
+                    fig.add_shape(type="line", x0=a0, x1=a1, y0=mp, y1=mp, line=dict(color=TEXTO, width=2, dash="dash"))
+                    # nombre de la posición y su media ARRIBA del gráfico, para no pisar las barras
+                    fig.add_annotation(x=(a0 + a1) / 2, y=1.0, yref="paper", text=f"<b>{pos_j}</b><br>media {mp:{fmt}}",
+                                       showarrow=False, yanchor="bottom", font=dict(size=10, color=NEUTRO_TEXTO))
+                else:
+                    fig.add_shape(type="rect", y0=a0, y1=a1, x0=0, x1=mp, fillcolor="rgba(148,163,184,0.10)", line_width=0, layer="below")
+                    fig.add_shape(type="line", y0=a0, y1=a1, x0=mp, x1=mp, line=dict(color=TEXTO, width=2, dash="dash"))
+                    # etiqueta en el hueco que hay encima de cada grupo
+                    fig.add_annotation(y=g['x'].min() - 1, x=0, text=f"<b>{pos_j}</b> · media {mp:{fmt}}", showarrow=False,
+                                       xanchor="left", yanchor="middle", font=dict(size=10, color=NEUTRO_TEXTO))
+            hover = [f"<b>{nombre_bonito(n)}</b> ({p})<br>{metrica_comp_lbl}: {v:{fmt}}<br>Media {p}: {mp:{fmt}} ({d:+.0f}%)<br>{k} sesiones"
+                     for n, p, v, mp, d, k in zip(res['Nombre'], res['Posicion'], res['Valor'], res['Media_pos'], res['Dif'].fillna(0), res['N'])]
+            # valor escrito solo en las barras resaltadas (el resto, al pasar el cursor)
+            textos = [f"{v:{fmt}}" if c != "rgba(148,163,184,0.55)" else "" for v, c in zip(res['Valor'], colores)]
+            if vertical:
+                fig.add_trace(go.Bar(x=res['x'], y=res['Valor'], marker_color=colores, text=textos, textposition="outside",
+                                     textfont=dict(size=10, color=TEXTO), hovertext=hover, hoverinfo="text", width=0.75))
+                estilo_fig(fig, height=500, leyenda_abajo=False, titulo=f"{metrica_comp_lbl} · media {txt_rango}")
+                fig.update_layout(margin=dict(t=90))
+                fig.update_xaxes(tickvals=res['x'], ticktext=[nombre_corto(n) for n in res['Nombre']], tickangle=-45)
+                fig.update_yaxes(range=[0, max(res['Valor'].max(), max(medias_pos.values()) if medias_pos else 0) * 1.12])
+            else:
+                fig.add_trace(go.Bar(y=res['x'], x=res['Valor'], orientation="h", marker_color=colores, text=textos,
+                                     textposition="outside", textfont=dict(size=10, color=TEXTO), hovertext=hover, hoverinfo="text", width=0.75))
+                estilo_fig(fig, height=max(320, 22 * (res['x'].max() + 3) + 90), leyenda_abajo=False,
+                           titulo=f"{metrica_comp_lbl} · media {txt_rango}")
+                fig.update_yaxes(tickvals=res['x'], ticktext=[nombre_corto(n) for n in res['Nombre']],
+                                 range=[res['x'].max() + 0.7, -1.6], tickfont=dict(size=10))
+                fig.update_xaxes(range=[0, res['Valor'].max() * 1.25])
+            fig.update_layout(showlegend=False, bargap=0.2)
+            return fig
+
+        st.caption(f"Cada barra = media del jugador en las sesiones del rango. Sombreado y línea discontinua = media de su posición. "
+                   f"Naranja = más de un {UMBRAL}% por encima de la media de su posición · azul = más de un {UMBRAL}% por debajo.")
+        mostrar_segun_pantalla(construir(True), construir(False), key="comp_barras", movil=movil)
+        if m_comp == 'Dec_Max':
+            st.caption("Decel. máx se muestra en valor absoluto: más alto = frenada más intensa.")
+
+# La tabla compacta se ve automáticamente en el móvil; la completa en pantallas anchas.
+# Con "Vista móvil" activada en el lateral, se muestra solo la compacta en cualquier pantalla.
 if not df_sesion_tabla.empty:
+    clase_compacta = "" if movil else "solo-movil"
+    render_html(f"<div class='{clase_compacta}' style='color:{NEUTRO_TEXTO}; font-size:.8rem'>Azul = por debajo del rango programado · "
+                "rojo = por encima · gris = dentro. %Vmax respecto a su máximo de 28 días.</div>")
+    cols_c = [('Dist_Total', 'Dist', 0), ('Dist_18', '>18', 0), ('Dist_25', '>25', 0), ('Accels', 'Acel', 0), ('Decels', 'Dec', 0)]
+    filas = ""
+    for _, row in df_sesion_tabla.iterrows():
+        celdas = ""
+        for m, _, dec in cols_c:
+            v, tmin, tmax = row[m], row[f'Target_Min_{m}'], row[f'Target_Max_{m}']
+            col = AZUL if v < tmin else (ROJO if (tmax > 0 and v > tmax) else NEUTRO_TEXTO)
+            peso = "800" if col != NEUTRO_TEXTO else "400"
+            celdas += f"<td style='padding:6px 4px; text-align:right; color:{col}; font-weight:{peso}'>{v:.{dec}f}</td>"
+        vm = df_master[(df_master['Nombre'] == row['Nombre']) & (df_master['Fecha'] >= fecha_inicio_vmax.strftime('%Y-%m-%d')) & (df_master['Fecha'] <= fecha_sel)]['Top_Speed'].max()
+        pv = (row['Top_Speed'] / vm * 100) if vm and vm > 0 else np.nan
+        col_v = VERDE if pd.notna(pv) and pv >= 90 else NEUTRO_TEXTO
+        celdas += f"<td style='padding:6px 4px; text-align:right; color:{col_v}'>{'' if pd.isna(pv) else f'{pv:.0f}%'}</td>"
+        rpe = row['RPE_G']
+        celdas += f"<td style='padding:6px 4px; text-align:right; color:{ROJO if pd.notna(rpe) and rpe >= 8 else NEUTRO_TEXTO}'>{'–' if pd.isna(rpe) else f'{rpe:.1f}'}</td>"
+        filas += (f"<tr style='border-bottom:1px solid {BORDE}'><td class='col-jug' style='padding:6px 4px; white-space:nowrap; color:{TEXTO}'>"
+                  f"{nombre_corto(row['Nombre'])}<div style='font-size:10px; color:{NEUTRO_TEXTO}'>{row['Posicion']}</div></td>{celdas}</tr>")
+    cab = "".join([f"<th style='padding:6px 4px; text-align:right'>{t}</th>" for _, t, _ in cols_c]) + \
+          "<th style='padding:6px 4px; text-align:right'>%Vmax</th><th style='padding:6px 4px; text-align:right'>RPE</th>"
+    render_html(f"""<style>.tabla-compacta td.col-jug {{ position: sticky; left: 0; background: #0E1117; }}</style>
+        <div class="{clase_compacta}" style="overflow-x:auto"><table class="tabla-compacta" style="border-collapse:collapse; width:100%; font-size:12px">
+        <thead><tr style="color:{NEUTRO_TEXTO}; border-bottom:2px solid {BORDE}"><th style="text-align:left; padding:6px 4px">Jugador</th>{cab}</tr></thead>
+        <tbody>{filas}</tbody></table></div>""")
+
+if not df_sesion_tabla.empty and not movil:
     
     escalas_max = {}
     for m in metricas_tabla:
@@ -838,9 +1019,9 @@ if not df_sesion_tabla.empty:
         pct_t_max = min((t_max/max_val)*100, 100)
         width_target = max(pct_t_max - pct_t_min, 1)
         t_val = f"{valor:.1f}" if es_decimal else f"{valor:.0f}"
-        if valor < t_min: c_barra = "#3498DB" 
-        elif valor > t_max: c_barra = "#E74C3C" 
-        else: c_barra = "#2ECC71" 
+        if valor < t_min: c_barra = AZUL
+        elif valor > t_max and t_max > 0: c_barra = ROJO
+        else: c_barra = "rgba(148,163,184,0.55)"
         return f"""
         <div style="position:relative; width:100%; min-width:50px; max-width:90px; height:18px; background-color:rgba(255,255,255,0.1); border-radius:2px; margin:0 auto; overflow:visible;">
             <div style="position:absolute; left:{pct_t_min}%; top:0; height:100%; width:{width_target}%; background-color:rgba(46, 204, 113, 0.2); z-index:1;"></div>
@@ -883,8 +1064,9 @@ if not df_sesion_tabla.empty:
     <style>
     .tabla-jugadores tbody tr { transition: background-color 0.2s ease; }
     .tabla-jugadores tbody tr:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+    .tabla-jugadores td.col-jug { position: sticky; left: 0; background: #0E1117; z-index: 5; }
     </style>
-    <div style="overflow-x: auto; padding-bottom: 20px;">
+    <div class="solo-pc" style="overflow-x: auto; padding-bottom: 20px;">
     <table class="tabla-jugadores" style="border-collapse: collapse; text-align: center; font-family: sans-serif; font-size: 12px; width: 100%;">
         <thead><tr style="background-color: rgba(0,0,0,0.3); border-bottom: 2px solid #555;">
         <th style="padding: 10px;">POSICIÓN</th><th style="padding: 10px; text-align:left;">JUGADOR</th>
@@ -914,7 +1096,7 @@ if not df_sesion_tabla.empty:
         if pos != pos_actual:
             html += f"<td rowspan='{pos_counts.get(pos,1)}' style='vertical-align:middle; font-weight:bold; color:#E67E22; text-transform:uppercase; border-right:1px solid #444; border-bottom:2px solid #555;'>{pos}</td>"
             pos_actual = pos
-        html += f"<td style='padding:8px; text-align:left; white-space:nowrap;'>{jugador}</td>"
+        html += f"<td class='col-jug' style='padding:8px; text-align:left; white-space:nowrap;'>{nombre_bonito(jugador)}</td>"
         
         for m, _ in metricas_tabla.items():
             val = row[m]
@@ -935,7 +1117,7 @@ if not df_sesion_tabla.empty:
                 color_pct = "#2ECC71" if pct_max >= 90 else "#A0AEC0"
                 html += f"<td style='padding:5px; background-color:transparent; color:{color_pct}; font-weight:bold; font-size:11px;'>{pct_max:.0f}%</td>"
             
-            elif m in ['Dist_28', 'Sprints']:
+            elif False:   # (antes Dist_28/Sprints usaban el 100% de partido todos los días)
                 pos_jug = pos
                 t_ref = dict_ref_posicion.get(pos_jug, fallbacks_profesionales).get(m, fallbacks_profesionales[m])
                 diff_text = ""
@@ -976,12 +1158,13 @@ if not df_sesion_tabla.empty:
                 c_z = "#8B0000" if z > 2 else "#E74C3C" if z > 1.5 else "#1F618D" if z < -2 else "transparent"
                 html += f"<td style='padding:5px; background-color:{c_z}; border-radius:3px; color:{'white' if c_z!='transparent' else '#CCC'};'>{z:.2f}</td>"
         
-        html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if rpe_val>=8 else 'transparent'};'>{rpe_val:.1f}</td></tr>"
+        rpe_txt = f"{rpe_val:.1f}" if pd.notna(rpe_val) else "–"
+        html += f"<td style='padding:5px; border-left:1px solid #444; font-weight:bold; background-color:{'#E74C3C' if pd.notna(rpe_val) and rpe_val>=8 else 'transparent'};'>{rpe_txt}</td></tr>"
         
     html += "</tbody></table></div>"
     st.markdown(html, unsafe_allow_html=True)
-else:
-    st.info("No hay datos para esta fecha.")
+if df_sesion_tabla.empty and not es_comparativa:
+    st.info("No hay datos para esta fecha con esos filtros.")
 
 # =============================================================================
 # 6.B RATIO AGUDO:CRÓNICO PONDERADO (ACWR EWMA 7:21 DÍAS)
@@ -998,58 +1181,58 @@ opciones_metrica_acwr = {
     'Aceleraciones + Desaceleraciones': 'Acc_Dec'
 }
 
-col_ac1, col_ac2 = st.columns([2, 2])
+# El jugador se elige PULSANDO SU BARRA; para volver, botón "Ver toda la plantilla"
+if "acwr_jug" not in st.session_state:
+    st.session_state["acwr_jug"] = "Toda la plantilla"
+    st.session_state["acwr_n"] = 0
+jugador_acwr_sel = st.session_state["acwr_jug"]
+col_ac1, col_ac2 = st.columns([2, 1], vertical_alignment="bottom")
 with col_ac1:
     metrica_acwr_lbl = st.selectbox("🎯 Métrica para Ratio ACWR:", list(opciones_metrica_acwr.keys()), index=0, key="sel_metrica_acwr")
 with col_ac2:
-    jugadores_acwr_opt = ["Vista Plantilla (Foto 2)"] + sorted(list(df_master['Nombre'].unique()))
-    jugador_acwr_sel = st.selectbox("👤 Modo de Visualización:", jugadores_acwr_opt, key="sel_jugador_acwr")
+    if jugador_acwr_sel != "Toda la plantilla" and st.button("👥 Ver toda la plantilla", key="acwr_volver", width="stretch"):
+        st.session_state["acwr_jug"] = "Toda la plantilla"
+        st.session_state["acwr_n"] += 1
+        st.rerun()
 
 metrica_acwr_key = opciones_metrica_acwr[metrica_acwr_lbl]
 df_acwr_total = calcular_acwr_ewma(df_master, metrica=metrica_acwr_key, dias_agudo=7, dias_cronico=21)
 
 if not df_acwr_total.empty:
-    if jugador_acwr_sel == "Vista Plantilla (Foto 2)":
-        df_acwr_fecha = df_acwr_total[df_acwr_total['Fecha'] == fecha_sel].sort_values(by='ACWR', ascending=True)
-        
-        colores_acwr_bars = []
-        for r in df_acwr_fecha['ACWR']:
-            if 0.8 <= r <= 1.3: colores_acwr_bars.append('#2ECC71')
-            elif 1.3 < r <= 1.5: colores_acwr_bars.append('#F1C40F')
-            elif r > 1.5: colores_acwr_bars.append('#E74C3C')
-            else: colores_acwr_bars.append('#3498DB')
+    if jugador_acwr_sel == "Toda la plantilla":
+        df_acwr_fecha = df_acwr_total[df_acwr_total['Fecha'] == fecha_sel].copy()
+        # Jugadores sin carga crónica (lesionados largos, altas recientes): no se dibujan como "0.00"
+        sin_datos = df_acwr_fecha[df_acwr_fecha['EWMA_Cronico'] <= 1.0]['Nombre'].tolist()
+        df_acwr_fecha = df_acwr_fecha[df_acwr_fecha['EWMA_Cronico'] > 1.0]
 
-        fig_team_acwr = go.Figure()
-        fig_team_acwr.add_trace(go.Bar(
-            x=df_acwr_fecha['Nombre'],
-            y=df_acwr_fecha['ACWR'],
-            marker_color=colores_acwr_bars,
-            text=[f"{r:.2f}" for r in df_acwr_fecha['ACWR']],
-            textposition='outside',
-            name='ACWR EWMA (7:21)'
-        ))
-
-        fig_team_acwr.add_hline(y=0.8, line=dict(color='#2ECC71', width=1.5, dash='dash'), annotation_text="0.8 Mín. Óptimo", annotation_position="bottom right")
-        fig_team_acwr.add_hline(y=1.3, line=dict(color='#2ECC71', width=1.5, dash='dash'), annotation_text="1.3 Máx. Óptimo", annotation_position="top right")
-        fig_team_acwr.add_hline(y=1.5, line=dict(color='#E74C3C', width=1.5, dash='dot'), annotation_text="1.5 Riesgo Alto (Sobrecarga)", annotation_position="top right")
-
-        max_acwr_fecha = df_acwr_fecha['ACWR'].max() if not df_acwr_fecha.empty else 1.5
-        fig_team_acwr.update_layout(
-            title=f"ACWR EWMA (7:21) por Jugador en la Sesión ({fecha_sel}) - {metrica_acwr_lbl}",
-            template="plotly_dark",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(title="Ratio ACWR", range=[0, max(max_acwr_fecha * 1.25, 1.8)]),
-            xaxis=dict(tickangle=-45),
-            height=400
-        )
-        st.plotly_chart(fig_team_acwr, use_container_width=True)
-        
-        c_ley1, c_ley2, c_ley3, c_ley4 = st.columns(4)
-        with c_ley1: st.markdown("<div style='background-color:rgba(46, 204, 113, 0.2); padding:8px; border-left:4px solid #2ECC71; color:white; font-size:12px;'>🟢 <b>0.8 - 1.3:</b> Rango Óptimo</div>", unsafe_allow_html=True)
-        with c_ley2: st.markdown("<div style='background-color:rgba(241, 196, 15, 0.2); padding:8px; border-left:4px solid #F1C40F; color:white; font-size:12px;'>🟡 <b>1.31 - 1.50:</b> Tolerable Puntualmente</div>", unsafe_allow_html=True)
-        with c_ley3: st.markdown("<div style='background-color:rgba(231, 76, 60, 0.2); padding:8px; border-left:4px solid #E74C3C; color:white; font-size:12px;'>🔴 <b>> 1.50:</b> Fuera de Rango → Ajustar Carga</div>", unsafe_allow_html=True)
-        with c_ley4: st.markdown("<div style='background-color:rgba(52, 152, 219, 0.2); padding:8px; border-left:4px solid #3498DB; color:white; font-size:12px;'>🔵 <b>< 0.80:</b> Subcarga / Desentrenamiento</div>", unsafe_allow_html=True)
+        def c_acwr(r):
+            if r > 1.5: return ROJO
+            if r > 1.3: return NARANJA
+            if r < 0.8: return AZUL
+            return NEUTRO
+        colores = [c_acwr(r) for r in df_acwr_fecha['ACWR']]
+        textos = [f"{r:.2f}" if c != NEUTRO else "" for r, c in zip(df_acwr_fecha['ACWR'], colores)]
+        args_acwr = dict(
+            textos=textos, orden="desc",
+            hover=[f"{nombre_bonito(n)}: {r:.2f}<br>(pulsa para ver su evolución)" for n, r in zip(df_acwr_fecha['Nombre'], df_acwr_fecha['ACWR'])],
+            ids=df_acwr_fecha['Nombre'].tolist(),
+            eje_titulo=f"ACWR EWMA 7:21 · {metrica_acwr_lbl}",
+            lineas=[{"x": 0.8, "color": AZUL, "texto": "0.8"}, {"x": 1.3, "color": NARANJA, "texto": "1.3"},
+                    {"x": 1.5, "color": ROJO, "texto": "1.5"}],
+            rango=[0, max(1.9, float(df_acwr_fecha['ACWR'].max() or 0) * 1.15)])
+        fig_team_acwr = barras_jugadores(df_acwr_fecha['Nombre'], df_acwr_fecha['ACWR'], colores, **args_acwr)
+        fig_team_acwr_pc = barras_jugadores(df_acwr_fecha['Nombre'], df_acwr_fecha['ACWR'], colores, vertical=True, **args_acwr)
+        st.caption(f"{fecha_es(fecha_sel)} · gris = rango 0.8-1.3 · naranja 1.3-1.5 · rojo > 1.5 · azul < 0.8 · "
+                   "**pulsa la barra de un jugador para ver su evolución**")
+        evs = mostrar_segun_pantalla(fig_team_acwr_pc, fig_team_acwr, key=f"acwr_plantilla_{st.session_state['acwr_n']}",
+                                     movil=movil, on_select="rerun", selection_mode="points")
+        pulsado = nombre_pulsado(evs)
+        if pulsado:
+            st.session_state["acwr_jug"] = pulsado
+            st.session_state["acwr_n"] += 1
+            st.rerun()
+        if sin_datos:
+            st.caption("Sin carga crónica suficiente (no se calcula): " + ", ".join(nombre_bonito(n) for n in sin_datos))
 
     else:
         df_p_acwr = df_acwr_total[df_acwr_total['Nombre'] == jugador_acwr_sel].sort_values(by='Fecha_dt')
@@ -1094,7 +1277,7 @@ if not df_acwr_total.empty:
 
         max_acwr_p = df_p_acwr['ACWR'].max() if not df_p_acwr.empty else 1.5
         fig_p_timeline.update_layout(
-            title=f"Evolución Agudo:Crónico EWMA (7:21 Días) - {jugador_acwr_sel} ({metrica_acwr_lbl})",
+            title=f"Evolución ACWR EWMA 7:21 · {nombre_bonito(jugador_acwr_sel)} ({metrica_acwr_lbl})",
             template="plotly_dark",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
@@ -1104,7 +1287,7 @@ if not df_acwr_total.empty:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             height=480
         )
-        st.plotly_chart(fig_p_timeline, use_container_width=True)
+        st.plotly_chart(fig_p_timeline, width="stretch")
 
 # =============================================================================
 # 7. ANÁLISIS DE EXIGENCIA COMPETITIVA (PARTIDOS) CON INTERACCIÓN DIRECTA
@@ -1121,22 +1304,15 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
     col_sc1, col_sc2 = st.columns([1.8, 1.2])
 
     with col_sc1:
-        c_r1, c_r2, c_r3, c_espacio, c_r4, c_r5, c_vacio = st.columns([1.1, 1.1, 1.1, 0.5, 0.9, 0.9, 1.5])
-        with c_r1: fil_g = st.checkbox("🟢 Ganados", value=True)
-        with c_r2: fil_e = st.checkbox("🟡 Empatados", value=True)
-        with c_r3: fil_p = st.checkbox("🔴 Perdidos", value=True)
-        with c_r4: fil_casa = st.checkbox("🏠 Casa", value=True)
-        with c_r5: fil_fuera = st.checkbox("✈️ Fuera", value=True)
+        f1, f2 = st.columns(2)
+        # Pulsar un botón = ver SOLO esos partidos. Sin ningún botón pulsado = todos.
+        with f1:
+            sel_res = st.pills("Resultado", ["Ganados", "Empatados", "Perdidos"], selection_mode="multi", key="pills_res_v2")
+        with f2:
+            sel_loc = st.pills("Campo", ["Casa", "Fuera"], selection_mode="multi", key="pills_loc_v2")
+        valid_results = [{"Ganados": "G", "Empatados": "E", "Perdidos": "P"}[x] for x in (sel_res or ["Ganados", "Empatados", "Perdidos"])]
+        valid_locs = list(sel_loc or ["Casa", "Fuera"])
 
-        valid_results = []
-        if fil_g: valid_results.append('G')
-        if fil_e: valid_results.append('E')
-        if fil_p: valid_results.append('P')
-        
-        valid_locs = []
-        if fil_casa: valid_locs.append('Casa')
-        if fil_fuera: valid_locs.append('Fuera')
-        
         df_scatter_filt = df_scatter[
             (df_scatter['Resultado_Codificado'].isin(valid_results)) & 
             (df_scatter['Local_Visitante'].isin(valid_locs))
@@ -1144,9 +1320,11 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
         
         if not df_scatter_filt.empty:
             st.markdown("<p style='font-size:14px; color:#A0AEC0; margin-bottom: 0px;'>Pincha en los escudos para cargar el partido arriba, o añadir/quitar del radar 👉</p>", unsafe_allow_html=True)
+            st.caption("Las líneas discontinuas son la media de TODOS los partidos y no cambian al filtrar.")
             
-            x_min, x_max = df_scatter_filt['Dist_Total'].min(), df_scatter_filt['Dist_Total'].max()
-            y_min, y_max = df_scatter_filt['Dist_18'].min(), df_scatter_filt['Dist_18'].max()
+            # Ejes y medias con TODOS los partidos: no se mueven al filtrar, para comparar contra la referencia global
+            x_min, x_max = df_scatter['Dist_Total'].min(), df_scatter['Dist_Total'].max()
+            y_min, y_max = df_scatter['Dist_18'].min(), df_scatter['Dist_18'].max()
             
             if (x_max - x_min) < 1000:
                 x_center = (x_max + x_min) / 2
@@ -1178,8 +1356,8 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     xanchor="center", yanchor="middle"
                 ))
             
-            mean_x = df_scatter_filt['Dist_Total'].mean()
-            mean_y = df_scatter_filt['Dist_18'].mean()
+            mean_x = df_scatter['Dist_Total'].mean()
+            mean_y = df_scatter['Dist_18'].mean()
             fig_sc.add_vline(x=mean_x, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
             fig_sc.add_hline(y=mean_y, line=dict(color='white', width=1, dash='dash'), opacity=0.5)
             
@@ -1192,7 +1370,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             
             scatter_key = f"scatter_{st.session_state.grafico_key}"
             try:
-                seleccion = st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False}, on_select="rerun", selection_mode=["points", "box", "lasso"], key=scatter_key)
+                seleccion = st.plotly_chart(fig_sc, width="stretch", config={'displayModeBar': False}, on_select="rerun", selection_mode=["points", "box", "lasso"], key=scatter_key)
                 if seleccion and hasattr(seleccion, 'selection'):
                     puntos = getattr(seleccion.selection, 'points', [])
                     hubo_cambios = False
@@ -1213,7 +1391,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                         st.session_state.grafico_key += 1
                         st.rerun()
             except Exception:
-                st.plotly_chart(fig_sc, use_container_width=True, config={'displayModeBar': False})
+                st.plotly_chart(fig_sc, width="stretch", config={'displayModeBar': False})
         else:
             st.info("No hay partidos con el resultado y localización seleccionados.")
 
@@ -1223,7 +1401,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
             with c_tit1:
                 st.markdown("<p style='font-size:14px; color:#A0AEC0; font-weight:bold; margin-bottom:10px; margin-top:5px;'>Radar de Exigencia Relativa (0-100%)</p>", unsafe_allow_html=True)
             with c_tit2:
-                if st.button("🧹 Limpiar", use_container_width=True):
+                if st.button("🧹 Limpiar", width="stretch"):
                     st.session_state.partidos_radar = []
                     st.session_state.grafico_key += 1
                     st.rerun()
@@ -1254,7 +1432,7 @@ if not df_partidos_analisis.empty and not df_calendario.empty:
                     legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
                     template="plotly_dark", height=580, margin=dict(l=40, r=40, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                 )
-                st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+                st.plotly_chart(fig_radar, width="stretch", config={'displayModeBar': False})
             else:
                 st.info("👆 Selecciona uno o varios escudos en el gráfico para ver la comparativa aquí.")
 else:

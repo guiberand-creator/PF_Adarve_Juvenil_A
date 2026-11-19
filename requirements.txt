@@ -1,6 +1,6 @@
-streamlit
-pandas
+streamlit>=1.50
+pandas>=2.1
 numpy
-plotly
+plotly>=5.20
 openpyxl
-# Forzar reinicio del servidor
+requests

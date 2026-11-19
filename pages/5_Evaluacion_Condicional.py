@@ -8,67 +8,16 @@ import requests
 import io
 import re
 import os
-from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_sello_sidebar
+from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
+                   chips_html, nombre_bonito, fecha_es, colores_por_fecha, estilo_fig, mostrar_fig, barras_jugadores, mostrar_segun_pantalla,
+                   _limpiar_categorias, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
-# Al principio de la página
-aplicar_diseno_responsive()
-
-# -----------------------------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS (ÚNICA)
-# -----------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Evaluación Condicional - Adarve DH",
-    page_icon="⚡",
-    layout="wide"
-)
-
-# SELLO FIJO AL PIE DEL SIDEBAR
-_carpeta_pages = os.path.dirname(os.path.abspath(__file__))
-_ruta_logo = os.path.abspath(os.path.join(_carpeta_pages, "..", "assets", "logo-guille_blanco.png"))
-
-if os.path.exists(_ruta_logo):
-    with open(_ruta_logo, "rb") as _f:
-        _b64 = base64.b64encode(_f.read()).decode()
-        
-    st.sidebar.markdown(f"""
-        <style>
-        .footer-sello-unico {{
-            position: fixed;
-            bottom: 20px;
-            left: 10px;
-            width: 260px;
-            text-align: center;
-            z-index: 999;
-            padding-top: 12px;
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-        }}
-        .footer-sello-unico img {{
-            width: 195px;
-            height: auto;
-            margin-bottom: 8px;
-        }}
-        .footer-sello-unico p {{
-            font-size: 11px !important;
-            color: #CCCCCC !important;
-            margin: 2px 0 0 0 !important;
-            letter-spacing: 0.5px;
-        }}
-        </style>
-
-        <div class="footer-sello-unico">
-            <img src="data:image/png;base64,{_b64}">
-            <p>© 2026 All Rights Reserved</p>
-        </div>
-    """, unsafe_allow_html=True)
+configurar_pagina("Evaluación Condicional - Adarve DH")
+exigir_login_staff()
+movil = controles_sidebar()
 
 st.markdown("""
     <style>
-    div[data-testid="stHorizontalBlock"] button {
-        font-size: 16px !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
-        padding: 8px 12px !important;
-    }
     .metric-card {
         background-color: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -119,6 +68,9 @@ def aplicar_estilo_shadcn(fig):
     try:
         fig.update_traces(marker_cornerradius=4, selector=dict(type='bar'))
     except: pass
+    fig.update_xaxes(fixedrange=True); fig.update_yaxes(fixedrange=True)
+    fig.update_layout(dragmode=False)
+    _limpiar_categorias(fig)   # nombres sin guiones bajos
     return fig
 
 SHADCN_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#0ea5e9']
@@ -126,9 +78,6 @@ SHADCN_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6
 # -----------------------------------------------------------------------------
 # 2. CONTROL DE ACCESO
 # -----------------------------------------------------------------------------
-if 'logeado' not in st.session_state or not st.session_state['logeado']:
-    st.error("⚠️ Acceso no autorizado. Por favor, inicia sesión en la página principal.")
-    st.stop()
 
 # -----------------------------------------------------------------------------
 # 3. CARGA DE DATOS LOCALES Y GOOGLE SHEETS
@@ -150,7 +99,7 @@ URL_SHEET_DRI = "https://docs.google.com/spreadsheets/d/1r7nUPbRWDjKpZW-Jwex1HFN
 COLOR_ADARVE_GRANATE = "#800020"
 COLOR_ADARVE_BORDER = "#B22222"
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=600)
 def cargar_datos_evaluaciones():
     df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = None, None, None, None, None, None, None, None, None, None, None, None, None
     
@@ -292,7 +241,7 @@ def cargar_datos_evaluaciones():
 
     # 6. Drop Jump / DRI
     try:
-        df_dri_sheet = pd.read_csv(URL_SHEET_DRI)
+        df_dri_sheet = descargar_sheet("1r7nUPbRWDjKpZW-Jwex1HFNpDcHiCTKTwLPF7YfHL2Y")
         renomb_dri = {}
         for col in df_dri_sheet.columns:
             c_l = str(col).strip().lower()
@@ -318,6 +267,7 @@ def cargar_datos_evaluaciones():
         tc_s = df_dri_sheet['TC']
 
         df_dri_sheet['DRI'] = (h_m + h_drop_m) / (g * (tc_s ** 2))
+        df_dri_sheet.loc[~(tc_s > 0), 'DRI'] = np.nan   # intentos sin tiempo de contacto válido: fuera
         df_dri_sheet = df_dri_sheet.dropna(subset=['Fecha_dt', 'DRI']).sort_values('Fecha_dt')
     except Exception:
         df_dri_sheet = None
@@ -394,6 +344,7 @@ def cargar_datos_evaluaciones():
     return df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo
 
 df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = cargar_datos_evaluaciones()
+comprobar_descargas(cargar_datos_evaluaciones)
 
 # -----------------------------------------------------------------------------
 # 4. CABECERA
@@ -418,16 +369,11 @@ opciones_menu = [
 if 'pestaña_activa' not in st.session_state:
     st.session_state['pestaña_activa'] = "🏆 Ranking Global"
 
-cols_nav = st.columns(len(opciones_menu))
-for i, opcion in enumerate(opciones_menu):
-    with cols_nav[i]:
-        es_activa = st.session_state['pestaña_activa'] == opcion
-        tipo_boton = "primary" if es_activa else "secondary"
-        if st.button(opcion, key=f"nav_btn_{i}", use_container_width=True, type=tipo_boton):
-            st.session_state['pestaña_activa'] = opcion
-            st.rerun()
+sel_nav = st.pills("Sección", opciones_menu, selection_mode="single", default=st.session_state['pestaña_activa'],
+                   key="nav_eval", label_visibility="collapsed")
+if sel_nav:
+    st.session_state['pestaña_activa'] = sel_nav
 
-st.markdown("<br>", unsafe_allow_html=True)
 pest_sel = st.session_state['pestaña_activa']
 
 # =============================================================================
@@ -440,80 +386,90 @@ if pest_sel == "🩺 Movilidad":
         ultima_fecha_mov = df_mov['Fecha'].iloc[-1]
         df_fecha_mov = df_mov[df_mov['Fecha'] == ultima_fecha_mov].copy()
         
-        dict_alertas = {}
-        for idx, row in df_fecha_mov.iterrows():
+        # Rangos: verde >= óptimo · amarillo entre mínimo y óptimo · rojo < mínimo  (+ asimetría)
+        RANGOS_MOV = {
+            "Dorsiflexión tobillo": ('DORSIFLEX_D', 'DORSIFLEX_I', 12, 10, 3, 'cm'),
+            "Rotación interna cadera": ('ROT_INT_D', 'ROT_INT_I', 35, 30, 5, '°'),
+            "Flexión cadera": ('FLEX_CAD_D', 'FLEX_CAD_I', 80, 75, 5, '°'),
+        }
+        rojos, amarillos, asimetrias = {}, {}, {}
+        for _, row in df_fecha_mov.iterrows():
             nombre = row['Nombre']
-            alertas_jugador = []
-            
-            df_d, df_i = row['DORSIFLEX_D'], row['DORSIFLEX_I']
-            if df_d < 12 or df_i < 12: alertas_jugador.append("Dorsiflexión Tobillo")
-            elif abs(df_d - df_i) >= 3: alertas_jugador.append("Asimetría Tobillo")
-                
-            rot_d, rot_i = row['ROT_INT_D'], row['ROT_INT_I']
-            if rot_d < 35 or rot_i < 35: alertas_jugador.append("Rot. Interna Cadera")
-            elif abs(rot_d - rot_i) >= 5: alertas_jugador.append("Asimetría Rot. Cadera")
+            for art, (cd, ci, verde, amar, asim_max, _) in RANGOS_MOV.items():
+                vd, vi = row.get(cd), row.get(ci)
+                if pd.isna(vd) or pd.isna(vi): continue
+                peor = min(vd, vi)
+                if peor < amar: rojos.setdefault(nombre, []).append(art)
+                elif peor < verde: amarillos.setdefault(nombre, []).append(art)
+                if abs(vd - vi) >= asim_max: asimetrias.setdefault(nombre, []).append(art)
 
-            flx_d, flx_i = row['FLEX_CAD_D'], row['FLEX_CAD_I']
-            if flx_d < 80 or flx_i < 80: alertas_jugador.append("Flexión Cadera")
-            elif abs(flx_d - flx_i) >= 5: alertas_jugador.append("Asimetría Flex. Cadera")
+        n_tot = len(df_fecha_mov)
+        tarjetas_kpi([
+            {"titulo": "Evaluados", "valor": str(n_tot), "sub": fecha_es(ultima_fecha_mov) if ultima_fecha_mov else ""},
+            {"titulo": "Déficit importante (rojo)", "valor": str(len(rojos)), "color": ROJO if rojos else TEXTO},
+            {"titulo": "Mejorable (amarillo)", "valor": str(len([n for n in amarillos if n not in rojos])),
+             "color": NARANJA if amarillos else TEXTO},
+            {"titulo": "Con asimetría", "valor": str(len(asimetrias)), "color": AZUL if asimetrias else TEXTO},
+        ])
+        bloque_alerta("🔴 Déficit importante (por debajo del mínimo): prioridad de trabajo", list(rojos.keys()), ROJO,
+                      sufijos={n: " / ".join(v) for n, v in rojos.items()}, vacio="✅ Nadie por debajo del mínimo")
+        with st.expander(f"🟡 Mejorables ({len([n for n in amarillos if n not in rojos])}) y ↔️ asimetrías ({len(asimetrias)})"):
+            solo_am = {n: v for n, v in amarillos.items() if n not in rojos}
+            bloque_alerta("🟡 Entre el mínimo y el óptimo", list(solo_am.keys()), NARANJA,
+                          sufijos={n: " / ".join(v) for n, v in solo_am.items()}, vacio="Nadie")
+            bloque_alerta("↔️ Asimetría derecha-izquierda", list(asimetrias.keys()), AZUL,
+                          sufijos={n: " / ".join(v) for n, v in asimetrias.items()}, vacio="Nadie")
 
-            if alertas_jugador: dict_alertas[nombre] = alertas_jugador
+        st.markdown("---")
+        bloque_seleccionado = st.selectbox("Articulación a inspeccionar:", list(RANGOS_MOV.keys()))
+        col_d, col_i, val_verde, val_amarillo, asim_max, unidad = RANGOS_MOV[bloque_seleccionado]
 
-        col_m1, col_m2 = st.columns(2)
-        with col_m1: st.metric("Jugadores con algún Déficit/Asimetría", f"{len(dict_alertas)} / {len(df_fecha_mov)}")
-        with col_m2: st.metric("Porcentaje del Vestuario Óptimo", f"{((len(df_fecha_mov) - len(dict_alertas)) / len(df_fecha_mov) * 100):.0f}%")
+        def color_val(v):
+            if pd.isna(v): return NEUTRO
+            if v < val_amarillo: return ROJO
+            if v < val_verde: return NARANJA
+            return NEUTRO
 
-        if dict_alertas:
-            col_a1, col_a2 = st.columns(2)
-            items = list(dict_alertas.items())
-            mitad = (len(items) + 1) // 2
-            with col_a1:
-                for nom, defs in items[:mitad]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
-            with col_a2:
-                for nom, defs in items[mitad:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
-        else: st.success("✅ ¡Excelente! Todo el vestuario se encuentra en rangos óptimos.")
-
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        bloque_seleccionado = st.selectbox("Selec. Articulación para inspeccionar en gráfico:", ["Dorsiflexión Tobillo", "Rotación Interna Cadera", "Flexión Cadera"])
-
-        if bloque_seleccionado == "Dorsiflexión Tobillo": 
-            col_d, col_i, val_verde, val_amarillo, unidad = 'DORSIFLEX_D', 'DORSIFLEX_I', 12, 10, 'cm'
-        elif bloque_seleccionado == "Rotación Interna Cadera": 
-            col_d, col_i, val_verde, val_amarillo, unidad = 'ROT_INT_D', 'ROT_INT_I', 35, 30, '°'
-        else: 
-            col_d, col_i, val_verde, val_amarillo, unidad = 'FLEX_CAD_D', 'FLEX_CAD_I', 80, 75, '°'
-
+        dm = df_fecha_mov.copy()
+        dm['peor'] = dm[[col_d, col_i]].min(axis=1)
+        dm = dm.sort_values('peor', ascending=False)   # en barras horizontales, el peor queda arriba
+        nombres = [nombre_bonito(n) for n in dm['Nombre']]
         fig_barras = go.Figure()
-        fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_d], name='Derecha (D)', marker_color='#3b82f6', text=df_fecha_mov[col_d], textposition='outside', textfont=dict(color='white', size=11)))
-        fig_barras.add_trace(go.Bar(x=df_fecha_mov['Nombre'], y=df_fecha_mov[col_i], name='Izquierda (I)', marker_color='#10b981', text=df_fecha_mov[col_i], textposition='outside', textfont=dict(color='white', size=11)))
-        
-        max_y = max(df_fecha_mov[col_d].max(), df_fecha_mov[col_i].max())
-        max_y_axis = max(max_y + 5, val_verde + 5)
-
-        # BANDAS DE COLOR SEGÚN TABLA DE RANGOS DE REFERENCIA
-        # 1. Zona Roja (< val_amarillo)
-        fig_barras.add_hrect(
-            y0=0, y1=val_amarillo,
-            fillcolor="rgba(239, 68, 68, 0.12)", line_width=0, layer="below"
-        )
-        # 2. Zona Amarilla (val_amarillo a val_verde)
-        fig_barras.add_hrect(
-            y0=val_amarillo, y1=val_verde,
-            fillcolor="rgba(245, 158, 11, 0.12)", line_width=0, layer="below"
-        )
-        # 3. Zona Verde (> val_verde)
-        fig_barras.add_hrect(
-            y0=val_verde, y1=max_y_axis,
-            fillcolor="rgba(34, 197, 94, 0.12)", line_width=0, layer="below"
-        )
-
-        fig_barras.add_shape(type="line", x0=-0.5, x1=len(df_fecha_mov)-0.5, y0=val_verde, y1=val_verde, line=dict(color="#22c55e", width=1.5, dash="dash"))
-        
-        fig_barras = aplicar_estilo_shadcn(fig_barras)
-        fig_barras.update_layout(title=f"Comparativa Bilateral: {bloque_seleccionado} ({ultima_fecha_mov})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad})", range=[0, max_y_axis]), height=460, margin=dict(l=20, r=20, t=50, b=100))
-        st.plotly_chart(fig_barras, use_container_width=True)
+        fig_barras.add_trace(go.Bar(y=nombres, x=dm[col_d], orientation='h', name='Derecha',
+                                    marker=dict(color=[color_val(v) for v in dm[col_d]]),
+                                    text=[f"D {v:g}" for v in dm[col_d]], textposition='outside', textfont=dict(size=10, color=TEXTO)))
+        fig_barras.add_trace(go.Bar(y=nombres, x=dm[col_i], orientation='h', name='Izquierda',
+                                    marker=dict(color=[color_val(v) for v in dm[col_i]], pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.35)")),
+                                    text=[f"I {v:g}" for v in dm[col_i]], textposition='outside', textfont=dict(size=10, color=TEXTO)))
+        fig_barras.add_vline(x=val_verde, line=dict(color=VERDE, dash="dash", width=1.5), annotation_text=f"óptimo {val_verde}{unidad}",
+                             annotation_font=dict(size=10, color=VERDE))
+        fig_barras.add_vline(x=val_amarillo, line=dict(color=ROJO, dash="dot", width=1.5), annotation_text=f"mínimo {val_amarillo}{unidad}",
+                             annotation_position="bottom", annotation_font=dict(size=10, color=ROJO))
+        estilo_fig(fig_barras, height=max(320, 30 * len(dm) + 100), leyenda_abajo=False,
+                   titulo=f"{bloque_seleccionado} ({fecha_es(ultima_fecha_mov)}) · barra lisa = derecha, rayada = izquierda")
+        fig_barras.update_layout(barmode='group', bargap=0.3, showlegend=False)
+        fig_barras.update_xaxes(title_text=f"Valor ({unidad})", range=[0, max(dm[[col_d, col_i]].max().max(), val_verde) * 1.25],
+                                showgrid=True, gridcolor="rgba(255,255,255,0.06)")
+        # Versión ordenador: jugadores a lo ancho (toda la plantilla de un vistazo, sin scroll)
+        dm_pc = dm.sort_values('peor', ascending=True)
+        nombres_pc = [nombre_bonito(n) for n in dm_pc['Nombre']]
+        fig_pc = go.Figure()
+        fig_pc.add_trace(go.Bar(x=nombres_pc, y=dm_pc[col_d], name='Derecha', marker=dict(color=[color_val(v) for v in dm_pc[col_d]]),
+                                text=[f"{v:g}" for v in dm_pc[col_d]], textposition='outside', textfont=dict(size=10, color=TEXTO)))
+        fig_pc.add_trace(go.Bar(x=nombres_pc, y=dm_pc[col_i], name='Izquierda',
+                                marker=dict(color=[color_val(v) for v in dm_pc[col_i]], pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.35)")),
+                                text=[f"{v:g}" for v in dm_pc[col_i]], textposition='outside', textfont=dict(size=10, color=TEXTO)))
+        fig_pc.add_hline(y=val_verde, line=dict(color=VERDE, dash="dash", width=1.5), annotation_text=f"óptimo {val_verde}{unidad}",
+                         annotation_position="top right", annotation_font=dict(size=10, color=VERDE))
+        fig_pc.add_hline(y=val_amarillo, line=dict(color=ROJO, dash="dot", width=1.5), annotation_text=f"mínimo {val_amarillo}{unidad}",
+                         annotation_position="bottom right", annotation_font=dict(size=10, color=ROJO))
+        estilo_fig(fig_pc, height=440, leyenda_abajo=False,
+                   titulo=f"{bloque_seleccionado} ({fecha_es(ultima_fecha_mov)}) · barra lisa = derecha, rayada = izquierda")
+        fig_pc.update_layout(barmode='group', bargap=0.25, showlegend=False)
+        fig_pc.update_xaxes(tickangle=-45, type='category')
+        fig_pc.update_yaxes(title_text=f"Valor ({unidad})", range=[0, max(dm[[col_d, col_i]].max().max(), val_verde) * 1.25])
+        st.caption("Gris = en rango óptimo · amarillo = mejorable · rojo = por debajo del mínimo.")
+        mostrar_segun_pantalla(fig_pc, fig_barras, key="movilidad", movil=movil)
 
 # =============================================================================
 # ÁREA 2: PESO
@@ -531,11 +487,11 @@ elif pest_sel == "⚖️ Peso":
         for i, f in enumerate(fechas_ordenadas):
             df_f = df_p_equipo[df_p_equipo['Fecha'] == f]
             etiquetas_equipo = [f"<b>{row['Peso']:.1f} kg</b>" if pd.isna(row['Var_Pct']) else f"<b>{row['Peso']:.1f} kg</b><br><i>{'+' if row['Var_Pct']>0 else ''}{row['Var_Pct']:.1f}%</i>" for _, row in df_f.iterrows()]
-            fig_p_equipo.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['Peso'], name=f"Fecha {f}", text=etiquetas_equipo, textposition='outside', marker_color=SHADCN_COLORS[i % len(SHADCN_COLORS)], textfont=dict(color='white', size=11)))
+            fig_p_equipo.add_trace(go.Bar(x=df_f['Nombre'], y=df_f['Peso'], name=f"Fecha {f}", text=etiquetas_equipo, textposition='outside', marker_color=colores_por_fecha(len(fechas_ordenadas))[i], textfont=dict(color='white', size=11)))
 
         fig_p_equipo = aplicar_estilo_shadcn(fig_p_equipo)
         fig_p_equipo.update_layout(title="Evolución del Peso por Jugador en Todas las Fechas Registradas", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Peso (kg)", range=[max(0, df_p_equipo['Peso'].min() - 5), df_p_equipo['Peso'].max() + 7]), height=500, margin=dict(l=20, r=20, t=50, b=110))
-        st.plotly_chart(fig_p_equipo, use_container_width=True)
+        mostrar_fig(fig_p_equipo)
 
 # =============================================================================
 # ÁREA 3: VAM / AERÓBICO
@@ -577,10 +533,10 @@ elif pest_sel == "🫁 VAM / Aeróbico":
             
             with col_va1:
                 for nom, defs in items_v[:mitad_v]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_va2:
                 for nom, defs in items_v[mitad_v:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple o supera la VAM de referencia para su posición.")
 
@@ -621,7 +577,7 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                                 name=f"Fecha {f}", 
                                 text=etiquetas, 
                                 textposition='outside', 
-                                marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)],
+                                marker_color=colores_por_fecha(len(fechas_p))[idx_f],
                                 textfont=dict(color='white', size=11)
                             ))
 
@@ -642,7 +598,7 @@ elif pest_sel == "🫁 VAM / Aeróbico":
                             yaxis=dict(title="VAM (km/h)", range=[0, max(df_p['VAM'].max() if not df_p.empty else 20, (ref_val or 0)) + 3]), 
                             height=420, margin=dict(l=20, r=20, t=50, b=90), showlegend=True
                         )
-                        st.plotly_chart(fig_p, use_container_width=True)
+                        mostrar_fig(fig_p)
 
 # =============================================================================
 # ÁREA 4: DINAMOMETRÍA
@@ -751,7 +707,7 @@ elif pest_sel == "⚙️ Dinamometría":
                     if det['asim']: tags.append("Corregir Asimetrías")
                     if det['descomp']: tags.append("Corregir Descompensaciones")
                     
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    header_txt = f"🔴 **{nombre_bonito(nom)}**: " + " • ".join(tags)
                     with st.expander(header_txt):
                         if det['fmax']:
                             st.markdown("##### 💪 Déficit de Fuerza Máxima:")
@@ -773,7 +729,7 @@ elif pest_sel == "⚙️ Dinamometría":
                     if det['asim']: tags.append("Corregir Asimetrías")
                     if det['descomp']: tags.append("Corregir Descompensaciones")
                     
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(tags)
+                    header_txt = f"🔴 **{nombre_bonito(nom)}**: " + " • ".join(tags)
                     with st.expander(header_txt):
                         if det['fmax']:
                             st.markdown("##### 💪 Déficit de Fuerza Máxima:")
@@ -820,11 +776,11 @@ elif pest_sel == "⚙️ Dinamometría":
             max_alturas_f = df_g_frel[[ej_d, ej_i]].max(axis=1)
             for idx_f, row_f in df_g_frel.iterrows():
                 asim_val = row_f['Asimetria_Pct']
-                color_texto = "#ef4444" if asim_val > 10 else "#10b981"
+                color_texto = "#ef4444" if asim_val > 10 else NEUTRO_TEXTO
                 pos_y = max_alturas_f.iloc[idx_f] + 0.25
 
                 fig_frel.add_annotation(
-                    x=row_f['Nombre'], y=pos_y,
+                    x=nombre_bonito(row_f['Nombre']), y=pos_y,
                     text=f"<b>{asim_val:.1f}%</b>",
                     showarrow=False,
                     font=dict(color=color_texto, size=13)
@@ -841,7 +797,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Fuerza Relativa (N/kg)", range=[0, max_y_val]),
                 height=460, margin=dict(l=20, r=20, t=50, b=90), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig_frel, use_container_width=True)
+            mostrar_fig(fig_frel)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -871,7 +827,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 fig_r_fe.update_layout(
                     title="⚖️ Ratio Flexión / Extensión Rodilla (Índice)", xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_r_y]), height=450, margin=dict(l=20, r=20, t=50, b=90)
                 )
-                st.plotly_chart(fig_r_fe, use_container_width=True)
+                mostrar_fig(fig_r_fe)
 
         else:
             ratios_aa, nombres_aa = [], []
@@ -904,7 +860,7 @@ elif pest_sel == "⚙️ Dinamometría":
                 fig_r_aa.update_layout(
                     title="⚖️ Ratio ADD / ABD Cadera (Índice)", xaxis=dict(tickangle=-45), yaxis=dict(title="Ratio Índice", range=[0, max_raa_y]), height=450, margin=dict(l=20, r=20, t=50, b=90)
                 )
-                st.plotly_chart(fig_r_aa, use_container_width=True)
+                mostrar_fig(fig_r_aa)
 
 # =============================================================================
 # ÁREA 5: SALTOS
@@ -969,10 +925,10 @@ elif pest_sel == "🚀 Saltos (CMJ)":
             
             with col_sa1:
                 for nom, defs in items_s[:mitad_s]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_sa2:
                 for nom, defs in items_s[mitad_s:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple las referencias de saltabilidad y simetría.")
 
@@ -1008,7 +964,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                 else:
                     idx_max_cmj = df_cmj['Altura'].idxmax()
                     row_max_cmj = df_cmj.loc[idx_max_cmj]
-                    st.info(f"🏆 **Récord Histórico CMJ:** `{row_max_cmj['Nombre']}` con **{row_max_cmj['Altura']:.1f} cm**")
+                    st.info(f"🏆 **Récord Histórico CMJ:** **{nombre_bonito(row_max_cmj['Nombre'])}** con **{row_max_cmj['Altura']:.1f} cm**")
 
                     df_jug_cmj = df_cmj.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean()
                     df_cmj_eq = df_jug_cmj.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
@@ -1046,7 +1002,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     
                     fig_cmj = aplicar_estilo_shadcn(fig_cmj)
                     fig_cmj.update_layout(title="Evolución CMJ (cm) - Media ± SD Granate", xaxis=dict(tickangle=-30), yaxis=dict(title="Altura Salto (cm)", range=[0, max_y_cmj]), height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False)
-                    st.plotly_chart(fig_cmj, use_container_width=True)
+                    mostrar_fig(fig_cmj)
 
     # --- GRÁFICO 2: EVOLUCIÓN DRI (LÍNEAS) ---
     if sel_tipo_evo in ["Ambos Gráficos", "Evolución DRI (Drop Jump 50cm)"]:
@@ -1063,7 +1019,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                 else:
                     idx_max_dri = df_dri['DRI'].idxmax()
                     row_max_dri = df_dri.loc[idx_max_dri]
-                    st.info(f"🏆 **Récord Histórico DRI:** `{row_max_dri['Nombre']}` con **{row_max_dri['DRI']:.2f}**")
+                    st.info(f"🏆 **Récord Histórico DRI:** **{nombre_bonito(row_max_dri['Nombre'])}** con **{row_max_dri['DRI']:.2f}**")
 
                     df_jug_dri = df_dri.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['DRI'].mean()
                     df_dri_eq = df_jug_dri.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
@@ -1101,7 +1057,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     
                     fig_dri = aplicar_estilo_shadcn(fig_dri)
                     fig_dri.update_layout(title="Evolución DRI Exacto - Media ± SD Granate", xaxis=dict(tickangle=-30), yaxis=dict(title="DRI (Índice)", range=[0, max_y_dri]), height=460, margin=dict(l=10, r=10, t=50, b=80), showlegend=False)
-                    st.plotly_chart(fig_dri, use_container_width=True)
+                    mostrar_fig(fig_dri)
 
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
@@ -1165,7 +1121,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                                 vr, vl = row_j['slCMJright'], row_j['slCMJleft']
                                 if pd.notna(vr) and pd.notna(vl) and max(vr, vl) > 0:
                                     asim_s = (abs(vr - vl) / max(vr, vl)) * 100
-                                    color_as = "#ef4444" if asim_s > 10 else "#10b981"
+                                    color_as = "#ef4444" if asim_s > 10 else NEUTRO_TEXTO
                                     pos_y_s = max(vr, vl) + 3.8
 
                                     fig_pos.add_annotation(
@@ -1200,7 +1156,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                                 height=460, margin=dict(l=20, r=20, t=50, b=90),
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
-                            st.plotly_chart(fig_pos, use_container_width=True)
+                            mostrar_fig(fig_pos)
 
             st.markdown("<br><hr>", unsafe_allow_html=True)
 
@@ -1258,7 +1214,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
                         legend=dict(title="Jugadores (Un clic aisla)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, itemclick="toggleothers", itemdoubleclick="toggle")
                     )
-                    st.plotly_chart(fig_interactivo, use_container_width=True)
+                    mostrar_fig(fig_interactivo)
 
             else:
                 if df_dri_sheet is None or df_dri_sheet.empty:
@@ -1302,7 +1258,7 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                         height=550, margin=dict(l=20, r=20, t=50, b=50),
                         legend=dict(title="Jugadores (Un clic aisla)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, itemclick="toggleothers", itemdoubleclick="toggle")
                     )
-                    st.plotly_chart(fig_interactivo, use_container_width=True)
+                    mostrar_fig(fig_interactivo)
 
 # =============================================================================
 # ÁREA 6: TREN SUPERIOR
@@ -1350,10 +1306,10 @@ elif pest_sel == "🏋️ Tren Superior":
             
             with col_tsa1:
                 for nom, defs in items_ts[:mitad_ts]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
             with col_tsa2:
                 for nom, defs in items_ts[mitad_ts:]:
-                    st.markdown(f"🔴 **{nom}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
+                    st.markdown(f"🔴 **{nombre_bonito(nom)}**: <span style='color: #ef4444;'>{' • '.join(defs)}</span>", unsafe_allow_html=True)
         else:
             st.success("✅ ¡Excelente! Todo el vestuario cumple los umbrales mínimos de fuerza de tren superior.")
 
@@ -1372,7 +1328,7 @@ elif pest_sel == "🏋️ Tren Superior":
                 df_max_pb = df_pb[df_pb['Press_Banca'] == max_pb_val]
                 nom_max_pb = df_max_pb.iloc[0]['Nombre']
                 
-                st.info(f"🏆 **Récord Histórico:** `{nom_max_pb}` con **{max_pb_val:.0f} reps**")
+                st.info(f"🏆 **Récord Histórico:** **{nombre_bonito(nom_max_pb)}** con **{max_pb_val:.0f} reps**")
 
                 df_pb_ult = df_pb[df_pb['Fecha_dt'] == ult_fecha_ts_dt].sort_values('Press_Banca', ascending=False)
                 jugadores_ord_pb = df_pb_ult['Nombre'].tolist()
@@ -1392,7 +1348,7 @@ elif pest_sel == "🏋️ Tren Superior":
 
                     fig_pb.add_trace(go.Bar(
                         x=jugadores_ord_pb, y=val_y, name=f"Fecha {f_str}",
-                        marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
+                        marker_color=colores_por_fecha(len(fechas_pb_ord))[idx_f], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
                     ))
 
                 fig_pb.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_pb)-0.5, y0=REF_PRESS_BANCA, y1=REF_PRESS_BANCA, line=dict(color="#3b82f6", width=2, dash="dash"))
@@ -1400,7 +1356,7 @@ elif pest_sel == "🏋️ Tren Superior":
 
                 fig_pb = aplicar_estilo_shadcn(fig_pb)
                 fig_pb.update_layout(title=f"Ranking Press Banca (Última sesión: {ult_fecha_ts_str})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_pb_val, REF_PRESS_BANCA) + 5]), height=520, margin=dict(l=10, r=10, t=50, b=100))
-                st.plotly_chart(fig_pb, use_container_width=True)
+                mostrar_fig(fig_pb)
 
         with col_dom:
             st.markdown("### 🤸‍♂️ Dominadas (30s)")
@@ -1413,7 +1369,7 @@ elif pest_sel == "🏋️ Tren Superior":
                 df_max_dom = df_dom[df_dom['Dominada'] == max_dom_val]
                 nom_max_dom = df_max_dom.iloc[0]['Nombre']
                 
-                st.info(f"🏆 **Récord Histórico:** `{nom_max_dom}` con **{max_dom_val:.0f} reps**")
+                st.info(f"🏆 **Récord Histórico:** **{nombre_bonito(nom_max_dom)}** con **{max_dom_val:.0f} reps**")
 
                 df_dom_ult = df_dom[df_dom['Fecha_dt'] == ult_fecha_ts_dt].sort_values('Dominada', ascending=False)
                 jugadores_ord_dom = df_dom_ult['Nombre'].tolist()
@@ -1433,7 +1389,7 @@ elif pest_sel == "🏋️ Tren Superior":
 
                     fig_dom.add_trace(go.Bar(
                         x=jugadores_ord_dom, y=val_y, name=f"Fecha {f_str}",
-                        marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
+                        marker_color=colores_por_fecha(len(fechas_dom_ord))[idx_f], text=[f"<b>{v:.0f}</b>" if pd.notna(v) else "" for v in val_y], textposition='outside', textfont=dict(color='white')
                     ))
 
                 fig_dom.add_shape(type="line", x0=-0.5, x1=len(jugadores_ord_dom)-0.5, y0=REF_DOMINADAS, y1=REF_DOMINADAS, line=dict(color="#10b981", width=2, dash="dash"))
@@ -1441,7 +1397,7 @@ elif pest_sel == "🏋️ Tren Superior":
 
                 fig_dom = aplicar_estilo_shadcn(fig_dom)
                 fig_dom.update_layout(title=f"Ranking Dominadas (Última sesión: {ult_fecha_ts_str})", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title="Repeticiones", range=[0, max(max_dom_val, REF_DOMINADAS) + 5]), height=520, margin=dict(l=10, r=10, t=50, b=100))
-                st.plotly_chart(fig_dom, use_container_width=True)
+                mostrar_fig(fig_dom)
 
 # =============================================================================
 # ÁREA 7: VELOCIDAD & COD
@@ -1504,14 +1460,14 @@ elif pest_sel == "⚡ Velocidad & COD":
             
             with col_ca1:
                 for nom, det in items_c[:mitad_c]:
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(det)
+                    header_txt = f"🔴 **{nombre_bonito(nom)}**: " + " • ".join(det)
                     with st.expander(header_txt):
                         for d in det:
                             st.markdown(f"<p style='color: #CCCCCC; font-size: 14px; margin: 2px 0;'>• {d}</p>", unsafe_allow_html=True)
                             
             with col_ca2:
                 for nom, det in items_c[mitad_c:]:
-                    header_txt = f"🔴 **{nom}**: " + " • ".join(det)
+                    header_txt = f"🔴 **{nombre_bonito(nom)}**: " + " • ".join(det)
                     with st.expander(header_txt):
                         for d in det:
                             st.markdown(f"<p style='color: #CCCCCC; font-size: 14px; margin: 2px 0;'>• {d}</p>", unsafe_allow_html=True)
@@ -1527,19 +1483,19 @@ elif pest_sel == "⚡ Velocidad & COD":
             idx_vmax = df_campo['V_MAX'].idxmax()
             row_vmax = df_campo.loc[idx_vmax]
             with c_rec1:
-                st.info(f"⚡ **Máx. Velocidad (V_MAX):**\n`{row_vmax['Nombre']}` - **{row_vmax['V_MAX']:.1f} km/h**")
+                st.info(f"⚡ **Máx. Velocidad (V_MAX):**\n**{nombre_bonito(row_vmax['Nombre'])}** - **{row_vmax['V_MAX']:.1f} km/h**")
         
         if 'AC_MAX' in df_campo.columns and not df_campo['AC_MAX'].dropna().empty:
             idx_acmax = df_campo['AC_MAX'].idxmax()
             row_acmax = df_campo.loc[idx_acmax]
             with c_rec2:
-                st.info(f"🚀 **Máx. Aceleración (AC_MAX):**\n`{row_acmax['Nombre']}` - **{row_acmax['AC_MAX']:.2f} m/s²**")
+                st.info(f"🚀 **Máx. Aceleración (AC_MAX):**\n**{nombre_bonito(row_acmax['Nombre'])}** - **{row_acmax['AC_MAX']:.2f} m/s²**")
 
         if 'DEC_MAX' in df_campo.columns and not df_campo['DEC_MAX'].dropna().empty:
             idx_decmax = df_campo['DEC_MAX'].idxmin()
             row_decmax = df_campo.loc[idx_decmax]
             with c_rec3:
-                st.info(f"🛑 **Máx. Desaceleración (DEC_MAX):**\n`{row_decmax['Nombre']}` - **{row_decmax['DEC_MAX']:.2f} m/s²**")
+                st.info(f"🛑 **Máx. Desaceleración (DEC_MAX):**\n**{nombre_bonito(row_decmax['Nombre'])}** - **{row_decmax['DEC_MAX']:.2f} m/s²**")
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
 
@@ -1610,7 +1566,7 @@ elif pest_sel == "⚡ Velocidad & COD":
 
                             fig_campo.add_trace(go.Bar(
                                 x=jugadores_p_c, y=vals_y, name=f"Fecha {f_str}",
-                                marker_color=SHADCN_COLORS[idx_f % len(SHADCN_COLORS)], text=etiquetas, textposition='outside', textfont=dict(color='white', size=11)
+                                marker_color=colores_por_fecha(len(fechas_p_c))[idx_f], text=etiquetas, textposition='outside', textfont=dict(color='white', size=11)
                             ))
 
                         ref_val_c = None
@@ -1628,7 +1584,7 @@ elif pest_sel == "⚡ Velocidad & COD":
 
                         fig_campo = aplicar_estilo_shadcn(fig_campo)
                         fig_campo.update_layout(title=f"⚽ Demarcación: {pos_curr} - {titulo_m}", barmode='group', xaxis=dict(tickangle=-45), yaxis=dict(title=f"Valor ({unidad_m})", range=[min(0, val_min - 2), val_max + 4]), height=440, margin=dict(l=10, r=10, t=50, b=90))
-                        st.plotly_chart(fig_campo, use_container_width=True)
+                        mostrar_fig(fig_campo)
 
                     with col_der_c:
                         st.markdown(f"#### 🔍 Biomecánica ({ult_f_campo_str})")
@@ -1647,7 +1603,7 @@ elif pest_sel == "⚡ Velocidad & COD":
                         html_tabla += "<thead><tr style='border-bottom: 2px solid #555; text-align: left;'><th style='padding: 8px;'>Jugador</th><th style='padding: 8px;'>Técnica</th></tr></thead><tbody>"
 
                         for _, r_t in df_p_c_ult.iterrows():
-                            html_tabla += f"<tr style='border-bottom: 1px solid #333;'><td style='padding: 8px;'><b>{r_t['Nombre']}</b></td><td style='padding: 8px;'>{r_t['Val_Cualitativa']}</td></tr>"
+                            html_tabla += f"<tr style='border-bottom: 1px solid #333;'><td style='padding: 8px;'><b>{nombre_bonito(r_t['Nombre'])}</b></td><td style='padding: 8px;'>{r_t['Val_Cualitativa']}</td></tr>"
                         html_tabla += "</tbody></table>"
 
                         st.markdown(html_tabla, unsafe_allow_html=True)
@@ -1742,7 +1698,7 @@ elif pest_sel == "🏆 Ranking Global":
                 if not df_ts_sub.empty:
                     ult_f_ts = df_ts_sub['Fecha_dt'].max()
                     df_ts_u = df_ts_sub[df_ts_sub['Fecha_dt'] == ult_f_ts].copy()
-                    df_ts_u['Tren_Superior_Reps'] = df_ts_u['Press_Banca'].fillna(0) + df_ts_u['Dominada'].fillna(0)
+                    df_ts_u['Tren_Superior_Reps'] = df_ts_u[['Press_Banca', 'Dominada']].apply(pd.to_numeric, errors='coerce').sum(axis=1, min_count=1)
                     df_rank_base = pd.merge(df_rank_base, df_ts_u[['Nombre', 'Tren_Superior_Reps']], on='Nombre', how='left')
 
             if df_campo is not None and not df_campo.empty:
@@ -1763,100 +1719,55 @@ elif pest_sel == "🏆 Ranking Global":
                 'AC_MAX': ('Aceleración ACMAX', True)
             }
 
+            # CORRECCIÓN: un test no realizado ya no cuenta como "último puesto".
+            # Se ordena por el PUESTO MEDIO en los tests que el jugador sí ha hecho.
             cols_puntos = []
             for col_raw, (col_nombre_clean, mayor_es_mejor) in columnas_pruebas.items():
                 if col_raw in df_rank_base.columns:
                     col_rank_name = f"P_{col_nombre_clean}"
-                    df_rank_base[col_rank_name] = df_rank_base[col_raw].rank(ascending=not mayor_es_mejor, method='min', na_option='bottom').astype(int)
+                    df_rank_base[col_rank_name] = df_rank_base[col_raw].rank(ascending=not mayor_es_mejor, method='min', na_option='keep')
                     cols_puntos.append(col_rank_name)
 
-            df_rank_base['PUNTOS_TOTALES'] = df_rank_base[cols_puntos].sum(axis=1)
-            df_rank_base = df_rank_base.sort_values('PUNTOS_TOTALES', ascending=True).reset_index(drop=True)
-            df_rank_base['POSICION_GLOBAL'] = df_rank_base.index + 1
+            n_tests_total = len(cols_puntos)
+            df_rank_base['TESTS'] = df_rank_base[cols_puntos].notna().sum(axis=1)
+            df_rank_base['PUESTO_MEDIO'] = df_rank_base[cols_puntos].mean(axis=1, skipna=True)
+            # Para entrar en la clasificación hay que tener al menos la mitad de los tests
+            min_tests = max(1, n_tests_total // 2)
+            df_rank_base['CLASIFICA'] = df_rank_base['TESTS'] >= min_tests
+            df_rank_base = df_rank_base.sort_values(['CLASIFICA', 'PUESTO_MEDIO'], ascending=[False, True]).reset_index(drop=True)
+            df_rank_base['POSICION_GLOBAL'] = np.where(df_rank_base['CLASIFICA'], np.arange(1, len(df_rank_base) + 1), np.nan)
 
-            st.markdown("<br>", unsafe_allow_html=True)
+            podio = df_rank_base[df_rank_base['CLASIFICA']].head(3)
+            medallas = [("🥇 1º", "#FFD700"), ("🥈 2º", "#C0C0C0"), ("🥉 3º", "#CD7F32")]
+            tarjetas_kpi([{"titulo": medallas[i][0], "valor": nombre_bonito(r['Nombre']),
+                           "sub": f"Puesto medio {r['PUESTO_MEDIO']:.1f} · {r['Posicion']}", "color": medallas[i][1]}
+                          for i, (_, r) in enumerate(podio.iterrows())])
 
-            c_p1, c_p2, c_p3 = st.columns(3)
-
-            if len(df_rank_base) >= 1:
-                j1 = df_rank_base.iloc[0]
-                with c_p1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="podium-1">🥇 1º PUESTO</div>
-                        <h2 style='margin:5px 0;'>{j1['Nombre']}</h2>
-                        <p style='color:#2ECC71; font-weight:bold; font-size:18px;'>{j1['PUNTOS_TOTALES']} Puntos Totales</p>
-                        <small>{j1['Posicion']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            if len(df_rank_base) >= 2:
-                j2 = df_rank_base.iloc[1]
-                with c_p2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="podium-2">🥈 2º PUESTO</div>
-                        <h2 style='margin:5px 0;'>{j2['Nombre']}</h2>
-                        <p style='color:#00A8E8; font-weight:bold; font-size:18px;'>{j2['PUNTOS_TOTALES']} Puntos Totales</p>
-                        <small>{j2['Posicion']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            if len(df_rank_base) >= 3:
-                j3 = df_rank_base.iloc[2]
-                with c_p3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="podium-3">🥉 3º PUESTO</div>
-                        <h2 style='margin:5px 0;'>{j3['Nombre']}</h2>
-                        <p style='color:#FF9F1C; font-weight:bold; font-size:18px;'>{j3['PUNTOS_TOTALES']} Puntos Totales</p>
-                        <small>{j3['Posicion']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            st.markdown("<br><hr>", unsafe_allow_html=True)
-
-            st.markdown(f"### Clasificación Completa ({f_sel_str})")
-            st.caption("Nota: Menos Puntos Totales = Mejor Puesto Global. Las columnas muestran los resultados reales obtenidos en cada test.")
+            st.markdown(f"### Clasificación completa ({f_sel_str})")
+            st.caption(f"Puesto medio = media de sus puestos en cada test (menos = mejor). Las columnas muestran el resultado real. "
+                       f"Para clasificar hay que haber hecho al menos {min_tests} de {n_tests_total} tests; '–' = test no realizado.")
 
             df_tabla = df_rank_base.copy()
-            def icon_pos(pos):
-                if pos == 1: return "🥇 1º"
-                elif pos == 2: return "🥈 2º"
-                elif pos == 3: return "🥉 3º"
-                return f"{pos}º"
-
-            df_tabla['POSICION_GLOBAL'] = df_tabla['POSICION_GLOBAL'].apply(icon_pos)
-
-            if 'Movilidad_Score' in df_tabla.columns: df_tabla['Movilidad_Score'] = df_tabla['Movilidad_Score'].round(1)
-            if 'VAM' in df_tabla.columns: df_tabla['VAM'] = df_tabla['VAM'].round(2)
-            if 'Fmax_Rel' in df_tabla.columns: df_tabla['Fmax_Rel'] = df_tabla['Fmax_Rel'].round(2)
-            if 'CMJ_Altura' in df_tabla.columns: df_tabla['CMJ_Altura'] = df_tabla['CMJ_Altura'].round(1)
-            if 'DRI' in df_tabla.columns: df_tabla['DRI'] = df_tabla['DRI'].round(2)
-            if 'Tren_Superior_Reps' in df_tabla.columns: df_tabla['Tren_Superior_Reps'] = df_tabla['Tren_Superior_Reps'].fillna(0).round(0).astype(int)
-            if 'V_MAX' in df_tabla.columns: df_tabla['V_MAX'] = df_tabla['V_MAX'].round(1)
-            if 'AC_MAX' in df_tabla.columns: df_tabla['AC_MAX'] = df_tabla['AC_MAX'].round(2)
+            df_tabla['Jugador'] = df_tabla['Nombre'].apply(nombre_bonito)
+            df_tabla['Puesto'] = df_tabla['POSICION_GLOBAL'].apply(
+                lambda p: "–" if pd.isna(p) else {1: "🥇 1º", 2: "🥈 2º", 3: "🥉 3º"}.get(int(p), f"{int(p)}º"))
+            df_tabla['Tests'] = df_tabla['TESTS'].astype(int).astype(str) + f"/{n_tests_total}"
 
             cols_mostrar = {
-                'POSICION_GLOBAL': 'Posición',
-                'Nombre': 'Jugador',
-                'PUNTOS_TOTALES': '🏆 Puntos Totales',
-                'Movilidad_Score': '🩺 Movilidad',
-                'VAM': '🫁 VAM',
-                'Fmax_Rel': '⚙️ Dinamometría',
-                'CMJ_Altura': '🚀 CMJ',
-                'DRI': '⚡ DRI',
-                'Tren_Superior_Reps': '🏋️ Tren Sup.',
-                'V_MAX': '⚡ V_MAX',
-                'AC_MAX': '⚡ AC_MAX'
+                'Puesto': 'Puesto', 'Jugador': 'Jugador', 'PUESTO_MEDIO': 'Puesto medio', 'Tests': 'Tests',
+                'Movilidad_Score': 'Movilidad', 'VAM': 'VAM', 'Fmax_Rel': 'Dinamometría (N/kg)', 'CMJ_Altura': 'CMJ (cm)',
+                'DRI': 'DRI', 'Tren_Superior_Reps': 'Tren sup. (reps)', 'V_MAX': 'V máx', 'AC_MAX': 'Acel. máx'
             }
-
-            cols_existentes = [c for c in cols_mostrar.keys() if c in df_tabla.columns]
+            if movil:
+                cols_mostrar = {k: v for k, v in cols_mostrar.items() if k in ['Puesto', 'Jugador', 'PUESTO_MEDIO', 'Tests']}
+            cols_existentes = [c for c in cols_mostrar if c in df_tabla.columns]
             df_tabla_final = df_tabla[cols_existentes].rename(columns=cols_mostrar)
-
+            formatos = {'Puesto medio': "{:.1f}", 'Movilidad': "{:.1f}", 'VAM': "{:.2f}", 'Dinamometría (N/kg)': "{:.2f}",
+                        'CMJ (cm)': "{:.1f}", 'DRI': "{:.2f}", 'Tren sup. (reps)': "{:.0f}", 'V máx': "{:.1f}", 'Acel. máx': "{:.2f}"}
+            formatos = {k: v for k, v in formatos.items() if k in df_tabla_final.columns}
             st.dataframe(
-                df_tabla_final,
-                use_container_width=True,
+                df_tabla_final.style.format(formatos, na_rep="–"),
+                width="stretch",
                 hide_index=True,
-                height=(len(df_tabla_final) + 1) * 38 + 10
+                height=(len(df_tabla_final) + 1) * 36 + 10
             )

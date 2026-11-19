@@ -7,19 +7,18 @@ import io
 import plotly.express as px
 from datetime import datetime, timedelta
 import os
-from utils import aplicar_estilos_globales, aplicar_diseno_responsive, mostrar_sello_sidebar, render_html
+import re
+import plotly.graph_objects as go
+from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
+                   nombre_bonito, estilo_fig, mostrar_fig, ROJO, NARANJA, AZUL, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
 # =============================================================================
 # 1. CONFIGURACIÓN Y SEGURIDAD
 # =============================================================================
-st.set_page_config(page_title="Dosis - Respuesta | Adarve DH", page_icon="⚡", layout="wide")
-aplicar_estilos_globales()
-aplicar_diseno_responsive()
-mostrar_sello_sidebar()
-
-if 'logeado' not in st.session_state or not st.session_state['logeado']:
-    st.error("⚠️ Por favor, inicia sesión en la página principal para acceder.")
-    st.stop()
+configurar_pagina("Dosis - Respuesta | Adarve DH")
+exigir_login_staff()
+movil = controles_sidebar()
+Z_RESIDUO = 2.0   # sesiones con respuesta (sRPE) muy por encima de lo esperado para su carga externa
 
 if 'jugadores_seleccionados_dosis' not in st.session_state:
     st.session_state.jugadores_seleccionados_dosis = []
@@ -33,16 +32,10 @@ def norm_cruce(texto):
 # =============================================================================
 # 2. MOTOR DE EXTRACCIÓN Y FUSIÓN DE DATOS
 # =============================================================================
-def descargar_csv_drive(sheet_id, gid):
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200: return pd.read_csv(io.StringIO(res.text))
-    except: pass
-    return pd.DataFrame()
+def descargar_csv_drive(sheet_id, gid=None):
+    return descargar_sheet(sheet_id, gid)   # utils.py: tiempo límite + reintento
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600)
 def cargar_matriz_completa():
     df_rpe_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "1785642271")
     df_rpe = pd.DataFrame()
@@ -55,7 +48,6 @@ def cargar_matriz_completa():
         col_c = next((c for c in cols if 'cardio' in str(c).lower()), cols[4] if len(cols)>4 else None)
         col_m = next((c for c in cols if 'muscular' in str(c).lower()), cols[5] if len(cols)>5 else None)
         col_animo = next((c for c in cols if any(k in str(c).lower() for k in ['animo', 'ánimo', 'estado'])), None)
-        col_res = next((c for c in cols if any(k in str(c).lower() for k in ['resultado', 'partido', 'puntos', 'ganad', 'res'])), None)
 
         df_rpe['Fecha_dt'] = pd.to_datetime(df_rpe_raw[col_f], dayfirst=True, errors='coerce')
         df_rpe['Fecha'] = df_rpe['Fecha_dt'].dt.strftime('%Y-%m-%d')
@@ -65,21 +57,11 @@ def cargar_matriz_completa():
         df_rpe['Tipo_Sesion'] = df_rpe_raw[col_t].fillna('Entreno').astype(str).str.strip().str.title()
         
         df_rpe['Minutos'] = pd.to_numeric(df_rpe_raw[col_min], errors='coerce').fillna(0) if col_min else 0
-        df_rpe['RPE_G'] = (pd.to_numeric(df_rpe_raw[col_c], errors='coerce').fillna(0) + pd.to_numeric(df_rpe_raw[col_m], errors='coerce').fillna(0)) / 2
+        df_rpe['RPE_G'] = pd.concat([pd.to_numeric(df_rpe_raw[col_c], errors='coerce'),
+                                     pd.to_numeric(df_rpe_raw[col_m], errors='coerce')], axis=1).mean(axis=1, skipna=True)
         df_rpe['sRPE'] = df_rpe['RPE_G'] * df_rpe['Minutos']
         df_rpe['Estado_Animo'] = pd.to_numeric(df_rpe_raw[col_animo], errors='coerce') if col_animo else np.nan
         
-        if col_res:
-            def parse_res(val):
-                if pd.isna(val): return np.nan
-                s = str(val).lower().strip()
-                if any(w in s for w in ['gan', 'v', 'vic', '3']): return 3.0
-                if any(w in s for w in ['emp', 'e', '1']): return 1.0
-                if any(w in s for w in ['per', 'der', 'd', 'p', '0']): return 0.0
-                try: return float(s)
-                except: return np.nan
-            df_rpe['Resultado_Partido'] = df_rpe_raw[col_res].apply(parse_res)
-        else: df_rpe['Resultado_Partido'] = np.nan
         df_rpe = df_rpe.dropna(subset=['Fecha_dt'])
 
     if not df_rpe.empty:
@@ -130,21 +112,47 @@ def cargar_matriz_completa():
 
     if df_gps.empty or df_rpe.empty: return pd.DataFrame()
     df_base = pd.merge(df_gps, df_rpe, on=['Fecha', 'Nombre_Cruce'], how='inner')
-    df_base['Carga_UA'] = (df_base['Dist_Total'] + (df_base['Dist_18']*2) + (df_base['Dist_25']*4) + (df_base['Acc_Dec']*1.5)) * df_base['RPE_G']
+    # CORRECCIÓN: la carga EXTERNA ya no se multiplica por el RPE (si no, se correlaciona consigo misma)
+    df_base['Carga_UA'] = df_base['Dist_Total'] + (df_base['Dist_18'] * 2) + (df_base['Dist_25'] * 4) + (df_base['Acc_Dec'] * 1.5)
     df_base['Fecha_dt'] = pd.to_datetime(df_base['Fecha'])
     df_base = df_base.sort_values('Fecha_dt').reset_index(drop=True)
 
-    df_w_raw = descargar_csv_drive("1Q8z8qhMJPt4p110OjpvutzklzYhO_jjdZysDbCER45s", "0")
+    # CORRECCIÓN: el wellness se lee de SU hoja (antes se leía la hoja del RPE y la columna salía vacía)
+    df_w_raw = descargar_csv_drive("12q2mpHSAq-HGAQv3qr5EU9Gm5yttbls_UtXhoiAOO9o", "1891505901")
     if not df_w_raw.empty:
-        cw = df_w_raw.columns
-        cw_f, cw_n = cw[0], cw[1]
-        c_items = [c for c in cw if any(k in str(c).lower() for k in ['sueño', 'fatiga', 'estrés', 'agujetas', 'estado'])]
-        df_w_raw['Wellness'] = df_w_raw[c_items].apply(pd.to_numeric, errors='coerce').sum(axis=1) if c_items else np.nan
-        df_w_raw['Fecha_W'] = pd.to_datetime(df_w_raw[cw_f], dayfirst=True, errors='coerce')
-        df_w_raw['Nombre_Cruce'] = df_w_raw[cw_n].apply(norm_cruce)
-        df_w_raw['Fecha'] = df_w_raw['Fecha_W'].dt.strftime('%Y-%m-%d')
-        df_w_clean = df_w_raw.groupby(['Fecha', 'Nombre_Cruce'])['Wellness'].mean().reset_index()
-        df_base = pd.merge(df_base, df_w_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
+        cw = [str(c).strip() for c in df_w_raw.columns]
+        df_w_raw.columns = cw
+        up = {c: c.upper().replace('É', 'E').replace('Ú', 'U') for c in cw}
+        c_f = next((c for c in cw if 'marca' in c.lower()), cw[0])
+        c_n = next((c for c in cw if 'nombre' in c.lower()), cw[1])
+        c_items = [c for c in cw if up[c].startswith(('SUE', 'DOLOR', 'ESTRES', 'CARGA'))]
+        if c_items:
+            df_w_raw['Wellness'] = df_w_raw[c_items].apply(pd.to_numeric, errors='coerce').mean(axis=1, skipna=True)
+            df_w_raw['Fecha'] = pd.to_datetime(df_w_raw[c_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+            df_w_raw['Nombre_Cruce'] = df_w_raw[c_n].apply(norm_cruce)
+            df_w_clean = df_w_raw.groupby(['Fecha', 'Nombre_Cruce'])['Wellness'].mean().reset_index()
+            df_base = pd.merge(df_base, df_w_clean, on=['Fecha', 'Nombre_Cruce'], how='left')
+
+    # CORRECCIÓN: el resultado del partido sale del CALENDARIO (antes se tomaba la columna de minutos)
+    df_cal = descargar_csv_drive("1JyR7HA1zCU06-QPqHSCPaYac3hLHuSz5", "1771990969")
+    df_base['Resultado_Partido'] = np.nan
+    if not df_cal.empty:
+        cc = df_cal.columns
+        c_f = next((c for c in cc if 'fecha' in str(c).lower()), None)
+        c_cf = next((c for c in cc if 'casa' in str(c).lower() or 'fuera' in str(c).lower()), None)
+        c_r = next((c for c in cc if 'resultado' in str(c).lower()), None)
+        if c_f and c_cf and c_r:
+            def puntos(row):
+                m = re.search(r'(\d+)\s*[-:\s_xX]\s*(\d+)', str(row[c_r]))
+                if not m: return np.nan
+                gl, gv = int(m.group(1)), int(m.group(2))
+                casa = 'casa' in str(row[c_cf]).lower() or 'local' in str(row[c_cf]).lower()
+                a, b = (gl, gv) if casa else (gv, gl)
+                return 3.0 if a > b else (1.0 if a == b else 0.0)
+            df_cal['Fecha'] = pd.to_datetime(df_cal[c_f], dayfirst=True, errors='coerce').dt.strftime('%Y-%m-%d')
+            df_cal['Puntos'] = df_cal.apply(puntos, axis=1)
+            mapa = df_cal.dropna(subset=['Fecha']).set_index('Fecha')['Puntos'].to_dict()
+            df_base['Resultado_Partido'] = df_base['Fecha'].map(mapa)
 
     def cruzar_evaluacion(df_eval, col_valor, nuevo_nombre):
         if not df_eval.empty and col_valor in df_eval.columns:
@@ -206,12 +214,15 @@ def cargar_matriz_completa():
     return df_base
 
 df_dosis = cargar_matriz_completa()
+comprobar_descargas(cargar_matriz_completa)
 
 # =============================================================================
 # 3. INTERFAZ Y FILTROS
 # =============================================================================
 st.title("DOSIS - RESPUESTA")
-st.markdown("---")
+st.caption("¿Responde cada jugador a la carga externa como se espera? Cada punto es una sesión: "
+           "carga externa (GPS) frente a carga interna (sRPE). Se resaltan las sesiones con una respuesta "
+           "anormalmente alta para la carga recibida, posible señal de fatiga.")
 
 if df_dosis.empty:
     st.info("🚧 No hay suficientes datos coincidentes para construir la relación Dosis-Respuesta.")
@@ -219,7 +230,7 @@ if df_dosis.empty:
 
 c_f1, c_f2 = st.columns([1, 2.5])
 with c_f1:
-    tipo_sel = st.selectbox("⚽ Tipo de Sesión:", ["Todos"] + sorted(list(df_dosis['Tipo_Sesion'].unique())))
+    tipo_sel = st.selectbox("⚽ Tipo de sesión:", ["Todos"] + sorted(list(df_dosis['Tipo_Sesion'].unique())))
 with c_f2:
     f_uni = sorted(df_dosis['Fecha_dt'].dropna().dt.date.unique())
     rango_s = st.slider("📅 Rango de Fechas:", min_value=f_uni[0], max_value=f_uni[-1], value=(f_uni[0], f_uni[-1]), format="DD/MM/YYYY")
@@ -228,17 +239,11 @@ df_f = df_dosis.copy()
 if tipo_sel != "Todos": df_f = df_f[df_f['Tipo_Sesion'] == tipo_sel]
 df_f = df_f[(df_f['Fecha_dt'].dt.date >= rango_s[0]) & (df_f['Fecha_dt'].dt.date <= rango_s[1])]
 
-c_i, c_b = st.columns([3, 1])
-with c_i:
-    if st.session_state.jugadores_seleccionados_dosis: 
-        st.markdown(f"🏃 **Filtrado por Jugador (Vista Gráfico):** `{', '.join(st.session_state.jugadores_seleccionados_dosis)}`")
-    else: 
-        st.caption("💡 Se están analizando todos los jugadores. Puedes hacer clic sobre cualquier punto para destacarlo.")
-with c_b:
-    if st.session_state.jugadores_seleccionados_dosis and st.button("🧹 Limpiar", use_container_width=True):
-        st.session_state.jugadores_seleccionados_dosis = []
-        st.session_state.dosis_key += 1
-        st.rerun()
+jugadores_opts = sorted(df_dosis['Nombre_Oficial'].dropna().unique(), key=nombre_bonito)
+st.session_state.jugadores_seleccionados_dosis = [j for j in st.session_state.jugadores_seleccionados_dosis if j in jugadores_opts]
+sel_jug = st.multiselect("🏃 Destacar jugadores:", jugadores_opts, default=st.session_state.jugadores_seleccionados_dosis,
+                         format_func=nombre_bonito, key=f"ms_dosis_{st.session_state.dosis_key}")
+st.session_state.jugadores_seleccionados_dosis = sel_jug
 
 if df_f.empty:
     st.warning("No hay registros en el rango seleccionado.")
@@ -247,78 +252,97 @@ if df_f.empty:
 # =============================================================================
 # 4. GRÁFICO 1: DISPERSIÓN DOSIS-RESPUESTA
 # =============================================================================
-if 'Carga_UA' in df_f.columns and 'sRPE' in df_f.columns:
-    fig = px.scatter(
-        df_f, x="sRPE", y="Carga_UA", color="Nombre_Oficial", custom_data=["Nombre_Oficial"],
-        hover_data=["Fecha", "Tipo_Sesion", "Minutos", "RPE_G", "Dist_Total"],
-        labels={"sRPE": "Carga Interna (sRPE)", "Carga_UA": "Carga Externa (UA)", "Nombre_Oficial": "Jugador"}, template="plotly_dark",
-        title="Dispersión: Dosis (Carga Externa UA) vs Respuesta (Carga Interna sRPE)"
-    )
+df_sc = df_f.dropna(subset=['Carga_UA', 'sRPE']).copy()
+df_sc = df_sc[(df_sc['Carga_UA'] > 0) & (df_sc['sRPE'] > 0)]
+if len(df_sc) >= 10:
+    # Respuesta esperada = recta de regresión del equipo. Residuo estandarizado = cuánto se aleja cada sesión.
+    pend, orig = np.polyfit(df_sc['Carga_UA'], df_sc['sRPE'], 1)
+    df_sc['Esperado'] = pend * df_sc['Carga_UA'] + orig
+    res = df_sc['sRPE'] - df_sc['Esperado']
+    df_sc['Z_Res'] = (res - res.mean()) / (res.std() if res.std() > 0 else 1)
+    r_val = df_sc[['Carga_UA', 'sRPE']].corr().iloc[0, 1]
 
-    for trace in fig.data:
-        player_name = trace.name
-        if st.session_state.jugadores_seleccionados_dosis:
-            if player_name in st.session_state.jugadores_seleccionados_dosis:
-                trace.marker.opacity = 1.0
-                trace.marker.size = 16
-                trace.marker.line = dict(width=2, color='white')
-            else:
-                trace.marker.opacity = 0.20
-                trace.marker.size = 10
-                trace.marker.line = dict(width=0.5, color='rgba(255,255,255,0.1)')
-        else:
-            trace.marker.opacity = 0.90
-            trace.marker.size = 14
-            trace.marker.line = dict(width=1, color='white')
+    sel = set(st.session_state.jugadores_seleccionados_dosis)
+    alta = df_sc['Z_Res'] > Z_RESIDUO
+    def color_punto(row):
+        if sel:
+            return ACENTO if row['Nombre_Oficial'] in sel else "rgba(148,163,184,0.18)"
+        return ROJO if row['Z_Res'] > Z_RESIDUO else "rgba(148,163,184,0.35)"
+    colores = df_sc.apply(color_punto, axis=1)
+    tam = [13 if (c not in ("rgba(148,163,184,0.18)", "rgba(148,163,184,0.35)")) else 9 for c in colores]
 
-    fig.add_vline(x=df_f['sRPE'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
-    fig.add_hline(y=df_f['Carga_UA'].mean(), line=dict(color="#F1C40F", width=1.5, dash="dash"))
-    fig.update_layout(
-        height=520, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0.2)', 
-        margin=dict(l=20, r=20, t=40, b=80), 
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5)
-    )
+    fig = go.Figure()
+    xs = np.linspace(df_sc['Carga_UA'].min(), df_sc['Carga_UA'].max(), 50)
+    fig.add_trace(go.Scatter(x=xs, y=pend * xs + orig, mode="lines", line=dict(color=NEUTRO_TEXTO, dash="dash", width=1.5),
+                             hoverinfo="skip", name="Respuesta esperada"))
+    fig.add_trace(go.Scatter(
+        x=df_sc['Carga_UA'], y=df_sc['sRPE'], mode="markers", name="Sesiones",
+        marker=dict(color=colores, size=tam, line=dict(width=0.5, color="rgba(255,255,255,0.4)")),
+        customdata=np.stack([df_sc['Nombre_Oficial'], df_sc['Fecha'], df_sc['Tipo_Sesion'], df_sc['Z_Res']], axis=-1),
+        hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]} · %{customdata[2]}<br>Carga externa: %{x:.0f} UA"
+                      "<br>sRPE: %{y:.0f}<br>Desviación: %{customdata[3]:.2f}<extra></extra>"))
+    estilo_fig(fig, height=420 if movil else 500, leyenda_abajo=False)
+    fig.update_layout(showlegend=False,
+                      xaxis_title="DOSIS · Carga externa (UA = dist + 2·>18 + 4·>25 + 1,5·acc/dec)",
+                      yaxis_title="RESPUESTA · Carga interna (sRPE)")
 
+    tarjetas_kpi([
+        {"titulo": "Sesiones analizadas", "valor": str(len(df_sc))},
+        {"titulo": "Relación dosis-respuesta (r)", "valor": f"{r_val:.2f}"},
+        {"titulo": "Respuesta anormalmente alta", "valor": str(int(alta.sum())), "color": ROJO if alta.any() else TEXTO,
+         "sub": f"desviación > {Z_RESIDUO} DE"},
+    ])
     chart_key = f"dosis_scatter_{st.session_state.dosis_key}"
-    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode="points", key=chart_key)
-    
-    if event and isinstance(event, dict) and "selection" in event:
+    event = mostrar_fig(fig, key=chart_key, on_select="rerun", selection_mode="points")
+    if event and "selection" in event:
         pts = event["selection"].get("points", [])
-        if pts:
-            cambio = False
-            for p in pts:
-                cdata = p.get("customdata")
-                clicked_player = cdata[0] if cdata else p.get("legendgroup")
-                if clicked_player:
-                    if clicked_player in st.session_state.jugadores_seleccionados_dosis:
-                        st.session_state.jugadores_seleccionados_dosis.remove(clicked_player)
-                    else:
-                        st.session_state.jugadores_seleccionados_dosis.append(clicked_player)
-                    cambio = True
-            if cambio:
-                st.session_state.dosis_key += 1
-                st.rerun()
+        cambio = False
+        for p in pts:
+            cd = p.get("customdata")
+            if cd:
+                j = cd[0]
+                if j in st.session_state.jugadores_seleccionados_dosis:
+                    st.session_state.jugadores_seleccionados_dosis.remove(j)
+                else:
+                    st.session_state.jugadores_seleccionados_dosis.append(j)
+                cambio = True
+        if cambio:
+            st.session_state.dosis_key += 1
+            st.rerun()
+    st.caption("Pulsa un punto (o usa el selector) para destacar a ese jugador. Sin selección se resaltan en rojo las sesiones con respuesta anormalmente alta.")
+
+    ult = df_sc[alta].sort_values('Fecha_dt', ascending=False)
+    if not ult.empty:
+        recientes = ult[ult['Fecha_dt'] >= df_sc['Fecha_dt'].max() - pd.Timedelta(days=7)]
+        bloque_alerta("🔺 Respuesta alta en los últimos 7 días",
+                      recientes['Nombre_Oficial'].unique().tolist(), ROJO,
+                      sufijos={n: pd.to_datetime(f).strftime('%d/%m') for n, f in zip(recientes['Nombre_Oficial'], recientes['Fecha'])})
+else:
+    st.info("Hacen falta al menos 10 sesiones con GPS y RPE para dibujar la relación.")
 
 # =============================================================================
 # 5. MATRICES DE CORRELACIÓN SEPARADAS
 # =============================================================================
 st.markdown("---")
-st.markdown("### 📊 Matriz 1: Variables de Frecuencia Diaria (Control y Carga)")
+st.markdown("### 📊 Matriz 1: variables diarias (control y carga)")
+st.caption("Correlaciones entre -1 y 1. Rojo = suben juntas, azul = una sube cuando la otra baja. Cerca de 0 = sin relación. "
+           "El resultado (3/1/0 puntos) solo existe los días de partido.")
 dic_m1 = {
     'sRPE_prev': 'sRPE (D-1)', 'Wellness': 'Wellness (Día)', 'Dist_Total': 'Dist Total (m)',
-    'Dist_18': 'Dist >18 km/h', 'Acc_Dec': 'Num. Acc+Dec', 'Estado_Animo': 'Est. Ánimo (RPE)', 'Resultado_Partido': 'Resultado (W/D/L)'
+    'Dist_18': 'Dist >18 km/h', 'Acc_Dec': 'Num. Acc+Dec', 'Estado_Animo': 'Estado ánimo', 'Resultado_Partido': 'Puntos partido'
 }
 
 cols_1 = [c for c in dic_m1.keys() if c in df_f.columns]
 if len(cols_1) > 1:
     m_corr1 = df_f[cols_1].rename(columns=dic_m1).corr(numeric_only=True).dropna(how='all', axis=0).dropna(how='all', axis=1)
     if not m_corr1.empty:
+        m_corr1 = m_corr1.where(np.tril(np.ones(m_corr1.shape, dtype=bool)))
         f_c1 = px.imshow(m_corr1, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
         f_c1.update_traces(opacity=0.85)
         f_c1.update_xaxes(showgrid=False)
         f_c1.update_yaxes(showgrid=False)
         f_c1.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
-        st.plotly_chart(f_c1, use_container_width=True)
+        mostrar_fig(f_c1)
     else: st.info("Datos insuficientes para la Matriz 1.")
 else: st.info("Datos insuficientes para la Matriz 1.")
 
@@ -333,11 +357,12 @@ cols_2 = [c for c in dic_m2.keys() if c in df_f.columns]
 if len(cols_2) > 1:
     m_corr2 = df_f[cols_2].rename(columns=dic_m2).corr(numeric_only=True).dropna(how='all', axis=0).dropna(how='all', axis=1)
     if not m_corr2.empty:
+        m_corr2 = m_corr2.where(np.tril(np.ones(m_corr2.shape, dtype=bool)))
         f_c2 = px.imshow(m_corr2, text_auto=".2f", aspect="auto", color_continuous_scale="RdBu_r", range_color=[-1, 1])
         f_c2.update_traces(opacity=0.85)
         f_c2.update_xaxes(showgrid=False)
         f_c2.update_yaxes(showgrid=False)
         f_c2.update_layout(height=450, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=20, r=20, t=10, b=50))
-        st.plotly_chart(f_c2, use_container_width=True)
+        mostrar_fig(f_c2)
     else: st.info("Datos insuficientes para la Matriz 2.")
 else: st.info("Datos insuficientes para la Matriz 2.")
