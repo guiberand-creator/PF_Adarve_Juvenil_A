@@ -10,7 +10,7 @@ import os
 import re
 import plotly.graph_objects as go
 from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
-                   nombre_bonito, estilo_fig, mostrar_fig, ROJO, NARANJA, AZUL, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
+                   nombre_bonito, etiqueta_sesion, estilo_fig, mostrar_fig, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
 # =============================================================================
 # 1. CONFIGURACIÓN Y SEGURIDAD
@@ -18,7 +18,7 @@ from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exig
 configurar_pagina("Dosis - Respuesta | Adarve DH")
 exigir_login_staff()
 movil = controles_sidebar()
-Z_RESIDUO = 2.0   # sesiones con respuesta (sRPE) muy por encima de lo esperado para su carga externa
+Z_RESIDUO = 2.0   # sesiones cuya respuesta (sRPE) se aleja más de 2 DE de lo esperado para su carga externa
 
 if 'jugadores_seleccionados_dosis' not in st.session_state:
     st.session_state.jugadores_seleccionados_dosis = []
@@ -221,8 +221,9 @@ comprobar_descargas(cargar_matriz_completa)
 # =============================================================================
 st.title("DOSIS - RESPUESTA")
 st.caption("¿Responde cada jugador a la carga externa como se espera? Cada punto es una sesión: "
-           "carga externa (GPS) frente a carga interna (sRPE). Se resaltan las sesiones con una respuesta "
-           "anormalmente alta para la carga recibida, posible señal de fatiga.")
+           "carga externa (GPS) frente a carga interna (sRPE). Se colorean las sesiones que se salen "
+           "de lo esperado: arriba (rojo/naranja) la sintieron más dura de lo normal, posible fatiga; abajo (verde/azul) "
+           "más suave, buena adaptación… o un dato a revisar.")
 
 if df_dosis.empty:
     st.info("🚧 No hay suficientes datos coincidentes para construir la relación Dosis-Respuesta.")
@@ -262,35 +263,80 @@ if len(df_sc) >= 10:
     df_sc['Z_Res'] = (res - res.mean()) / (res.std() if res.std() > 0 else 1)
     r_val = df_sc[['Carga_UA', 'sRPE']].corr().iloc[0, 1]
 
-    sel = set(st.session_state.jugadores_seleccionados_dosis)
+    # Cuadrantes: arriba/abajo = por encima/debajo de la respuesta esperada (más de 2 DE);
+    # izquierda/derecha = carga externa por debajo/encima de la media del filtro actual.
+    media_x = df_sc['Carga_UA'].mean()
     alta = df_sc['Z_Res'] > Z_RESIDUO
-    def color_punto(row):
-        if sel:
-            return ACENTO if row['Nombre_Oficial'] in sel else "rgba(148,163,184,0.18)"
-        return ROJO if row['Z_Res'] > Z_RESIDUO else "rgba(148,163,184,0.35)"
-    colores = df_sc.apply(color_punto, axis=1)
-    tam = [13 if (c not in ("rgba(148,163,184,0.18)", "rgba(148,163,184,0.35)")) else 9 for c in colores]
+    baja = df_sc['Z_Res'] < -Z_RESIDUO
+    dcha = df_sc['Carga_UA'] >= media_x
+    CUADRANTES = {
+        "rojo":    (alta & ~dcha, ROJO,    "Poca carga · respuesta muy alta"),
+        "naranja": (alta & dcha,  NARANJA, "Mucha carga · respuesta muy alta"),
+        "azul":    (baja & ~dcha, AZUL,    "Poca carga · respuesta muy baja"),
+        "verde":   (baja & dcha,  VERDE,   "Mucha carga · respuesta muy baja"),
+    }
+    df_sc['Color'] = NEUTRO
+    df_sc['Zona'] = "Dentro de lo esperado"
+    for _, (mask, col, txt) in CUADRANTES.items():
+        df_sc.loc[mask, 'Color'] = col
+        df_sc.loc[mask, 'Zona'] = txt
 
-    fig = go.Figure()
+    sel = set(st.session_state.jugadores_seleccionados_dosis)
+    if sel:
+        colores = np.where(df_sc['Nombre_Oficial'].isin(sel), ACENTO, "rgba(148,163,184,0.18)")
+        tam = np.where(df_sc['Nombre_Oficial'].isin(sel), 13, 9)
+    else:
+        colores = df_sc['Color'].values
+        tam = np.where(df_sc['Color'] != NEUTRO, 13, 9)
+
+    sd_res = (df_sc['sRPE'] - df_sc['Esperado']).std()
     xs = np.linspace(df_sc['Carga_UA'].min(), df_sc['Carga_UA'].max(), 50)
-    fig.add_trace(go.Scatter(x=xs, y=pend * xs + orig, mode="lines", line=dict(color=NEUTRO_TEXTO, dash="dash", width=1.5),
+    y_lin = pend * xs + orig
+    fig = go.Figure()
+    # Banda de normalidad (± 2 DE alrededor de la respuesta esperada)
+    fig.add_trace(go.Scatter(x=np.concatenate([xs, xs[::-1]]),
+                             y=np.concatenate([y_lin + Z_RESIDUO * sd_res, (y_lin - Z_RESIDUO * sd_res)[::-1]]),
+                             fill="toself", fillcolor="rgba(148,163,184,0.07)", line=dict(width=0),
+                             hoverinfo="skip", name="Zona normal"))
+    fig.add_trace(go.Scatter(x=xs, y=y_lin, mode="lines", line=dict(color=NEUTRO_TEXTO, dash="dash", width=1.5),
                              hoverinfo="skip", name="Respuesta esperada"))
+    orden = np.argsort((df_sc['Color'] != NEUTRO).values)   # los de color, dibujados encima
+    d = df_sc.iloc[orden]
     fig.add_trace(go.Scatter(
-        x=df_sc['Carga_UA'], y=df_sc['sRPE'], mode="markers", name="Sesiones",
-        marker=dict(color=colores, size=tam, line=dict(width=0.5, color="rgba(255,255,255,0.4)")),
-        customdata=np.stack([df_sc['Nombre_Oficial'], df_sc['Fecha'], df_sc['Tipo_Sesion'], df_sc['Z_Res']], axis=-1),
+        x=d['Carga_UA'], y=d['sRPE'], mode="markers", name="Sesiones",
+        marker=dict(color=np.asarray(colores)[orden], size=np.asarray(tam)[orden],
+                    line=dict(width=0.5, color="rgba(255,255,255,0.4)")),
+        customdata=np.stack([d['Nombre_Oficial'], d['Fecha'], d['Tipo_Sesion'].map(etiqueta_sesion),
+                             d['Z_Res'], d['Zona']], axis=-1),
         hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]} · %{customdata[2]}<br>Carga externa: %{x:.0f} UA"
-                      "<br>sRPE: %{y:.0f}<br>Desviación: %{customdata[3]:.2f}<extra></extra>"))
+                      "<br>sRPE: %{y:.0f}<br>Desviación: %{customdata[3]:+.2f} DE<br><i>%{customdata[4]}</i><extra></extra>"))
+    # Separación izquierda/derecha: media de carga externa del filtro
+    fig.add_vline(x=media_x, line=dict(color="rgba(148,163,184,0.45)", dash="dot", width=1))
     estilo_fig(fig, height=420 if movil else 500, leyenda_abajo=False)
+    # Etiquetas de cuadrante en las esquinas
+    for (xa, ya, xan, yan, col, txt) in [
+        (0.01, 0.99, "left", "top", ROJO, "Poca carga · mucha respuesta"),
+        (0.99, 0.99, "right", "top", NARANJA, "Mucha carga · mucha respuesta"),
+        (0.01, 0.01, "left", "bottom", AZUL, "Poca carga · poca respuesta"),
+        (0.99, 0.01, "right", "bottom", VERDE, "Mucha carga · poca respuesta"),
+    ]:
+        fig.add_annotation(xref="paper", yref="paper", x=xa, y=ya, xanchor=xan, yanchor=yan, showarrow=False,
+                           text=txt, font=dict(size=10 if movil else 11, color=col), opacity=0.85)
+    fig.add_annotation(x=media_x, yref="paper", y=1.0, yanchor="bottom", showarrow=False,
+                       text=f"media {media_x:,.0f} UA".replace(",", "."), font=dict(size=10, color=NEUTRO_TEXTO))
     fig.update_layout(showlegend=False,
                       xaxis_title="DOSIS · Carga externa (UA = dist + 2·>18 + 4·>25 + 1,5·acc/dec)",
                       yaxis_title="RESPUESTA · Carga interna (sRPE)")
 
+    n = {k: int(v[0].sum()) for k, v in CUADRANTES.items()}
     tarjetas_kpi([
-        {"titulo": "Sesiones analizadas", "valor": str(len(df_sc))},
-        {"titulo": "Relación dosis-respuesta (r)", "valor": f"{r_val:.2f}"},
-        {"titulo": "Respuesta anormalmente alta", "valor": str(int(alta.sum())), "color": ROJO if alta.any() else TEXTO,
-         "sub": f"desviación > {Z_RESIDUO} DE"},
+        {"titulo": "Sesiones analizadas", "valor": str(len(df_sc)), "sub": f"r dosis-respuesta = {r_val:.2f}"},
+        {"titulo": "Respuesta muy alta (> 2 DE)", "valor": str(n['rojo'] + n['naranja']),
+         "color": ROJO if n['rojo'] else (NARANJA if n['naranja'] else TEXTO),
+         "sub": f"<span style='color:{ROJO}'>● {n['rojo']} poca carga</span> · <span style='color:{NARANJA}'>● {n['naranja']} mucha carga</span>"},
+        {"titulo": "Respuesta muy baja (< -2 DE)", "valor": str(n['verde'] + n['azul']),
+         "color": VERDE if n['verde'] else (AZUL if n['azul'] else TEXTO),
+         "sub": f"<span style='color:{VERDE}'>● {n['verde']} mucha carga</span> · <span style='color:{AZUL}'>● {n['azul']} poca carga</span>"},
     ])
     chart_key = f"dosis_scatter_{st.session_state.dosis_key}"
     event = mostrar_fig(fig, key=chart_key, on_select="rerun", selection_mode="points")
@@ -309,14 +355,24 @@ if len(df_sc) >= 10:
         if cambio:
             st.session_state.dosis_key += 1
             st.rerun()
-    st.caption("Pulsa un punto (o usa el selector) para destacar a ese jugador. Sin selección se resaltan en rojo las sesiones con respuesta anormalmente alta.")
+    st.caption("Los cuadrantes se recalculan con el filtro: arriba/abajo = más de 2 DE por encima/debajo de la respuesta esperada "
+               "(banda gris = zona normal); izquierda/derecha = carga externa por debajo/encima de la media (línea punteada). "
+               "Pulsa un punto o usa el selector para destacar a un jugador.")
 
-    ult = df_sc[alta].sort_values('Fecha_dt', ascending=False)
-    if not ult.empty:
-        recientes = ult[ult['Fecha_dt'] >= df_sc['Fecha_dt'].max() - pd.Timedelta(days=7)]
-        bloque_alerta("🔺 Respuesta alta en los últimos 7 días",
-                      recientes['Nombre_Oficial'].unique().tolist(), ROJO,
-                      sufijos={n: pd.to_datetime(f).strftime('%d/%m') for n, f in zip(recientes['Nombre_Oficial'], recientes['Fecha'])})
+    ult_fecha = df_sc['Fecha_dt'].max() - pd.Timedelta(days=7)
+    rec = df_sc[df_sc['Fecha_dt'] >= ult_fecha].sort_values('Fecha_dt', ascending=False)
+    rec_alta = rec[rec['Z_Res'] > Z_RESIDUO]
+    rec_baja = rec[(rec['Z_Res'] < -Z_RESIDUO) & (rec['Carga_UA'] >= media_x)]
+    if not rec_alta.empty or not rec_baja.empty:
+        ca, cb = st.columns(2)
+        if not rec_alta.empty:
+            bloque_alerta("🔺 Respuesta muy alta · últimos 7 días", rec_alta['Nombre_Oficial'].unique().tolist(), ROJO,
+                          sufijos={nm: pd.to_datetime(f).strftime('%d/%m') for nm, f in zip(rec_alta['Nombre_Oficial'], rec_alta['Fecha_dt'])},
+                          container=ca)
+        if not rec_baja.empty:
+            bloque_alerta("💪 Mucha carga, poca respuesta · últimos 7 días", rec_baja['Nombre_Oficial'].unique().tolist(), VERDE,
+                          sufijos={nm: pd.to_datetime(f).strftime('%d/%m') for nm, f in zip(rec_baja['Nombre_Oficial'], rec_baja['Fecha_dt'])},
+                          container=cb)
 else:
     st.info("Hacen falta al menos 10 sesiones con GPS y RPE para dibujar la relación.")
 
