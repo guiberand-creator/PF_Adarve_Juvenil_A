@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import os
 import re
-from utils import (leer_sheet_csv, configurar_pagina, controles_sidebar, inyectar_css, render_html, tarjetas_kpi,
+from utils import (es_exjugador, sin_exjugadores, quitar_exjugadores, leer_sheet_csv, configurar_pagina, controles_sidebar, inyectar_css, render_html, tarjetas_kpi,
                    chips_html, nombre_bonito, fecha_es, etiqueta_sesion, estilo_fig, mostrar_fig,
                    ROJO, NARANJA, AZUL, VERDE, NEUTRO_TEXTO, TEXTO, BORDE)
 
@@ -36,6 +36,7 @@ def obtener_cumpleaños_semana():
             if pd.isnull(row['Fecha de nacimiento']): continue
             fecha_nac = row['Fecha de nacimiento'].date()
             nombre = row['Nombre y apellidos']
+            if es_exjugador(nombre): continue
             try: cumple = fecha_nac.replace(year=hoy.year)
             except ValueError: cumple = fecha_nac.replace(year=hoy.year, day=28)
             if cumple < hoy:
@@ -113,6 +114,7 @@ def analizar_datos_completos():
         df_rpe = df_rpe.dropna(subset=['Fecha_Real'])
         df_rpe['Fecha_Dia'] = df_rpe['Fecha_Real'].dt.date
         df_rpe['Nombre_Clean'] = df_rpe['NOMBRE Y APELLIDOS'].fillna('Anónimo').astype(str).str.strip()
+        df_rpe = quitar_exjugadores(df_rpe, 'Nombre_Clean')
 
         df_well = leer_sheet_csv(url_well)
         df_well.columns = (df_well.columns.str.strip().str.upper()
@@ -122,6 +124,7 @@ def analizar_datos_completos():
         df_well = df_well.dropna(subset=['Fecha_Real'])
         df_well['Fecha_Dia'] = df_well['Fecha_Real'].dt.date
         df_well['Nombre_Clean'] = df_well['NOMBRE Y APELLIDOS'].fillna('Anónimo').astype(str).str.strip()
+        df_well = quitar_exjugadores(df_well, 'Nombre_Clean')
 
         ruta_pos = os.path.join(_dir_raiz, "data", "Posiciones.xlsx")
         plantilla = None
@@ -135,6 +138,7 @@ def analizar_datos_completos():
                 plantilla = None
         if plantilla is None:
             plantilla = sorted(set(df_rpe['Nombre_Clean']).union(set(df_well['Nombre_Clean'])))
+        plantilla = sin_exjugadores(plantilla)
         r['total'] = len(plantilla)
 
         # --- WELLNESS (último día con respuestas) ---
@@ -359,6 +363,7 @@ if not os.path.exists(ruta_posiciones):
 else:
     df_pos = pd.read_excel(ruta_posiciones)
     df_pos.columns = df_pos.columns.str.strip()
+    df_pos = quitar_exjugadores(df_pos, 'Jugador')
     df_disp = df_pos[~df_pos['Jugador'].isin(d['bajas'])].copy()
     dict_well_norm = {nombre_bonito(k).lower(): v for k, v in d['dict_wellness'].items()}
     dict_items_norm = {nombre_bonito(k).lower(): v for k, v in d['dict_items_bajos'].items()}

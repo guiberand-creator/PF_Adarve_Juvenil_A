@@ -7,7 +7,7 @@ import io
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
-from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
+from utils import (quitar_exjugadores, sin_exjugadores, es_exjugador, descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
                    bloque_alerta, chips_html, nombre_bonito, nombre_corto, fecha_es, etiqueta_sesion, estilo_fig,
                    mostrar_fig, barras_jugadores, mostrar_segun_pantalla, nombre_pulsado, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_FUERTE,
                    NEUTRO_TEXTO, TEXTO, BORDE)
@@ -441,6 +441,7 @@ with col_f3:
         jugadores_validos = sorted([str(j) for j in df_master['Nombre'].unique() if str(j).lower() != 'nan'])
     else:
         jugadores_validos = sorted([str(j) for j in df_master[df_master['Posicion'] == pos_sel]['Nombre'].unique() if str(j).lower() != 'nan'])
+    jugadores_validos = sin_exjugadores(jugadores_validos)   # Baja en Posiciones.xlsx
     jug_sel = st.selectbox("🏃 Jugador:", ["Todos"] + jugadores_validos, format_func=lambda x: x if x == "Todos" else nombre_bonito(x))
 
 target_refs_global = {}
@@ -517,7 +518,7 @@ alertas_metricas = {k: [] for k in metricas_alerta.keys()}
 
 evaluar_vmax_semana = any(k in str(t).lower() for t in df_sem['Tipo_Dia_Oficial'].unique() for k in ['-3', '3', '-2', '2', '-1', '1', 'partido'])
 
-for jug in df_sem['Nombre'].unique():
+for jug in sin_exjugadores(df_sem['Nombre'].unique()):
     df_j = df_sem[df_sem['Nombre'] == jug]
     
     if evaluar_vmax_semana:
@@ -617,7 +618,7 @@ df_hist_eq = df_28d[df_28d['Valido_Media'] == True].copy()
 df_vmax_hoy = df_sesion.merge(vmax_hist, on='Nombre', how='left')
 df_vmax_hoy['Porcentaje_Vmax'] = np.where(df_vmax_hoy['Vmax_4_semanas']>0, (df_vmax_hoy['Top_Speed']/df_vmax_hoy['Vmax_4_semanas'])*100, 0)
 media_vmax_sesion = df_vmax_hoy['Porcentaje_Vmax'].mean() if not df_vmax_hoy.empty else 0
-alcanzan_90 = df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90].sort_values(by='Porcentaje_Vmax', ascending=False)
+alcanzan_90 = quitar_exjugadores(df_vmax_hoy[df_vmax_hoy['Porcentaje_Vmax'] >= 90], 'Nombre').sort_values(by='Porcentaje_Vmax', ascending=False)
 
 tarjetas_kpi([
     {"titulo": "Tipo de sesión", "valor": etiqueta_sesion(tipo_sesion)},
@@ -838,6 +839,7 @@ pos_tabla = st.pills("Posiciones", pos_opts, selection_mode="multi", key="pills_
 pos_de = df_master.drop_duplicates('Nombre', keep='last').set_index('Nombre')['Posicion'].astype(str).to_dict()
 jug_pool = sorted(df_master[df_master['Posicion'].isin(pos_tabla)]['Nombre'].unique() if pos_tabla else df_master['Nombre'].unique(),
                   key=lambda n: (peso_pos(pos_de.get(n, '')), nombre_bonito(n)))
+jug_pool = sin_exjugadores(jug_pool)   # jugadores de baja: fuera de la tabla y de las barras (sí cuentan en la media de su posición)
 
 # Casillas de jugadores (todas marcadas por defecto)
 def _marcar(valor):
@@ -1196,7 +1198,7 @@ with col_ac2:
         st.rerun()
 
 metrica_acwr_key = opciones_metrica_acwr[metrica_acwr_lbl]
-df_acwr_total = calcular_acwr_ewma(df_master, metrica=metrica_acwr_key, dias_agudo=7, dias_cronico=21)
+df_acwr_total = quitar_exjugadores(calcular_acwr_ewma(df_master, metrica=metrica_acwr_key, dias_agudo=7, dias_cronico=21), 'Nombre')
 
 if not df_acwr_total.empty:
     if jugador_acwr_sel == "Toda la plantilla":

@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from utils import (descargar_sheet, comprobar_descargas, render_html, inyectar_css, tarjetas_kpi, nombre_bonito, fecha_es, etiqueta_sesion, estilo_fig,
+from utils import (quitar_exjugadores, sin_exjugadores, descargar_sheet, comprobar_descargas, render_html, inyectar_css, tarjetas_kpi, nombre_bonito, fecha_es, etiqueta_sesion, estilo_fig,
                    mostrar_fig, colores_por_fecha, _limpiar_categorias, ROJO, NARANJA, AZUL, VERDE, ACENTO,
                    NEUTRO, NEUTRO_FUERTE, NEUTRO_TEXTO)
 
@@ -343,7 +343,7 @@ def cargar_todo_informes():
     # CÁLCULO UNIFICADO DEL RANKING
     dict_rankings_reales = {}
     if not df_pos.empty:
-        df_rank_base = df_pos[['Nombre', 'Nombre_Norm']].copy()
+        df_rank_base = quitar_exjugadores(df_pos[['Nombre', 'Nombre_Norm']], 'Nombre').copy()   # el ranking es de la plantilla actual
         
         def merge_ult(df_base, df_src, col_src, col_dst):
             if df_src is not None and not df_src.empty and col_src in df_src.columns:
@@ -512,7 +512,7 @@ def lista_jugadores_disponibles():
     lista = sorted(df_pos['Nombre'].dropna().unique()) if not df_pos.empty else []
     if not lista and not df_cuest.empty:
         lista = sorted(df_cuest['Nombre'].dropna().unique())
-    return lista
+    return sin_exjugadores(lista)
 
 
 def render_informe(jugador_sel, movil=False):

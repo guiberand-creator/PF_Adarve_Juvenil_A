@@ -8,7 +8,7 @@ import requests
 import io
 import re
 import os
-from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
+from utils import (quitar_exjugadores, descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
                    chips_html, nombre_bonito, fecha_es, colores_por_fecha, estilo_fig, mostrar_fig, barras_jugadores, mostrar_segun_pantalla,
                    _limpiar_categorias, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
@@ -345,6 +345,19 @@ def cargar_datos_evaluaciones():
 
 df_pos, df_mov, df_ref_mov, df_peso, df_vam, df_ref_vam, df_dina, df_saltos, df_ref_saltos, df_dri_sheet, df_fts, df_campo, df_ref_campo = cargar_datos_evaluaciones()
 comprobar_descargas(cargar_datos_evaluaciones)
+
+# Jugadores marcados como Baja en Posiciones.xlsx: se ocultan de todas las gráficas por jugador,
+# tablas y ranking. Las medias del equipo de cada fecha (evolución CMJ / DRI) se calculan con TODOS.
+df_saltos_todos, df_dri_todos = df_saltos, df_dri_sheet
+def _sin_bajas(d):
+    return quitar_exjugadores(d, 'Nombre') if d is not None and 'Nombre' in getattr(d, 'columns', []) else d
+df_pos, df_mov, df_peso, df_vam, df_dina, df_saltos, df_dri_sheet, df_fts, df_campo = (
+    _sin_bajas(d) for d in (df_pos, df_mov, df_peso, df_vam, df_dina, df_saltos, df_dri_sheet, df_fts, df_campo))
+
+def _media_equipo_por_fecha(df_todos, filtro, col_val):
+    """Media y DE del equipo por fecha con TODOS los jugadores (también los de baja)."""
+    d = filtro(df_todos) if df_todos is not None and not df_todos.empty else pd.DataFrame(columns=['Fecha', 'Fecha_dt', 'Nombre', col_val])
+    return d.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)[col_val].mean()
 
 # -----------------------------------------------------------------------------
 # 4. CABECERA
@@ -967,7 +980,8 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     st.info(f"🏆 **Récord Histórico CMJ:** **{nombre_bonito(row_max_cmj['Nombre'])}** con **{row_max_cmj['Altura']:.1f} cm**")
 
                     df_jug_cmj = df_cmj.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['Altura'].mean()
-                    df_cmj_eq = df_jug_cmj.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
+                    df_jug_cmj_todos = _media_equipo_por_fecha(df_saltos_todos, lambda d: d[d[col_t_s].astype(str).str.upper() == 'CMJ'], 'Altura')
+                    df_cmj_eq = df_jug_cmj_todos.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
                         Media_Equipo=('Altura', 'mean'),
                         SD_Equipo=('Altura', 'std')
                     ).sort_values('Fecha_dt')
@@ -1022,7 +1036,9 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     st.info(f"🏆 **Récord Histórico DRI:** **{nombre_bonito(row_max_dri['Nombre'])}** con **{row_max_dri['DRI']:.2f}**")
 
                     df_jug_dri = df_dri.groupby(['Fecha', 'Fecha_dt', 'Nombre'], as_index=False)['DRI'].mean()
-                    df_dri_eq = df_jug_dri.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
+                    _filtro_dj = lambda d: (d[d['Tipo'].astype(str).str.upper().str.startswith('DJ')] if 'Tipo' in d.columns and d['Tipo'].astype(str).str.upper().str.startswith('DJ').any() else d)
+                    df_jug_dri_todos = _media_equipo_por_fecha(df_dri_todos, _filtro_dj, 'DRI')
+                    df_dri_eq = df_jug_dri_todos.groupby(['Fecha', 'Fecha_dt'], as_index=False).agg(
                         Media_Equipo=('DRI', 'mean'),
                         SD_Equipo=('DRI', 'std')
                     ).sort_values('Fecha_dt')
@@ -1178,7 +1194,9 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_unicas = sorted(df_cmj_agg['Fecha_dt'].unique())
                     fechas_str = [pd.to_datetime(f).strftime('%d/%m/%Y') for f in fechas_unicas]
                     
-                    df_media_equipo = df_cmj_agg.groupby('Fecha_dt', as_index=False)['Altura'].mean().sort_values('Fecha_dt')
+                    df_media_equipo = (_media_equipo_por_fecha(df_saltos_todos, lambda d: d[d[col_t_s].astype(str).str.upper() == 'CMJ'], 'Altura')
+                                       .groupby('Fecha_dt', as_index=False)['Altura'].mean())
+                    df_media_equipo = df_media_equipo[df_media_equipo['Fecha_dt'].isin(fechas_unicas)].sort_values('Fecha_dt')
 
                     fig_interactivo = go.Figure()
 
@@ -1224,7 +1242,9 @@ elif pest_sel == "🚀 Saltos (CMJ)":
                     fechas_unicas = sorted(df_dri_agg['Fecha_dt'].unique())
                     fechas_str = [pd.to_datetime(f).strftime('%d/%m/%Y') for f in fechas_unicas]
                     
-                    df_media_equipo = df_dri_agg.groupby('Fecha_dt', as_index=False)['DRI'].mean().sort_values('Fecha_dt')
+                    df_media_equipo = (_media_equipo_por_fecha(df_dri_todos, lambda d: d, 'DRI')
+                                       .groupby('Fecha_dt', as_index=False)['DRI'].mean())
+                    df_media_equipo = df_media_equipo[df_media_equipo['Fecha_dt'].isin(fechas_unicas)].sort_values('Fecha_dt')
 
                     fig_interactivo = go.Figure()
 

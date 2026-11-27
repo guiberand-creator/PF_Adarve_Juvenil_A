@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import streamlit as st
-from utils import configurar_pagina, controles_sidebar, inyectar_css, render_html, nombre_bonito
+from utils import configurar_pagina, controles_sidebar, inyectar_css, render_html, nombre_bonito, es_exjugador
 from informe_jugador import inject_v0_css, render_informe, escudo_oficial_b64, TEXT
 
 # =============================================================================
@@ -35,7 +35,9 @@ if not st.session_state['jugador_autenticado']:
                 if col_pass:
                     df_p_check['PASS_STR'] = df_p_check[col_pass].astype(str).str.split('.').str[0].str.strip()
                     match = df_p_check[df_p_check['PASS_STR'] == str(pin_ingresado).strip()]
-                    if not match.empty:
+                    if not match.empty and es_exjugador(match.iloc[0][col_nom]):
+                        st.error("❌ Este acceso está desactivado. Habla con el cuerpo técnico.")
+                    elif not match.empty:
                         st.session_state['jugador_autenticado'] = str(match.iloc[0][col_nom]).strip()
                         st.rerun()
                     else:
@@ -47,6 +49,9 @@ if not st.session_state['jugador_autenticado']:
     st.stop()
 
 jugador_sel = st.session_state['jugador_autenticado']
+if es_exjugador(jugador_sel):
+    st.session_state['jugador_autenticado'] = None
+    st.rerun()
 movil = controles_sidebar(mostrar_actualizar=False)
 with st.sidebar:
     st.markdown(f"**👤 Jugador:** {nombre_bonito(jugador_sel)}")

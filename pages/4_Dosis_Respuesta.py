@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import os
 import re
 import plotly.graph_objects as go
-from utils import (descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
+from utils import (quitar_exjugadores, sin_exjugadores, descargar_sheet, comprobar_descargas, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi, bloque_alerta,
                    nombre_bonito, etiqueta_sesion, estilo_fig, mostrar_fig, ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
 # =============================================================================
@@ -240,7 +240,7 @@ df_f = df_dosis.copy()
 if tipo_sel != "Todos": df_f = df_f[df_f['Tipo_Sesion'] == tipo_sel]
 df_f = df_f[(df_f['Fecha_dt'].dt.date >= rango_s[0]) & (df_f['Fecha_dt'].dt.date <= rango_s[1])]
 
-jugadores_opts = sorted(df_dosis['Nombre_Oficial'].dropna().unique(), key=nombre_bonito)
+jugadores_opts = sorted(sin_exjugadores(df_dosis['Nombre_Oficial'].dropna().unique()), key=nombre_bonito)
 st.session_state.jugadores_seleccionados_dosis = [j for j in st.session_state.jugadores_seleccionados_dosis if j in jugadores_opts]
 sel_jug = st.multiselect("🏃 Destacar jugadores:", jugadores_opts, default=st.session_state.jugadores_seleccionados_dosis,
                          format_func=nombre_bonito, key=f"ms_dosis_{st.session_state.dosis_key}")
@@ -281,6 +281,13 @@ if len(df_sc) >= 10:
         df_sc.loc[mask, 'Color'] = col
         df_sc.loc[mask, 'Zona'] = txt
 
+    # Recta, banda y media se calculan con TODAS las sesiones (también de jugadores que ya no están);
+    # a partir de aquí se ocultan los puntos de los jugadores marcados como Baja.
+    sd_res = (df_sc['sRPE'] - df_sc['Esperado']).std()
+    xs = np.linspace(df_sc['Carga_UA'].min(), df_sc['Carga_UA'].max(), 50)
+    df_sc = quitar_exjugadores(df_sc, 'Nombre_Oficial')
+    CUADRANTES = {k: (m.reindex(df_sc.index).fillna(False), c, t) for k, (m, c, t) in CUADRANTES.items()}
+
     sel = set(st.session_state.jugadores_seleccionados_dosis)
     if sel:
         colores = np.where(df_sc['Nombre_Oficial'].isin(sel), ACENTO, "rgba(148,163,184,0.18)")
@@ -289,8 +296,6 @@ if len(df_sc) >= 10:
         colores = df_sc['Color'].values
         tam = np.where(df_sc['Color'] != NEUTRO, 13, 9)
 
-    sd_res = (df_sc['sRPE'] - df_sc['Esperado']).std()
-    xs = np.linspace(df_sc['Carga_UA'].min(), df_sc['Carga_UA'].max(), 50)
     y_lin = pend * xs + orig
     fig = go.Figure()
     # Banda de normalidad (± 2 DE alrededor de la respuesta esperada)

@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from utils import (leer_sheet_csv, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
+from utils import (quitar_exjugadores, leer_sheet_csv, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
                    bloque_alerta, chips_html, nombre_bonito, nombre_corto, fecha_es, estilo_fig, mostrar_fig,
                    barras_jugadores, mostrar_segun_pantalla, ROJO, NARANJA, AZUL, VERDE, NEUTRO, NEUTRO_TEXTO, TEXTO)
 
@@ -145,6 +145,7 @@ hoy_w = dw[dw['FECHA_DIA'] == fecha_sel].drop_duplicates('JUGADOR_NORM', keep='l
 hoy_s = ds[ds['FECHA_DIA'] == fecha_sel]
 df = pd.merge(hoy_w, hoy_s[['JUGADOR_NORM', 'DRI_MEDIO', 'ALTURA_MEDIA_CM', 'TC_MEDIO_S', 'INTENTOS', 'Z_SALTO']],
               on='JUGADOR_NORM', how='left')
+df = quitar_exjugadores(df, 'JUGADOR')   # jugadores marcados como Baja en Posiciones.xlsx
 tiene_saltos = df['Z_SALTO'].notna().any()
 
 if df.empty:

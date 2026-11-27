@@ -483,3 +483,81 @@ def comprobar_descargas(*funciones_cacheadas):
         st.warning(f"⚠️ No se ha podido leer: **{fallidos}**. Faltan esos datos en esta página. "
                    "Pulsa 🔄 Actualizar datos en la barra lateral o recarga en un momento.")
         _FALLOS_DESCARGA.clear()
+
+
+# =============================================================================
+# 7. JUGADORES QUE HAN DEJADO EL EQUIPO (columna "Estado" = Baja en data/Posiciones.xlsx)
+# =============================================================================
+# No se borra nada de los Excel ni de los Sheets: la app solo los OCULTA como jugador
+# (selectores, tablas, alertas, gráficos por jugador, rankings, portal de jugadores).
+# Sus sesiones antiguas SIGUEN contando en las medias y totales del equipo.
+import unicodedata as _ud
+
+_RUTA_POSICIONES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "Posiciones.xlsx")
+
+
+def clave_nombre(nombre) -> str:
+    """Normaliza un nombre para cruzar fuentes: sin tildes, minúsculas, sin guiones bajos."""
+    if nombre is None or (isinstance(nombre, float) and np.isnan(nombre)):
+        return ""
+    t = _ud.normalize("NFKD", str(nombre)).encode("ascii", "ignore").decode()
+    return " ".join(t.replace("_", " ").replace(".", " ").lower().split())
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _claves_exjugadores(_mtime) -> tuple:
+    try:
+        df = pd.read_excel(_RUTA_POSICIONES)
+    except Exception:
+        return tuple()
+    df.columns = df.columns.astype(str).str.strip()
+    col_e = next((c for c in df.columns if clave_nombre(c) in ("estado", "baja", "situacion")), None)
+    if col_e is None:
+        return tuple()
+    col_j = "Jugador" if "Jugador" in df.columns else df.columns[0]
+    marcados = df[df[col_e].astype(str).map(clave_nombre).str.startswith("baja")]
+    return tuple(sorted({clave_nombre(n) for n in marcados[col_j].dropna() if clave_nombre(n)}))
+
+
+def claves_exjugadores() -> tuple:
+    try:
+        mtime = os.path.getmtime(_RUTA_POSICIONES)
+    except OSError:
+        mtime = 0
+    return _claves_exjugadores(mtime)
+
+
+def es_exjugador(nombre) -> bool:
+    """True si el jugador está marcado como Baja. Tolera formatos distintos del nombre
+    ('Ikki_Muller_Salak', 'Ikki Müller Salak', 'ikki muller'...)."""
+    bajas = claves_exjugadores()
+    if not bajas:
+        return False
+    k = clave_nombre(nombre)
+    if not k:
+        return False
+    if k in bajas:
+        return True
+    t = k.split()
+    for b in bajas:
+        tb = b.split()
+        corto, largo = (t, tb) if len(t) <= len(tb) else (tb, t)
+        # p. ej. 'ikki muller' dentro de 'ikki muller salak' (mínimo nombre + un apellido, en orden)
+        if len(corto) >= 2 and largo[:len(corto)] == corto:
+            return True
+    return False
+
+
+def quitar_exjugadores(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Devuelve el DataFrame sin las filas de jugadores de baja (si la columna existe)."""
+    if df is None or df.empty or col not in df.columns or not claves_exjugadores():
+        return df
+    marcas = {v: es_exjugador(v) for v in df[col].dropna().unique()}
+    return df[~df[col].map(marcas).fillna(False).astype(bool)]
+
+
+def sin_exjugadores(nombres):
+    """Filtra una lista de nombres."""
+    if not claves_exjugadores():
+        return list(nombres)
+    return [n for n in nombres if not es_exjugador(n)]

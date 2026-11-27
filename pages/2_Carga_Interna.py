@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from utils import (leer_sheet_csv, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
+from utils import (quitar_exjugadores, leer_sheet_csv, configurar_pagina, exigir_login_staff, controles_sidebar, render_html, tarjetas_kpi,
                    bloque_alerta, nombre_bonito, nombre_corto, fecha_es, etiqueta_sesion, estilo_fig, mostrar_fig,
                    ROJO, NARANJA, AZUL, VERDE, ACENTO, NEUTRO, NEUTRO_FUERTE, NEUTRO_TEXTO, TEXTO)
 
@@ -87,6 +87,10 @@ df_f = df_raw[~df_raw['Es_Lesion']].copy()
 df_f['Carga_Individual'] = df_f['RPE_General'] * df_f['Duracion']
 # Para medias del equipo: los partidos solo cuentan si el jugador jugó >= 60' (mismo criterio en toda la app)
 df_col = df_f[~(df_f['Es_Partido'] & (df_f['Duracion'] < 60))].copy()
+# Jugadores marcados como Baja en Posiciones.xlsx: fuera de alertas, selector y tabla,
+# pero sus sesiones antiguas siguen en el panel grupal (df_col).
+df_f_jug = quitar_exjugadores(df_f, 'Nombre')
+df_raw_jug = quitar_exjugadores(df_raw, 'Nombre')
 
 # Jugadores cuyo último registro es "entreno aparte/lesión": no se les alerta de subcarga
 ultimo_registro = df_raw.sort_values('Fecha').groupby('Nombre').tail(1).set_index('Nombre')
@@ -96,7 +100,7 @@ lesionados = set(ultimo_registro[ultimo_registro['Es_Lesion']].index)
 # ALERTAS
 # =============================================================================
 al_sobre, al_sub, al_animo, acwr_actual = [], [], [], {}
-for j, df_j in df_f.groupby('Nombre'):
+for j, df_j in df_f_jug.groupby('Nombre'):
     s = serie_diaria(df_j, fecha_fin)
     if s.empty: continue
     a = acwr_diario(s)
@@ -106,7 +110,7 @@ for j, df_j in df_f.groupby('Nombre'):
         if ult > ACWR_ALTO: al_sobre.append((j, f"{ult:.2f}"))
         elif ult < ACWR_BAJO and j not in lesionados: al_sub.append((j, f"{ult:.2f}"))
 
-for j, df_j in df_raw.sort_values('Fecha').groupby('Nombre'):
+for j, df_j in df_raw_jug.sort_values('Fecha').groupby('Nombre'):
     an = df_j.dropna(subset=['Estado_Animo'])
     if an.empty: continue
     if (fecha_fin - an['Dia'].iloc[-1]).days > 3:   # solo respuestas recientes
@@ -236,7 +240,7 @@ st.markdown("## 👥 Plantilla")
 st.caption("Elige un jugador (o pulsa su línea en el gráfico) y todos los gráficos se filtran para él.")
 
 filas = []
-for j, d_j in df_f.groupby('Nombre'):
+for j, d_j in df_f_jug.groupby('Nombre'):
     s = serie_diaria(d_j, fecha_fin)
     if s.empty:
         continue
@@ -301,7 +305,7 @@ fotos = cargar_fotos()
 if not plantilla.empty:
     plantilla = plantilla.sort_values(['_prio', 'ACWR'], ascending=[True, False]).reset_index(drop=True)
 TODOS = "__todos__"
-jugadores = sorted(df_raw['Nombre'].unique(), key=nombre_bonito)
+jugadores = sorted(df_raw_jug['Nombre'].unique(), key=nombre_bonito)
 opciones = [TODOS] + jugadores
 if st.session_state.get("jug_ci_pendiente") in opciones:
     st.session_state["jug_ci"] = st.session_state.pop("jug_ci_pendiente")
